@@ -46,6 +46,11 @@ def factory() -> MyPlugin:
 acme-hello = "my_plugin:factory"
 ```
 
+The entry-point group name (`teridex.plugins`) is the source-of-truth
+constant `PluginLoader.GROUP` in
+`packages/teridex-plugins/src/teridex_plugins/loader.py`. If you fork
+Teridex and rename the group, change it there.
+
 After installing the package into the same environment as Teridex, run
 `teridex plugins list` to confirm discovery.
 
