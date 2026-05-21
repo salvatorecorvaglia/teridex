@@ -156,6 +156,20 @@ class SQLiteAdapter(AbstractAdapter):
 
         return _gen()
 
+    async def cancel(self, handle: QueryHandle) -> None:
+        await super().cancel(handle)
+        # sqlite3.Connection.interrupt() is thread-safe and causes any
+        # in-flight statement on the connection to raise OperationalError.
+        # We bypass aiosqlite's async wrapper because it queues onto the
+        # same worker thread that's currently blocked on the long query.
+        if self._conn is None:
+            return
+        inner: Any = getattr(self._conn, "_conn", None)
+        if inner is None:
+            return
+        with contextlib.suppress(Exception):
+            inner.interrupt()
+
     async def begin(self) -> Transaction:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")

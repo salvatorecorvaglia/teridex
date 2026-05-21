@@ -61,6 +61,7 @@ class MySQLAdapter(AbstractAdapter):
         super().__init__()
         self._conn: Any = None
         self._cursors: dict[str, Any] = {}
+        self._thread_id: int | None = None
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncmy.connect(
@@ -71,6 +72,13 @@ class MySQLAdapter(AbstractAdapter):
             database=dsn.database,
             autocommit=True,
         )
+        cur = self._conn.cursor()
+        try:
+            await cur.execute("SELECT CONNECTION_ID()")
+            row = await cur.fetchone()
+            self._thread_id = int(row[0]) if row else None
+        finally:
+            await cur.close()
 
     async def _do_close(self) -> None:
         for c in list(self._cursors.values()):
@@ -80,6 +88,42 @@ class MySQLAdapter(AbstractAdapter):
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+        self._thread_id = None
+
+    async def cancel(self, handle: QueryHandle) -> None:
+        await super().cancel(handle)
+        # The live connection is busy with the running statement; open a
+        # side connection and issue KILL QUERY against the saved thread id.
+        if self._thread_id is None or self._dsn is None:
+            return
+        dsn = self._dsn
+        try:
+            side = await asyncmy.connect(
+                user=dsn.username or "root",
+                password=dsn.password or "",
+                host=dsn.host or "localhost",
+                port=dsn.port or 3306,
+                database=dsn.database,
+                autocommit=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "mysql_cancel_side_connect_failed",
+                query_id=handle.query_id,
+                error=str(exc),
+            )
+            return
+        try:
+            cur = side.cursor()
+            try:
+                with contextlib.suppress(Exception):
+                    await cur.execute(f"KILL QUERY {int(self._thread_id)}")
+            finally:
+                with contextlib.suppress(Exception):
+                    await cur.close()
+        finally:
+            with contextlib.suppress(Exception):
+                side.close()
 
     async def ping(self) -> bool:
         if self._conn is None:

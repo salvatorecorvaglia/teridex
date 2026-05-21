@@ -67,6 +67,7 @@ class PostgresAdapter(AbstractAdapter):
         super().__init__()
         self._conn: asyncpg.Connection | None = None
         self._pending: dict[str, str] = {}  # query_id -> sql (for streaming via cursor)
+        self._backend_pid: int | None = None
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncpg.connect(
@@ -76,11 +77,13 @@ class PostgresAdapter(AbstractAdapter):
             port=dsn.port or 5432,
             database=dsn.database,
         )
+        self._backend_pid = await self._conn.fetchval("SELECT pg_backend_pid()")
 
     async def _do_close(self) -> None:
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
+        self._backend_pid = None
 
     async def ping(self) -> bool:
         if self._conn is None:
@@ -197,10 +200,33 @@ class PostgresAdapter(AbstractAdapter):
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
-        # Best-effort server-side cancellation.
-        if self._conn is not None:
+        # The live connection is busy running the user's query, so we can't
+        # use it to issue pg_cancel_backend — open a short-lived side
+        # connection instead and target the saved backend PID.
+        if self._backend_pid is None or self._dsn is None:
+            return
+        dsn = self._dsn
+        try:
+            side = await asyncpg.connect(
+                user=dsn.username,
+                password=dsn.password,
+                host=dsn.host or "localhost",
+                port=dsn.port or 5432,
+                database=dsn.database,
+            )
+        except (asyncpg.PostgresError, OSError) as exc:
+            logger.warning(
+                "postgres_cancel_side_connect_failed",
+                query_id=handle.query_id,
+                error=str(exc),
+            )
+            return
+        try:
             with contextlib.suppress(asyncpg.PostgresError):
-                await self._conn.execute("SELECT pg_cancel_backend(pg_backend_pid())")
+                await side.execute("SELECT pg_cancel_backend($1)", self._backend_pid)
+        finally:
+            with contextlib.suppress(Exception):
+                await side.close()
 
     async def begin(self) -> Transaction:
         if self._conn is None:

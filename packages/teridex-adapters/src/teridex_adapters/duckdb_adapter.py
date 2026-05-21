@@ -160,6 +160,21 @@ class DuckDBAdapter(AbstractAdapter):
 
         return _gen()
 
+    async def cancel(self, handle: QueryHandle) -> None:
+        await super().cancel(handle)
+        if self._conn is None:
+            return
+        # interrupt() is thread-safe and aborts the in-progress query on the
+        # other thread; we MUST NOT hold ``_lock`` here or we'd deadlock the
+        # worker thread we're trying to interrupt.
+        conn = self._conn
+        try:
+            await asyncio.to_thread(conn.interrupt)
+        except Exception as exc:
+            logger.warning(
+                "duckdb_interrupt_failed", query_id=handle.query_id, error=str(exc)
+            )
+
     async def begin(self) -> Transaction:
         return _DuckDBTransaction(self)
 

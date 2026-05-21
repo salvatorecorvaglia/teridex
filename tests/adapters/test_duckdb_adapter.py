@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
 from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: E402
+from teridex_core.errors import QueryCancelledError  # noqa: E402
 from teridex_core.models.connection import Dsn  # noqa: E402
 
 
@@ -22,6 +25,31 @@ async def test_duckdb_select() -> None:
         assert cols == ["answer", "greeting"]
         rows = [r for r in rows if r]
         assert rows == [(42, "hi")]
+    finally:
+        await a.close()
+
+
+@pytest.mark.asyncio
+async def test_duckdb_cancel_interrupts_running_query() -> None:
+    a = DuckDBAdapter()
+    await a.connect(Dsn.parse("duckdb:///:memory:"))
+    try:
+        # range() materializes lazily; pairing with a cross join produces a
+        # CPU-bound stream that gives interrupt() something real to abort.
+        h = await a.execute(
+            "SELECT a.range, b.range FROM range(10_000_000) a CROSS JOIN range(100) b"
+        )
+        stream = await a.stream(h, batch_size=100)
+
+        async def _drain() -> None:
+            async for _ in stream:
+                pass
+
+        task = asyncio.create_task(_drain())
+        await asyncio.sleep(0.05)
+        await a.cancel(h)
+        with pytest.raises((QueryCancelledError, Exception)):
+            await asyncio.wait_for(task, timeout=5.0)
     finally:
         await a.close()
 
