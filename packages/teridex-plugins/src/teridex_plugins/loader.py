@@ -46,6 +46,7 @@ class PluginLoader:
         self._disabled = set(disabled or [])
         self._services = services or {}
         self._instances: dict[str, Any] = {}
+        self._contexts: dict[str, PluginContext] = {}
 
     def _is_allowed(self, plugin_id: str) -> bool:
         if plugin_id in self._disabled:
@@ -92,12 +93,14 @@ class PluginLoader:
             registry=self._registry,
             services=self._services,
         )
+        self._contexts[manifest.id] = ctx
         on_load = getattr(plugin, "on_load", None)
         if callable(on_load):
             try:
                 on_load(ctx)
             except Exception as exc:
                 self._registry.remove_plugin(manifest.id)
+                self._contexts.pop(manifest.id, None)
                 raise PluginLoadError(
                     f"on_load failed for plugin {manifest.id!r}",
                     context={"error": str(exc)},
@@ -106,12 +109,26 @@ class PluginLoader:
         self._bus.publish(PluginLoaded(plugin_id=manifest.id))
         logger.info("plugin_loaded", plugin_id=manifest.id, version=manifest.version)
 
+    def context_for(self, plugin_id: str) -> PluginContext:
+        """Return the long-lived context bound to a loaded plugin.
+
+        Used by the host app to invoke ``Panel.factory(ctx)`` with the same
+        context the plugin received in ``on_load`` — so panel widgets and
+        hooks share state.
+        """
+        try:
+            return self._contexts[plugin_id]
+        except KeyError as exc:
+            raise PluginError(
+                f"plugin not loaded: {plugin_id!r}", context={"plugin_id": plugin_id}
+            ) from exc
+
     def unload(self, plugin_id: str) -> None:
         plugin = self._instances.pop(plugin_id, None)
         if plugin is None:
             raise PluginError(f"plugin not loaded: {plugin_id!r}", context={"plugin_id": plugin_id})
         on_unload = getattr(plugin, "on_unload", None)
-        ctx = PluginContext(
+        ctx = self._contexts.pop(plugin_id, None) or PluginContext(
             plugin_id=plugin_id,
             event_bus=self._bus,
             registry=self._registry,

@@ -35,6 +35,8 @@ from teridex_tui.builtin_commands import BUILTIN_COMMANDS
 from teridex_tui.events import RunActionRequested
 from teridex_tui.keymaps import DEFAULT_BINDINGS, VIM_BINDINGS
 from teridex_tui.screens.command_palette import CommandPaletteScreen
+from teridex_tui.screens.help import HelpModal
+from teridex_tui.screens.history import HistoryModal
 from teridex_tui.screens.main import MainScreen
 from teridex_tui.state import AppState
 from teridex_tui.themes import THEMES
@@ -42,6 +44,7 @@ from teridex_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
 
 if TYPE_CHECKING:
     from teridex_core.models.connection import Dsn
+    from teridex_plugins.api import Command
 
 logger = get_logger(__name__)
 
@@ -84,6 +87,7 @@ class TeridexApp(App[None]):
     async def on_mount(self) -> None:
         self._apply_theme()
         await self._load_plugins()
+        await self._mount_plugin_panels()
         self._wire_event_listeners()
         if self._initial_dsn is not None:
             await self._connect(self._initial_dsn)
@@ -125,6 +129,40 @@ class TeridexApp(App[None]):
             disabled=self.cfg.plugins.disabled or None,
         )
         loader.load_all()
+        self._loader = loader
+
+    async def _mount_plugin_panels(self) -> None:
+        loader = getattr(self, "_loader", None)
+        if loader is None:
+            return
+        rails: dict[str, list] = {  # type: ignore[type-arg]
+            "left": [],
+            "right": [],
+            "bottom": [],
+        }
+        for plugin_id, panel in self.state.plugins.panels_by_plugin():
+            ctx = loader.context_for(plugin_id)
+            try:
+                widget = panel.factory(ctx)
+            except Exception:
+                logger.exception("plugin_panel_factory_failed", plugin_id=plugin_id)
+                continue
+            rails[panel.placement].append(widget)
+
+        if rails["left"]:
+            sidebar = self.query_one("#sidebar")
+            for w in rails["left"]:
+                await sidebar.mount(w)
+        if rails["right"]:
+            rail = self.query_one("#right-rail")
+            rail.add_class("has-panels")
+            for w in rails["right"]:
+                await rail.mount(w)
+        if rails["bottom"]:
+            rail = self.query_one("#bottom-rail")
+            rail.add_class("has-panels")
+            for w in rails["bottom"]:
+                await rail.mount(w)
 
     def _wire_event_listeners(self) -> None:
         async def on_started(ev: QueryStarted) -> None:
@@ -233,8 +271,10 @@ class TeridexApp(App[None]):
         # Textual supports async actions at runtime; its stubs only declare
         # the sync signature. Mypy override-suppress is intentional.
         commands = [*BUILTIN_COMMANDS, *self.state.plugins.all_commands()]
-        result = await self.push_screen_wait(CommandPaletteScreen(commands))
-        if result is not None:
+
+        def _on_pick(result: Command | None) -> None:
+            if result is None:
+                return
             ctx = PluginContext(
                 plugin_id="builtin",
                 event_bus=self.state.bus,
@@ -242,8 +282,27 @@ class TeridexApp(App[None]):
             )
             self._palette_task = asyncio.ensure_future(result.handler(ctx))
 
+        await self.push_screen(CommandPaletteScreen(commands), _on_pick)
+
     async def action_help(self) -> None:
-        self._status().message = "see docs/ or press Ctrl+P for commands"
+        await self.push_screen(HelpModal())
+
+    async def action_show_history(self) -> None:
+        if self.state.history is None:
+            self._status().message = "[yellow]history not opened[/]"
+            return
+        entries = await self.state.history.recent(limit=50)
+
+        def _on_pick(picked: HistoryEntry | None) -> None:
+            if picked is None:
+                return
+            editor = self._tabs().current_editor
+            if editor is None:
+                self._tabs().new_tab(picked.sql)
+            else:
+                editor.text = picked.sql
+
+        await self.push_screen(HistoryModal(entries), _on_pick)
 
     # ---- history ------------------------------------------------------
 

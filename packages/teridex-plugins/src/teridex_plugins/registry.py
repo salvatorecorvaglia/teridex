@@ -47,3 +47,10 @@ class PluginRegistry:
 
     def all_panels(self) -> list[Panel]:
         return [p for panels in self._panels_by_plugin.values() for p in panels]
+
+    def panels_by_plugin(self) -> list[tuple[str, Panel]]:
+        return [
+            (plugin_id, panel)
+            for plugin_id, panels in self._panels_by_plugin.items()
+            for panel in panels
+        ]

@@ -7,9 +7,15 @@ Screen {
 
 #main-grid {
     layout: grid;
-    grid-size: 2 2;
-    grid-columns: 28 1fr;
-    grid-rows: 1fr 1;
+    /* 3 columns × 3 rows:
+     *   [ sidebar  | workspace | right-rail ]
+     *   [ sidebar  | workspace | right-rail ]
+     *   [ bottom-rail (spans all)           ]
+     *   [ status-bar (spans all)            ]
+     */
+    grid-size: 3 4;
+    grid-columns: 28 1fr auto;
+    grid-rows: 1fr 1fr auto 1;
     height: 100%;
     width: 100%;
 }
@@ -22,8 +28,34 @@ Screen {
 }
 
 #workspace {
+    row-span: 2;
     layout: vertical;
     border: round $primary;
+}
+
+#right-rail {
+    row-span: 2;
+    width: auto;
+    min-width: 0;
+    border: round $primary 30%;
+    display: none;       /* hidden until the app mounts at least one panel */
+}
+
+#right-rail.has-panels {
+    display: block;
+    min-width: 24;
+}
+
+#bottom-rail {
+    column-span: 3;
+    height: auto;
+    border-top: solid $primary 30%;
+    display: none;
+}
+
+#bottom-rail.has-panels {
+    display: block;
+    height: 10;
 }
 
 #tabs {
@@ -41,7 +73,7 @@ Screen {
 }
 
 #status-bar {
-    column-span: 2;
+    column-span: 3;
     height: 1;
     background: $accent;
     color: $background;
@@ -81,11 +113,17 @@ CommandPalette {
     border: round $primary;
 }
 
-HelpModal {
+#HelpModal,
+#HistoryModal {
     align: center middle;
     background: $surface;
     border: thick $accent;
-    width: 60;
-    height: 20;
+    width: 70;
+    height: 22;
     padding: 1 2;
+}
+
+#history-list {
+    height: 14;
+    border: round $primary;
 }

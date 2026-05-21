@@ -10,6 +10,7 @@ DEFAULT_BINDINGS: list[tuple[str, str, str]] = [
     ("ctrl+t", "new_tab", "New tab"),
     ("ctrl+w", "close_tab", "Close tab"),
     ("ctrl+r", "refresh_schema", "Refresh schema"),
+    ("ctrl+h", "show_history", "Show history"),
     ("question_mark", "help", "Help"),
     ("ctrl+q", "quit", "Quit"),
 ]

@@ -51,6 +51,13 @@ BUILTIN_COMMANDS: list[Command] = [
         category="Schema",
     ),
     Command(
+        id="builtin.show_history",
+        title="Show query history",
+        default_binding="ctrl+h",
+        handler=_wrap("show_history"),
+        category="Query",
+    ),
+    Command(
         id="builtin.new_tab",
         title="New query tab",
         default_binding="ctrl+t",
