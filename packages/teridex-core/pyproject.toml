@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "teridex-core"
 version = "0.1.0"
 description = "Teridex core: domain models, DI, events, config, logging, errors"
-readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [{ name = "Teridex contributors" }]

@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "teridex-adapters"
 version = "0.1.0"
 description = "Database adapters for Teridex (DuckDB, SQLite, PostgreSQL, MySQL)"
-readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
 dependencies = [
