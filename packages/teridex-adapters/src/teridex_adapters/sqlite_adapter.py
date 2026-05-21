@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _quote_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
 class _SQLiteTransaction:
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
@@ -169,7 +173,7 @@ class SQLiteAdapter(AbstractAdapter):
             rows = await cur.fetchall()
         for name, kind in rows:
             cols: list[TableColumn] = []
-            async with conn.execute(f"PRAGMA table_info('{name}')") as ccur:
+            async with conn.execute(f"PRAGMA table_info({_quote_ident(name)})") as ccur:
                 for cid, cname, ctype, notnull, dflt, pk in await ccur.fetchall():
                     cols.append(
                         TableColumn(
@@ -183,7 +187,7 @@ class SQLiteAdapter(AbstractAdapter):
                         )
                     )
             fks: list[ForeignKey] = []
-            async with conn.execute(f"PRAGMA foreign_key_list('{name}')") as fcur:
+            async with conn.execute(f"PRAGMA foreign_key_list({_quote_ident(name)})") as fcur:
                 for (
                     fk_id,
                     _seq,
@@ -205,10 +209,10 @@ class SQLiteAdapter(AbstractAdapter):
                         )
                     )
             indexes: list[Index] = []
-            async with conn.execute(f"PRAGMA index_list('{name}')") as icur:
+            async with conn.execute(f"PRAGMA index_list({_quote_ident(name)})") as icur:
                 idx_rows = await icur.fetchall()
             for _seq, iname, unique, _origin, _partial in idx_rows:
-                async with conn.execute(f"PRAGMA index_info('{iname}')") as iicur:
+                async with conn.execute(f"PRAGMA index_info({_quote_ident(iname)})") as iicur:
                     icols = [r[2] for r in await iicur.fetchall()]
                 indexes.append(Index(name=iname, columns=icols, unique=bool(unique)))
             obj: SchemaObject

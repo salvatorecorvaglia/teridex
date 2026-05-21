@@ -63,6 +63,30 @@ async def test_introspect_tables_and_indexes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_introspect_handles_quoted_identifiers() -> None:
+    a = SQLiteAdapter()
+    await a.connect(Dsn.parse("sqlite:///:memory:"))
+    try:
+        # Table name contains both a single quote and a double quote — legal in
+        # SQLite when the CREATE statement quotes the identifier with doubled "".
+        h = await a.execute('CREATE TABLE "weird""name\'with-quotes" (id INTEGER, val TEXT)')
+        async for _ in await a.stream(h):
+            pass
+        h = await a.execute('CREATE INDEX "ix_weird\'name" ON "weird""name\'with-quotes"(val)')
+        async for _ in await a.stream(h):
+            pass
+        snap = await a.introspect()
+        target = next(
+            o for o in snap.schemas["main"] if o.name == 'weird"name\'with-quotes'
+        )
+        col_names = [c.name for c in target.columns]
+        assert col_names == ["id", "val"]
+        assert any(i.name == "ix_weird'name" for i in target.indexes)
+    finally:
+        await a.close()
+
+
+@pytest.mark.asyncio
 async def test_cancel_sets_status() -> None:
     a = SQLiteAdapter()
     await a.connect(Dsn.parse("sqlite:///:memory:"))
