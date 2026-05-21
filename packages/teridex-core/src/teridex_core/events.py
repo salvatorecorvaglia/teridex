@@ -15,8 +15,9 @@ Design notes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, TypeVar
 from uuid import uuid4
 
@@ -33,7 +34,7 @@ class Event(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     event_id: str = Field(default_factory=lambda: uuid4().hex)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 E = TypeVar("E", bound=Event)
@@ -109,7 +110,7 @@ class EventBus:
     def subscribe(self, event_type: type[E], handler: Callable[[E], Awaitable[None]]) -> None:
         if self._closed:
             raise RuntimeError("EventBus is closed")
-        sub = _Subscription(event_type, handler, self._queue_size)  # type: ignore[arg-type]
+        sub = _Subscription(event_type, handler, self._queue_size)
         sub.task = asyncio.create_task(self._drain(sub), name=f"eventbus:{event_type.__name__}")
         self._subs.append(sub)
 
@@ -135,10 +136,8 @@ class EventBus:
             try:
                 sub.queue.put_nowait(event)
             except asyncio.QueueFull:
-                try:
+                with contextlib.suppress(asyncio.QueueEmpty):
                     sub.queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
                 logger.warning(
                     "event_queue_full",
                     event_type=type(event).__name__,

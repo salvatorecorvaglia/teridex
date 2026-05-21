@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import pytest
 
 from teridex_core.events import EventBus
 from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.api import Command, hook
-from teridex_plugins.context import PluginContext
+from teridex_plugins.api import Command, hook, hook_event, is_hook
 from teridex_plugins.loader import PluginLoader
 from teridex_plugins.registry import PluginRegistry
+
+if TYPE_CHECKING:
+    from teridex_plugins.context import PluginContext
 
 
 class _SamplePlugin:
@@ -19,15 +22,13 @@ class _SamplePlugin:
         self.loaded = False
 
     def on_load(self, ctx: PluginContext) -> None:
-        async def _noop(ctx: PluginContext) -> None:  # noqa: ARG001
+        async def _noop(ctx: PluginContext) -> None:
             return
 
-        ctx.register_command(
-            Command(id="sample.hello", title="Hello", handler=_noop)
-        )
+        ctx.register_command(Command(id="sample.hello", title="Hello", handler=_noop))
         self.loaded = True
 
-    def on_unload(self, ctx: PluginContext) -> None:  # noqa: ARG001
+    def on_unload(self, ctx: PluginContext) -> None:
         self.loaded = False
 
 
@@ -53,8 +54,6 @@ def test_hook_decorator_marks_function() -> None:
     @hook("query.before_execute")
     async def my_hook(_ctx: object) -> None:
         return
-
-    from teridex_plugins.api import hook_event, is_hook
 
     assert is_hook(my_hook)
     assert hook_event(my_hook) == "query.before_execute"

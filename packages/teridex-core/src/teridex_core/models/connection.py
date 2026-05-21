@@ -36,24 +36,22 @@ class Dsn(BaseModel):
         return v
 
     @classmethod
-    def parse(cls, url: str) -> "Dsn":
+    def parse(cls, url: str) -> Dsn:
         try:
             parsed = urlparse(url)
         except ValueError as exc:
             raise ConfigError(f"invalid DSN: {url}", context={"error": str(exc)}) from exc
         if not parsed.scheme:
             raise ConfigError(f"DSN missing scheme: {url}")
-        # path: "/dbname" or "/path/to/file.db" or ":memory:"
+        # path: "/dbname" or "/path/to/file.db" or "/:memory:"
         database: str | None
         if parsed.path in ("", "/"):
             database = None
-        elif parsed.scheme in {"sqlite", "duckdb"}:
-            # File-based; preserve full path
-            database = parsed.path.lstrip("/") if parsed.path.startswith("/:") is False else parsed.path
-            if database == "" or database == ":memory:":
-                database = ":memory:"
         else:
-            database = parsed.path.lstrip("/")
+            # Strip exactly one leading slash. ``sqlite:///foo.db`` → ``foo.db``;
+            # ``sqlite:////abs/foo.db`` → ``/abs/foo.db``. The literal
+            # ``/:memory:`` collapses to ``:memory:``.
+            database = parsed.path[1:] if parsed.path.startswith("/") else parsed.path
         params: dict[str, str] = {}
         if parsed.query:
             for chunk in parsed.query.split("&"):
@@ -81,9 +79,12 @@ class Dsn(BaseModel):
         host = self.host or ""
         port = f":{self.port}" if self.port else ""
         db = self.database or ""
-        if db and not db.startswith("/") and self.scheme in {"sqlite", "duckdb"} and db != ":memory:":
-            db = "/" + db
-        elif db and self.scheme not in {"sqlite", "duckdb"}:
+        if (
+            db
+            and not db.startswith("/")
+            and self.scheme in {"sqlite", "duckdb"}
+            and db != ":memory:"
+        ) or (db and self.scheme not in {"sqlite", "duckdb"}):
             db = "/" + db
         elif db == ":memory:":
             db = "/:memory:"

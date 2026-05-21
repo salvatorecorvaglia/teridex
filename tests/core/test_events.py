@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from teridex_core.events import EventBus, QueryStarted
+from teridex_core.events import EventBus, QueryCompleted, QueryStarted
 
 
 @pytest.mark.asyncio
@@ -37,8 +37,6 @@ async def test_only_matching_type_delivered() -> None:
 
     bus.subscribe(QueryStarted, handler)
     # Publish a different event type — should not be delivered.
-    from teridex_core.events import QueryCompleted
-
     bus.publish(QueryCompleted(query_id="x", rows=1, duration_ms=1.0))
     for _ in range(20):
         await asyncio.sleep(0)

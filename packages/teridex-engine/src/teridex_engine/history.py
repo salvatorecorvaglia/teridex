@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
@@ -35,7 +35,7 @@ class HistoryEntry(BaseModel):
     duration_ms: float | None = None
     rows: int | None = None
     error: str | None = None
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class QueryHistory:
@@ -88,8 +88,8 @@ class QueryHistory:
     async def recent(self, limit: int = 50) -> list[HistoryEntry]:
         conn = self._require()
         async with conn.execute(
-            "SELECT id, query_id, connection_label, sql, status, duration_ms, rows, error, started_at "
-            "FROM history ORDER BY started_at DESC LIMIT ?",
+            "SELECT id, query_id, connection_label, sql, status, duration_ms,"
+            " rows, error, started_at FROM history ORDER BY started_at DESC LIMIT ?",
             (limit,),
         ) as cur:
             rows = await cur.fetchall()

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 from textwrap import dedent
+from typing import TYPE_CHECKING
 
 from teridex_core.config import load_config
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_load_config_with_file(tmp_path: Path) -> None:

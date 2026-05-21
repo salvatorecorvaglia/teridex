@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz, process
-from textual.app import ComposeResult
 from textual.containers import Vertical
-from textual.events import Key
 from textual.screen import ModalScreen
 from textual.widgets import Input, ListItem, ListView, Static
 
 from teridex_plugins.api import Command
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+    from textual.events import Key
 
 
 @dataclass(slots=True)
@@ -53,19 +56,20 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
     def _refresh(self, q: str) -> None:
         lst = self.query_one("#palette-list", ListView)
         lst.clear()
+        ranked: list[Command]
         if not q:
-            ranked = [(c.title, 100, c) for c in self._all]
+            ranked = list(self._all)
         else:
-            ranked = process.extract(
+            # process.extract with a dict input returns (choice, score, key).
+            id_to_cmd = {c.id: c for c in self._all}
+            matches = process.extract(
                 q,
                 {c.id: c.title for c in self._all},
                 scorer=fuzz.WRatio,
                 limit=20,
             )
-            # process.extract returns (choice, score, key) when dict input
-            id_to_cmd = {c.id: c for c in self._all}
-            ranked = [(title, score, id_to_cmd[key]) for (title, score, key) in ranked]
-        for title, _score, cmd in ranked:
+            ranked = [id_to_cmd[key] for (_title, _score, key) in matches]
+        for cmd in ranked:
             lst.append(ListItem(Static(_Entry(cmd).label), id=f"cmd-{cmd.id}"))
 
     def _submit(self) -> None:

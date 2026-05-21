@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from textual.widgets import DataTable
 
-from teridex_core.models.result import ResultBatch
+if TYPE_CHECKING:
+    from teridex_core.models.result import ResultBatch
 
 
 class ResultsTable(DataTable[str]):
@@ -25,6 +28,4 @@ class ResultsTable(DataTable[str]):
                 self.add_column(col.name, key=col.name)
             self._initialized = True
         if batch.rows:
-            self.add_rows(
-                tuple("" if v is None else str(v) for v in row) for row in batch.rows
-            )
+            self.add_rows(tuple("" if v is None else str(v) for v in row) for row in batch.rows)

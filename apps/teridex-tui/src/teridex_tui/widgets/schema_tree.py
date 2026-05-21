@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from textual.widgets import Tree
-from textual.widgets.tree import TreeNode
+from typing import TYPE_CHECKING
 
-from teridex_core.models.schema import SchemaSnapshot
+from textual.widgets import Tree
+
+if TYPE_CHECKING:
+    from textual.widgets.tree import TreeNode
+
+    from teridex_core.models.schema import SchemaSnapshot
 
 
 class SchemaTree(Tree[str]):

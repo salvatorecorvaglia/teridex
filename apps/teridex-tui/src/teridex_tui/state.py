@@ -5,15 +5,17 @@ Keeping this in one place keeps the screen and widgets thin and testable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from teridex_core.events import EventBus
-from teridex_core.models.connection import Dsn
-from teridex_core.protocols.adapter import DatabaseAdapter
-from teridex_engine.executor import QueryExecutor
-from teridex_engine.history import QueryHistory
-from teridex_engine.introspector import Introspector
-from teridex_plugins.registry import PluginRegistry
+if TYPE_CHECKING:
+    from teridex_core.events import EventBus
+    from teridex_core.models.connection import Dsn
+    from teridex_core.protocols.adapter import DatabaseAdapter
+    from teridex_engine.executor import QueryExecutor
+    from teridex_engine.history import QueryHistory
+    from teridex_engine.introspector import Introspector
+    from teridex_plugins.registry import PluginRegistry
 
 
 @dataclass

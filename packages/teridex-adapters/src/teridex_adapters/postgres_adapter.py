@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping
-from typing import Any, ClassVar
+import contextlib
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncpg
 
+from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
@@ -21,9 +22,12 @@ from teridex_core.models.schema import (
     TableColumn,
     View,
 )
-from teridex_core.protocols.adapter import Transaction
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.connection import Dsn
+    from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
@@ -33,7 +37,7 @@ class _PostgresTransaction:
         self._conn = conn
         self._tx: Any = None
 
-    async def __aenter__(self) -> "_PostgresTransaction":
+    async def __aenter__(self) -> _PostgresTransaction:
         self._tx = self._conn.transaction()
         await self._tx.start()
         return self
@@ -87,9 +91,7 @@ class PostgresAdapter(AbstractAdapter):
         except asyncpg.PostgresError:
             return False
 
-    async def execute(
-        self, sql: str, params: Mapping[str, Any] | None = None
-    ) -> QueryHandle:
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
         handle = QueryHandle(
@@ -160,7 +162,7 @@ class PostgresAdapter(AbstractAdapter):
                     record0 = first[0]
                     columns = [
                         Column(name=k, type=infer_column_type(None), type_native=None)
-                        for k in record0.keys()
+                        for k in record0
                     ]
                     self._set_metadata(
                         handle,
@@ -197,10 +199,8 @@ class PostgresAdapter(AbstractAdapter):
         await super().cancel(handle)
         # Best-effort server-side cancellation.
         if self._conn is not None:
-            try:
+            with contextlib.suppress(asyncpg.PostgresError):
                 await self._conn.execute("SELECT pg_cancel_backend(pg_backend_pid())")
-            except asyncpg.PostgresError:
-                pass
 
     async def begin(self) -> Transaction:
         if self._conn is None:
@@ -306,7 +306,7 @@ class PostgresAdapter(AbstractAdapter):
                     )
             obj: SchemaObject
             if kind in {"view", "materialized_view"}:
-                obj = View(name=name, schema_name=schema_name, columns=columns, kind=kind)  # type: ignore[arg-type]
+                obj = View(name=name, schema_name=schema_name, columns=columns, kind=kind)
             else:
                 obj = Table(
                     name=name,

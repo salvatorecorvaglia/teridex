@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from teridex_core.errors import QueryCancelledError, QueryError
 from teridex_core.events import (
@@ -23,9 +22,13 @@ from teridex_core.events import (
     QueryStarted,
 )
 from teridex_core.logging import get_logger
-from teridex_core.models.query import QueryHandle, QueryStatus
-from teridex_core.models.result import ResultBatch
-from teridex_core.protocols.adapter import DatabaseAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.query import QueryHandle, QueryStatus
+    from teridex_core.models.result import ResultBatch
+    from teridex_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
 
@@ -92,11 +95,14 @@ class QueryExecutor:
             )
         )
 
-        run = QueryRun(handle=handle, rows=await self._adapter.stream(handle, batch_size=batch_size))
+        # Capture the source iterator locally so the closure cannot recursively
+        # iterate ``run.rows`` after we reassign it to the wrapper below.
+        source = await self._adapter.stream(handle, batch_size=batch_size)
+        run = QueryRun(handle=handle, rows=source)
 
         async def _wrap() -> AsyncIterator[ResultBatch]:
             try:
-                async for batch in run.rows:
+                async for batch in source:
                     run.rows_emitted += len(batch.rows)
                     if (
                         run.rows_emitted > 0
@@ -104,9 +110,7 @@ class QueryExecutor:
                         and run.rows_emitted % progress_every < batch_size
                     ):
                         self._bus.publish(
-                            QueryProgress(
-                                query_id=handle.query_id, rows_emitted=run.rows_emitted
-                            )
+                            QueryProgress(query_id=handle.query_id, rows_emitted=run.rows_emitted)
                         )
                     yield batch
                 self._bus.publish(

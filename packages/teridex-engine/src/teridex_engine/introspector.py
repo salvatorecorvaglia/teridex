@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from teridex_core.events import EventBus, SchemaRefreshed
 from teridex_core.logging import get_logger
-from teridex_core.models.schema import SchemaSnapshot
-from teridex_core.protocols.adapter import DatabaseAdapter
+
+if TYPE_CHECKING:
+    from teridex_core.models.schema import SchemaSnapshot
+    from teridex_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
 

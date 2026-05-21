@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class QueryStatus(str, Enum):
+class QueryStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     STREAMING = "streaming"
@@ -37,20 +37,20 @@ class QueryHandle(BaseModel):
 
     def mark_running(self) -> None:
         self.status = QueryStatus.RUNNING
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
 
     def mark_streaming(self) -> None:
         self.status = QueryStatus.STREAMING
 
     def mark_done(self, status: QueryStatus) -> None:
         self.status = status
-        self.finished_at = datetime.now(timezone.utc)
+        self.finished_at = datetime.now(UTC)
 
     @property
     def duration_ms(self) -> float | None:
         if self.started_at is None:
             return None
-        end = self.finished_at or datetime.now(timezone.utc)
+        end = self.finished_at or datetime.now(UTC)
         return (end - self.started_at).total_seconds() * 1000.0
 
 

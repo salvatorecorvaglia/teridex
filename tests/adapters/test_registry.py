@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_core.errors import AdapterError
 from teridex_adapters.registry import default_registry
+from teridex_core.errors import AdapterError
 
 
 def test_registry_has_known_adapters() -> None:

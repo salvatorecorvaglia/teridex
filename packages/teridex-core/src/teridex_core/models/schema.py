@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -74,7 +74,7 @@ class SchemaSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     connection_id: str
-    captured_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     database: str | None = None
     schemas: dict[str, list[SchemaObject]] = Field(default_factory=dict)
 

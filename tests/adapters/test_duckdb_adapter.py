@@ -4,8 +4,8 @@ import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
-from teridex_core.models.connection import Dsn  # noqa: E402
 from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: E402
+from teridex_core.models.connection import Dsn  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -35,10 +35,6 @@ async def test_duckdb_introspect_smoke() -> None:
         async for _ in await a.stream(h):
             pass
         snap = await a.introspect()
-        assert any(
-            obj.name == "t"
-            for objs in snap.schemas.values()
-            for obj in objs
-        )
+        assert any(obj.name == "t" for objs in snap.schemas.values() for obj in objs)
     finally:
         await a.close()

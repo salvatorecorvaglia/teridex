@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
-from teridex_core.models.connection import Dsn
-from teridex_core.protocols.adapter import DatabaseAdapter
 from teridex_adapters.sqlite_adapter import SQLiteAdapter
+from teridex_core.models.connection import Dsn
 from teridex_engine.pool import ConnectionPool
+
+if TYPE_CHECKING:
+    from teridex_core.protocols.adapter import DatabaseAdapter
 
 
 async def _factory(dsn: Dsn) -> DatabaseAdapter:

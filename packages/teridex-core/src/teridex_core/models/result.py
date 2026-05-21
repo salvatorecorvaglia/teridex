@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 Row = tuple[Any, ...]
 
 
-class ColumnType(str, Enum):
+class ColumnType(StrEnum):
     STRING = "string"
     INTEGER = "integer"
     FLOAT = "float"

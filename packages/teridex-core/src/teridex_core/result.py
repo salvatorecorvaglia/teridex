@@ -8,9 +8,11 @@ render without a try/except).
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Generic, NoReturn, TypeVar, Union
+from typing import TYPE_CHECKING, NoReturn, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -19,7 +21,7 @@ F = TypeVar("F")
 
 
 @dataclass(frozen=True, slots=True)
-class Ok(Generic[T]):
+class Ok[T]:
     value: T
 
     def is_ok(self) -> bool:
@@ -34,15 +36,15 @@ class Ok(Generic[T]):
     def unwrap_or(self, _default: T) -> T:
         return self.value
 
-    def map(self, fn: Callable[[T], U]) -> "Ok[U]":
+    def map(self, fn: Callable[[T], U]) -> Ok[U]:
         return Ok(fn(self.value))
 
-    def map_err(self, _fn: Callable[[object], F]) -> "Ok[T]":
+    def map_err(self, _fn: Callable[[object], F]) -> Ok[T]:
         return self
 
 
 @dataclass(frozen=True, slots=True)
-class Err(Generic[E]):
+class Err[E]:
     error: E
 
     def is_ok(self) -> bool:
@@ -57,11 +59,11 @@ class Err(Generic[E]):
     def unwrap_or(self, default: T) -> T:
         return default
 
-    def map(self, _fn: Callable[[object], U]) -> "Err[E]":
+    def map(self, _fn: Callable[[object], U]) -> Err[E]:
         return self
 
-    def map_err(self, fn: Callable[[E], F]) -> "Err[F]":
+    def map_err(self, fn: Callable[[E], F]) -> Err[F]:
         return Err(fn(self.error))
 
 
-Result = Union[Ok[T], Err[E]]
+type Result[T, E] = Ok[T] | Err[E]

@@ -8,7 +8,7 @@ container is sealed via :meth:`Container.seal`.
 from __future__ import annotations
 
 from collections.abc import Callable
-from enum import Enum
+from enum import StrEnum
 from threading import RLock
 from typing import Any, TypeVar, cast
 
@@ -19,13 +19,13 @@ T = TypeVar("T")
 _Factory = Callable[["Container"], Any]
 
 
-class Lifetime(str, Enum):
+class Lifetime(StrEnum):
     SINGLETON = "singleton"
     TRANSIENT = "transient"
 
 
 class _Registration:
-    __slots__ = ("factory", "lifetime", "instance")
+    __slots__ = ("factory", "instance", "lifetime")
 
     def __init__(self, factory: _Factory, lifetime: Lifetime) -> None:
         self.factory = factory
@@ -52,7 +52,7 @@ class Container:
     def register(
         self,
         interface: type[T],
-        factory: Callable[["Container"], T],
+        factory: Callable[[Container], T],
         *,
         lifetime: Lifetime = Lifetime.SINGLETON,
     ) -> None:
@@ -87,8 +87,8 @@ class Container:
             with self._lock:
                 if reg.instance is None:
                     reg.instance = reg.factory(self)
-                return cast(T, reg.instance)
-        return cast(T, reg.factory(self))
+                return cast("T", reg.instance)
+        return cast("T", reg.factory(self))
 
     def try_resolve(self, interface: type[T]) -> T | None:
         try:

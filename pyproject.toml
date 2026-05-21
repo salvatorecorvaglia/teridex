@@ -10,8 +10,8 @@ authors = [{ name = "Teridex contributors" }]
 [tool.uv.workspace]
 members = ["apps/*", "packages/*"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
@@ -41,6 +41,11 @@ markers = [
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:aiosqlite.*",
+    # aiosqlite's Connection.__del__ logs a ResourceWarning when finalized
+    # without explicit close — Textual's pilot teardown can race this on app
+    # exit. Suppress the warning so test_app_smoke is deterministic.
+    "ignore::ResourceWarning:aiosqlite.*",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]

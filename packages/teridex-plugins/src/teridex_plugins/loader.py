@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from importlib.metadata import EntryPoint, entry_points
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from teridex_core.errors import PluginError, PluginLoadError
 from teridex_core.events import EventBus, PluginLoaded, PluginUnloaded
 from teridex_core.logging import get_logger
 from teridex_core.protocols.plugin import PluginManifest
 from teridex_plugins.context import PluginContext
-from teridex_plugins.registry import PluginRegistry
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from teridex_plugins.registry import PluginRegistry
 
 logger = get_logger(__name__)
 
@@ -47,17 +50,10 @@ class PluginLoader:
     def _is_allowed(self, plugin_id: str) -> bool:
         if plugin_id in self._disabled:
             return False
-        if self._enabled and plugin_id not in self._enabled:
-            return False
-        return True
+        return not (self._enabled and plugin_id not in self._enabled)
 
     def discover(self) -> list[EntryPoint]:
-        try:
-            eps = entry_points(group=self.GROUP)
-        except TypeError:
-            # Older importlib.metadata API fallback
-            eps = entry_points().get(self.GROUP, [])  # type: ignore[union-attr]
-        return list(eps)
+        return list(entry_points(group=self.GROUP))
 
     def load_all(self) -> None:
         for ep in self.discover():
@@ -113,9 +109,7 @@ class PluginLoader:
     def unload(self, plugin_id: str) -> None:
         plugin = self._instances.pop(plugin_id, None)
         if plugin is None:
-            raise PluginError(
-                f"plugin not loaded: {plugin_id!r}", context={"plugin_id": plugin_id}
-            )
+            raise PluginError(f"plugin not loaded: {plugin_id!r}", context={"plugin_id": plugin_id})
         on_unload = getattr(plugin, "on_unload", None)
         ctx = PluginContext(
             plugin_id=plugin_id,

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -24,10 +25,10 @@ from teridex_core.events import (
     QueryStarted,
 )
 from teridex_core.logging import configure_logging, get_logger
-from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor, QueryRun
 from teridex_engine.history import HistoryEntry, QueryHistory
 from teridex_engine.introspector import Introspector
+from teridex_plugins.context import PluginContext
 from teridex_plugins.loader import PluginLoader
 from teridex_plugins.registry import PluginRegistry
 from teridex_tui.builtin_commands import BUILTIN_COMMANDS
@@ -39,6 +40,9 @@ from teridex_tui.state import AppState
 from teridex_tui.themes import THEMES
 from teridex_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
 
+if TYPE_CHECKING:
+    from teridex_core.models.connection import Dsn
+
 logger = get_logger(__name__)
 
 
@@ -48,6 +52,12 @@ class TeridexApp(App[None]):
     CSS_PATH = "teridex.tcss"
     TITLE = "Teridex"
 
+    # Class-level bindings — Textual reads these at class-creation time.
+    # Vim-mode adds extra bindings dynamically in __init__ via bind().
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        Binding(k, a, d) for (k, a, d) in DEFAULT_BINDINGS
+    ]
+
     def __init__(
         self,
         config: TeridexConfig | None = None,
@@ -55,19 +65,16 @@ class TeridexApp(App[None]):
     ) -> None:
         super().__init__()
         self.cfg = config or load_config()
-        configure_logging(level=self.cfg.logging.level, json=self.cfg.logging.json)
+        configure_logging(level=self.cfg.logging.level, json=self.cfg.logging.json_lines)
         self.state = AppState(bus=EventBus(), plugins=PluginRegistry())
         self._initial_dsn = initial_dsn
         self._current_run: QueryRun | None = None
-        self._bindings = (
-            VIM_BINDINGS if self.cfg.ui.keymap == "vim" else DEFAULT_BINDINGS
-        )
-
-    # ---- bindings ------------------------------------------------------
-
-    @property
-    def BINDINGS(self) -> list[Binding]:  # type: ignore[override]
-        return [Binding(k, a, d) for (k, a, d) in self._bindings]
+        self._palette_task: asyncio.Task[None] | None = None
+        if self.cfg.ui.keymap == "vim":
+            for key, action, desc in VIM_BINDINGS:
+                if (key, action, desc) in DEFAULT_BINDINGS:
+                    continue
+                self.bind(key, action, description=desc)
 
     # ---- lifecycle -----------------------------------------------------
 
@@ -91,9 +98,23 @@ class TeridexApp(App[None]):
     # ---- setup helpers ------------------------------------------------
 
     def _apply_theme(self) -> None:
+        from textual.theme import Theme as TxTheme  # noqa: PLC0415
+
         theme = THEMES.get(self.cfg.ui.theme, THEMES["monokai"])
-        # Textual's app exposes `theme_variables`; we set our overrides via
-        # CSS variables on the screen. For now we just log.
+        tx = TxTheme(
+            name=f"teridex-{theme.name}",
+            primary=theme.primary,
+            accent=theme.accent,
+            success=theme.success,
+            warning=theme.warning,
+            error=theme.error,
+            background=theme.background,
+            foreground=theme.foreground,
+            surface=theme.surface,
+            dark=True,
+        )
+        self.register_theme(tx)
+        self.theme = tx.name
         logger.debug("theme_applied", theme=theme.name)
 
     async def _load_plugins(self) -> None:
@@ -208,18 +229,18 @@ class TeridexApp(App[None]):
     async def action_close_tab(self) -> None:
         self._tabs().close_current()
 
-    async def action_command_palette(self) -> None:
+    async def action_command_palette(self) -> None:  # type: ignore[override]
+        # Textual supports async actions at runtime; its stubs only declare
+        # the sync signature. Mypy override-suppress is intentional.
         commands = [*BUILTIN_COMMANDS, *self.state.plugins.all_commands()]
         result = await self.push_screen_wait(CommandPaletteScreen(commands))
         if result is not None:
-            from teridex_plugins.context import PluginContext
-
             ctx = PluginContext(
                 plugin_id="builtin",
                 event_bus=self.state.bus,
                 registry=self.state.plugins,
             )
-            asyncio.create_task(result.handler(ctx))
+            self._palette_task = asyncio.ensure_future(result.handler(ctx))
 
     async def action_help(self) -> None:
         self._status().message = "see docs/ or press Ctrl+P for commands"

@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from teridex_core.errors import AdapterError
-from teridex_core.models.connection import Dsn
 
 if TYPE_CHECKING:
     from teridex_adapters.base import AbstractAdapter
+    from teridex_core.models.connection import Dsn
 
 
 class AdapterRegistry:
@@ -48,26 +48,27 @@ class AdapterRegistry:
 def _build_default() -> AdapterRegistry:
     reg = AdapterRegistry()
     # Lazy imports so unused-driver modules don't crash on missing extras.
+    # PLC0415 intentionally suppressed — each driver is an optional extra.
     try:
-        from teridex_adapters.duckdb_adapter import DuckDBAdapter
+        from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: PLC0415
 
         reg.register(DuckDBAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.sqlite_adapter import SQLiteAdapter
+        from teridex_adapters.sqlite_adapter import SQLiteAdapter  # noqa: PLC0415
 
         reg.register(SQLiteAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.postgres_adapter import PostgresAdapter
+        from teridex_adapters.postgres_adapter import PostgresAdapter  # noqa: PLC0415
 
         reg.register(PostgresAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.mysql_adapter import MySQLAdapter
+        from teridex_adapters.mysql_adapter import MySQLAdapter  # noqa: PLC0415
 
         reg.register(MySQLAdapter)
     except ImportError:
@@ -79,7 +80,7 @@ _default: AdapterRegistry | None = None
 
 
 def default_registry() -> AdapterRegistry:
-    global _default
+    global _default  # noqa: PLW0603 - module-level cache for the process-wide registry
     if _default is None:
         _default = _build_default()
     return _default

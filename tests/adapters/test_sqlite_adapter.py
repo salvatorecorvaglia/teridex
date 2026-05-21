@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from teridex_adapters.sqlite_adapter import SQLiteAdapter
 from teridex_core.errors import QueryCancelledError
 from teridex_core.models.connection import Dsn
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
 
 
 @pytest.mark.asyncio
@@ -55,7 +55,8 @@ async def test_introspect_tables_and_indexes() -> None:
         assert "main" in snap.schemas
         users = next(o for o in snap.schemas["main"] if o.name == "users")
         col_names = [c.name for c in users.columns]
-        assert "id" in col_names and "email" in col_names
+        assert "id" in col_names
+        assert "email" in col_names
         assert any(i.name == "ix_email" for i in users.indexes)
     finally:
         await a.close()

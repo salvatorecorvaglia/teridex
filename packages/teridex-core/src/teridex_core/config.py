@@ -27,7 +27,9 @@ class EngineConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    json: bool | None = None
+    # ``json_lines`` — emit one JSON object per line (CI/Docker). ``None``
+    # auto-detects based on whether stderr is a TTY.
+    json_lines: bool | None = None
 
 
 class PluginsConfig(BaseModel):

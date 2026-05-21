@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping
-from typing import Any, ClassVar
+import contextlib
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncmy
 
+from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
@@ -21,9 +22,12 @@ from teridex_core.models.schema import (
     TableColumn,
     View,
 )
-from teridex_core.protocols.adapter import Transaction
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.connection import Dsn
+    from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
@@ -32,7 +36,7 @@ class _MySQLTransaction:
     def __init__(self, conn: Any) -> None:
         self._conn = conn
 
-    async def __aenter__(self) -> "_MySQLTransaction":
+    async def __aenter__(self) -> _MySQLTransaction:
         await self._conn.begin()
         return self
 
@@ -70,10 +74,8 @@ class MySQLAdapter(AbstractAdapter):
 
     async def _do_close(self) -> None:
         for c in list(self._cursors.values()):
-            try:
+            with contextlib.suppress(Exception):
                 await c.close()
-            except Exception:
-                pass
         self._cursors.clear()
         if self._conn is not None:
             self._conn.close()
@@ -90,9 +92,7 @@ class MySQLAdapter(AbstractAdapter):
         except Exception:
             return False
 
-    async def execute(
-        self, sql: str, params: Mapping[str, Any] | None = None
-    ) -> QueryHandle:
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
         handle = QueryHandle(
@@ -150,9 +150,7 @@ class MySQLAdapter(AbstractAdapter):
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)
                         return
-                    yield ResultBatch(
-                        columns=columns, rows=[tuple(r) for r in rows], is_last=False
-                    )
+                    yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
             finally:
                 await cur.close()
                 self._cursors.pop(handle.query_id, None)
@@ -173,8 +171,10 @@ class MySQLAdapter(AbstractAdapter):
         cur = conn.cursor()
         try:
             await cur.execute(
-                "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM information_schema.tables "
-                "WHERE TABLE_SCHEMA NOT IN ('mysql','performance_schema','information_schema','sys')"
+                "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE"
+                " FROM information_schema.tables"
+                " WHERE TABLE_SCHEMA NOT IN"
+                " ('mysql','performance_schema','information_schema','sys')"
             )
             tables = await cur.fetchall()
             for schema_name, table_name, kind in tables:
@@ -201,9 +201,10 @@ class MySQLAdapter(AbstractAdapter):
                 indexes: list[Index] = []
                 if kind == "BASE TABLE":
                     await cur.execute(
-                        "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, "
-                        "REFERENCED_COLUMN_NAME FROM information_schema.key_column_usage "
-                        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND REFERENCED_TABLE_NAME IS NOT NULL",
+                        "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME,"
+                        " REFERENCED_COLUMN_NAME FROM information_schema.key_column_usage"
+                        " WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s"
+                        " AND REFERENCED_TABLE_NAME IS NOT NULL",
                         (schema_name, table_name),
                     )
                     for cn, col, ref_t, ref_c in await cur.fetchall():
@@ -216,15 +217,15 @@ class MySQLAdapter(AbstractAdapter):
                             )
                         )
                     await cur.execute(
-                        "SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE FROM information_schema.statistics "
-                        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY INDEX_NAME, SEQ_IN_INDEX",
+                        "SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE"
+                        " FROM information_schema.statistics"
+                        " WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s"
+                        " ORDER BY INDEX_NAME, SEQ_IN_INDEX",
                         (schema_name, table_name),
                     )
                     by_idx: dict[str, dict[str, Any]] = {}
                     for ix_name, col_name, non_unique in await cur.fetchall():
-                        entry = by_idx.setdefault(
-                            ix_name, {"cols": [], "unique": non_unique == 0}
-                        )
+                        entry = by_idx.setdefault(ix_name, {"cols": [], "unique": non_unique == 0})
                         entry["cols"].append(col_name)
                     for ix_name, info in by_idx.items():
                         indexes.append(

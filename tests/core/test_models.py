@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from teridex_core.errors import ConfigError
 from teridex_core.models.connection import Dsn
@@ -25,7 +26,7 @@ def test_dsn_parse_postgres() -> None:
 
 
 def test_dsn_unknown_scheme_raises() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Dsn.parse("oracle://foo")
 
 

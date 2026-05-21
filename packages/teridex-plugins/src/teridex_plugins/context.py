@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from teridex_core.events import Event, EventBus
 from teridex_core.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from teridex_plugins.api import Command, Panel
     from teridex_plugins.registry import PluginRegistry
 
@@ -28,7 +29,7 @@ class PluginContext:
         *,
         plugin_id: str,
         event_bus: EventBus,
-        registry: "PluginRegistry",
+        registry: PluginRegistry,
         services: dict[str, Any] | None = None,
     ) -> None:
         self.plugin_id = plugin_id
@@ -43,10 +44,10 @@ class PluginContext:
     def publish(self, event: Event) -> None:
         self._bus.publish(event)
 
-    def register_command(self, command: "Command") -> None:
+    def register_command(self, command: Command) -> None:
         self._registry.add_command(self.plugin_id, command)
 
-    def register_panel(self, panel: "Panel") -> None:
+    def register_panel(self, panel: Panel) -> None:
         self._registry.add_panel(self.plugin_id, panel)
 
     def get_service(self, name: str) -> Any:

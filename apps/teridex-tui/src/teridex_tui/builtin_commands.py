@@ -5,18 +5,23 @@ These mirror keyboard shortcuts but make the action discoverable via Ctrl+P.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from teridex_plugins.api import Command
-from teridex_plugins.context import PluginContext
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from teridex_plugins.context import PluginContext
+
+
+from teridex_tui.events import RunActionRequested
 
 
 def _wrap(action: str) -> Callable[[PluginContext], Awaitable[None]]:
-    async def _handler(ctx: PluginContext) -> None:  # noqa: ARG001
+    async def _handler(ctx: PluginContext) -> None:
         # Built-ins are invoked through the app's action_* methods. We use
         # the event bus to publish a request the app routes back to itself.
-        from teridex_tui.events import RunActionRequested
-
         ctx.publish(RunActionRequested(action=action))
 
     return _handler

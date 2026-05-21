@@ -10,16 +10,19 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Mapping
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from teridex_core.errors import AdapterError
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
-from teridex_core.models.result import ResultBatch
-from teridex_core.models.schema import SchemaSnapshot
-from teridex_core.protocols.adapter import Transaction
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.connection import Dsn
+    from teridex_core.models.result import ResultBatch
+    from teridex_core.models.schema import SchemaSnapshot
+    from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
@@ -80,12 +83,10 @@ class AbstractAdapter(ABC):
     # ---- execution ----------------------------------------------------
 
     @abstractmethod
-    async def execute(
-        self, sql: str, params: Mapping[str, Any] | None = None
-    ) -> QueryHandle: ...
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle: ...
 
     @abstractmethod
-    def stream(
+    async def stream(
         self, handle: QueryHandle, *, batch_size: int = 1000
     ) -> AsyncIterator[ResultBatch]: ...
 
@@ -93,9 +94,10 @@ class AbstractAdapter(ABC):
         return self._metadata.get(handle.query_id, QueryMetadata())
 
     async def cancel(self, handle: QueryHandle) -> None:
-        flag = self._cancel_flags.get(handle.query_id)
-        if flag is not None:
-            flag.set()
+        # Create-or-get — cancel() must be effective even if stream() hasn't
+        # been called yet for this handle (the executor may cancel between
+        # execute and stream).
+        self._cancel_event(handle).set()
         handle.mark_done(QueryStatus.CANCELLED)
         logger.info("adapter_cancel_requested", adapter=self.name, query_id=handle.query_id)
 

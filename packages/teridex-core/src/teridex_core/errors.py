@@ -33,7 +33,7 @@ class AdapterError(TeridexError):
     code = "teridex.adapter"
 
 
-class ConnectionError(AdapterError):  # noqa: A001 - intentional shadow at module scope
+class ConnectionError(AdapterError):
     code = "teridex.adapter.connection"
 
 

@@ -4,9 +4,9 @@ import asyncio
 
 import pytest
 
+from teridex_adapters.sqlite_adapter import SQLiteAdapter
 from teridex_core.events import EventBus, QueryCompleted, QueryStarted
 from teridex_core.models.connection import Dsn
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
 from teridex_engine.executor import QueryExecutor
 
 
@@ -28,7 +28,8 @@ async def test_executor_emits_lifecycle_events() -> None:
         await asyncio.sleep(0)
         if starts and completes:
             break
-    assert starts and completes
+    assert starts
+    assert completes
     assert completes[0].rows == 1
     await bus.close()
     await adapter.close()

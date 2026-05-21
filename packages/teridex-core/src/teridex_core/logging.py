@@ -13,19 +13,21 @@ from __future__ import annotations
 import logging
 import sys
 from contextvars import ContextVar
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
-from structlog.types import EventDict, Processor
 
-_request_context: ContextVar[dict[str, Any]] = ContextVar("teridex_request_context", default={})
+if TYPE_CHECKING:
+    from structlog.types import EventDict, Processor
+
+_request_context: ContextVar[dict[str, Any] | None] = ContextVar(
+    "teridex_request_context", default=None
+)
 
 _configured = False
 
 
-def _merge_request_context(
-    _logger: Any, _method_name: str, event_dict: EventDict
-) -> EventDict:
+def _merge_request_context(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
     ctx = _request_context.get()
     if ctx:
         for key, value in ctx.items():
@@ -40,7 +42,7 @@ def configure_logging(
 ) -> None:
     """Configure structlog + stdlib logging. Idempotent."""
 
-    global _configured
+    global _configured  # noqa: PLW0603 - module-level idempotency flag
     if _configured:
         return
 
@@ -81,15 +83,18 @@ def configure_logging(
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     if not _configured:
         configure_logging()
-    return structlog.get_logger(name) if name else structlog.get_logger()
+    bound: structlog.stdlib.BoundLogger = (
+        structlog.get_logger(name) if name else structlog.get_logger()
+    )
+    return bound
 
 
 def bind_context(**kwargs: Any) -> None:
     """Bind keys onto the current logging context (request/query scope)."""
-    ctx = dict(_request_context.get())
-    ctx.update(kwargs)
+    current = _request_context.get() or {}
+    ctx = {**current, **kwargs}
     _request_context.set(ctx)
 
 
 def clear_context() -> None:
-    _request_context.set({})
+    _request_context.set(None)

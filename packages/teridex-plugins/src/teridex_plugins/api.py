@@ -30,8 +30,7 @@ def hook(event: str) -> Callable[[F], F]:
     Example::
 
         @hook("query.before_execute")
-        async def warn_on_drop(self, ctx, sql: str) -> None:
-            ...
+        async def warn_on_drop(self, ctx, sql: str) -> None: ...
     """
 
     def _wrap(fn: F) -> F:
@@ -75,6 +74,6 @@ class Panel:
     id: str
     title: str
     placement: PanelPlacement
-    factory: Callable[["PluginContext"], Any]
+    factory: Callable[[PluginContext], Any]
     initial_size: int = 30
     keys: list[str] = field(default_factory=list)

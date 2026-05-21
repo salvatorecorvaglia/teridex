@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Mapping
-from typing import Any, ClassVar
+import contextlib
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiosqlite
 
+from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
@@ -21,9 +22,12 @@ from teridex_core.models.schema import (
     TableColumn,
     View,
 )
-from teridex_core.protocols.adapter import Transaction
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.connection import Dsn
+    from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
@@ -32,7 +36,7 @@ class _SQLiteTransaction:
     def __init__(self, conn: aiosqlite.Connection) -> None:
         self._conn = conn
 
-    async def __aenter__(self) -> "_SQLiteTransaction":
+    async def __aenter__(self) -> _SQLiteTransaction:
         await self._conn.execute("BEGIN")
         return self
 
@@ -63,18 +67,14 @@ class SQLiteAdapter(AbstractAdapter):
         self._conn = await aiosqlite.connect(path)
         # WAL mode is fine on file dbs, no-op on memory.
         if path != ":memory:":
-            try:
+            with contextlib.suppress(aiosqlite.Error):
                 await self._conn.execute("PRAGMA journal_mode=WAL")
-            except aiosqlite.Error:
-                pass
         await self._conn.execute("PRAGMA foreign_keys=ON")
 
     async def _do_close(self) -> None:
         for cur in list(self._cursors.values()):
-            try:
+            with contextlib.suppress(aiosqlite.Error):
                 await cur.close()
-            except aiosqlite.Error:
-                pass
         self._cursors.clear()
         if self._conn is not None:
             await self._conn.close()
@@ -89,9 +89,7 @@ class SQLiteAdapter(AbstractAdapter):
         except aiosqlite.Error:
             return False
 
-    async def execute(
-        self, sql: str, params: Mapping[str, Any] | None = None
-    ) -> QueryHandle:
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
         handle = QueryHandle(
@@ -118,7 +116,7 @@ class SQLiteAdapter(AbstractAdapter):
         cancel = self._cancel_event(handle)
 
         async def _gen() -> AsyncIterator[ResultBatch]:
-            description = cur.description or []
+            description: list[Any] = list(cur.description or [])
             columns = [
                 Column(name=d[0], type=infer_column_type(None), type_native=None)
                 for d in description
@@ -186,7 +184,16 @@ class SQLiteAdapter(AbstractAdapter):
                     )
             fks: list[ForeignKey] = []
             async with conn.execute(f"PRAGMA foreign_key_list('{name}')") as fcur:
-                for fk_id, _seq, ref_table, fcol, tcol, on_update, on_delete, _match in await fcur.fetchall():
+                for (
+                    fk_id,
+                    _seq,
+                    ref_table,
+                    fcol,
+                    tcol,
+                    on_update,
+                    on_delete,
+                    _match,
+                ) in await fcur.fetchall():
                     fks.append(
                         ForeignKey(
                             name=f"fk_{name}_{fk_id}",

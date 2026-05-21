@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from teridex_core.errors import PluginError
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.api import Command, Panel
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from teridex_core.protocols.plugin import PluginManifest
+    from teridex_plugins.api import Command, Panel
 
 
 class PluginRegistry:

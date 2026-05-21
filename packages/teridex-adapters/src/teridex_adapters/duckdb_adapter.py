@@ -7,14 +7,14 @@ per-connection lock so the embedded DB is touched by one thread at a time.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Mapping
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import duckdb
 
+from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
@@ -26,18 +26,21 @@ from teridex_core.models.schema import (
     TableColumn,
     View,
 )
-from teridex_core.protocols.adapter import Transaction
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Mapping
+
+    from teridex_core.models.connection import Dsn
+    from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
 
 class _DuckDBTransaction:
-    def __init__(self, adapter: "DuckDBAdapter") -> None:
+    def __init__(self, adapter: DuckDBAdapter) -> None:
         self._adapter = adapter
 
-    async def __aenter__(self) -> "_DuckDBTransaction":
+    async def __aenter__(self) -> _DuckDBTransaction:
         await self._adapter._exec_sync("BEGIN")
         return self
 
@@ -87,22 +90,20 @@ class DuckDBAdapter(AbstractAdapter):
             raise AdapterError("duckdb: not connected")
         conn = self._conn
         async with self._lock:
+
             def _run() -> Any:
                 if params:
-                    return conn.execute(sql, list(params.values()) if not isinstance(params, list) else params)
+                    return conn.execute(sql, list(params.values()))
                 return conn.execute(sql)
 
             return await asyncio.to_thread(_run)
 
-    async def execute(
-        self, sql: str, params: Mapping[str, Any] | None = None
-    ) -> QueryHandle:
-        from teridex_core.models.connection import ConnectionInfo  # local to avoid cycle
-
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         cid = id(self._conn)
-        handle = QueryHandle(connection_id=hex(cid), sql=sql, params=dict(params) if params else None)
+        handle = QueryHandle(
+            connection_id=hex(cid), sql=sql, params=dict(params) if params else None
+        )
         handle.mark_running()
-        _ = ConnectionInfo  # silence unused import in some checkers
         try:
             await self._exec_sync(sql, params)
         except duckdb.Error as exc:
@@ -147,7 +148,9 @@ class DuckDBAdapter(AbstractAdapter):
             while True:
                 if cancel.is_set():
                     handle.mark_done(QueryStatus.CANCELLED)
-                    raise QueryCancelledError("query cancelled", context={"query_id": handle.query_id})
+                    raise QueryCancelledError(
+                        "query cancelled", context={"query_id": handle.query_id}
+                    )
                 rows = await asyncio.to_thread(conn.fetchmany, batch_size)
                 if not rows:
                     handle.mark_done(QueryStatus.SUCCEEDED)
