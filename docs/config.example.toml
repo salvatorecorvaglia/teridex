@@ -1,0 +1,51 @@
+# Teridex configuration file
+#
+# Default location:  ~/.config/teridex/config.toml
+# Layered overrides: TERIDEX_<section>__<field> env vars > CLI flags
+
+[ui]
+# Theme name. Built-ins: "monokai" (warm) | "nord" (cool).
+theme = "monokai"
+
+# Keymap. "default" or "vim".
+keymap = "default"
+
+# Status bar visibility.
+show_status_bar = true
+
+# Rows per fetch batch from adapters → DataTable. Larger values trade
+# latency for throughput on big result sets.
+row_batch_size = 1000
+
+[engine]
+# Soft default for query execution timeouts (seconds).
+default_timeout_seconds = 60.0
+
+# Bounded retention of the local query-history store (~/.teridex/history.db).
+max_history_entries = 1000
+
+# Pool size when the TUI is configured to route queries through a
+# ConnectionPool (slice E will wire this).
+pool_size = 5
+
+[logging]
+# DEBUG | INFO | WARNING | ERROR
+level = "INFO"
+
+# Emit one JSON object per line. `null` auto-selects JSON in non-TTY
+# environments (CI/Docker) and pretty in a terminal.
+# json_lines = false
+
+[plugins]
+# Allowlist — empty means "load everything discovered".
+enabled = []
+
+# Block-list.
+disabled = []
+
+# Saved connections. Reference by name from the future
+# `teridex connections use <name>` command. Plain TOML — credentials
+# encryption is on the roadmap.
+[connections]
+# local-duckdb = "duckdb:///:memory:"
+# local-pg     = "postgres://teridex:teridex@localhost:5432/teridex"

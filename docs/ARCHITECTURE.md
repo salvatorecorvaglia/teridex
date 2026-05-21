@@ -72,6 +72,33 @@ Within `on_load` a plugin can:
 * `ctx.register_command(Command(...))` to surface a palette entry
 * `ctx.register_panel(Panel(...))` to contribute a docked widget
 
+## TUI layout
+
+`MainScreen` composes a 2-column / 3-row grid by default:
+
+```
++---------+---------------------+
+| sidebar |     workspace       |
+| (28)    |  tabs + editor      |
+|         |  + results          |
++---------+---------------------+
+|        status bar (1)         |
++-------------------------------+
+```
+
+When plugins register `Panel`s with `placement="right"` or
+`"bottom"`, the host adds the `.with-right` / `.with-bottom` classes
+to `#main-grid`, mounts the rail container, and slots panels into it.
+Plugin-free terminals never see empty rails.
+
+## Lazy schema tree
+
+`SchemaTree.populate(snapshot)` only renders schema → kind-folder →
+object nodes. Columns, indexes, and foreign keys are filled on the
+first `NodeExpanded` event for that object, keyed by `id(node)` so
+re-expansion is idempotent. This keeps load time linear in object
+count, not column count, for wide schemas.
+
 ## Non-functional
 
 * `mypy --strict`, `ruff` lint + format gates.

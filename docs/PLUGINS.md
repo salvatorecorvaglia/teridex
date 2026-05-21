@@ -68,7 +68,10 @@ class Telemetry:
 
 ## Contributing UI panels
 
-Implement a Textual widget and return it from a `Panel.factory`:
+Implement a Textual widget and return it from a `Panel.factory`. The host
+calls the factory with the same `PluginContext` your `on_load` received,
+so panel widgets can subscribe to events and read services exactly like
+the rest of your plugin.
 
 ```python
 from textual.widgets import Static
@@ -85,8 +88,50 @@ ctx.register_panel(
 )
 ```
 
+### Placement → layout rails
+
+| `placement`  | Where it mounts                              |
+| ------------ | -------------------------------------------- |
+| `"left"`     | Inside `#sidebar`, below the schema tree.    |
+| `"right"`    | Inside a `#right-rail` column (30 cells).    |
+| `"bottom"`   | Inside a `#bottom-rail` row (10 cells tall). |
+
+The right and bottom rails are mounted **only** when at least one panel
+contributes there. With no plugins loaded, the TUI falls back to a clean
+2-column layout.
+
+## Lifecycle
+
+```
+PluginLoader.discover()
+        │
+        ▼
+factory() → instance with `.manifest`
+        │
+        ▼
+PluginLoader.load_instance / load_entry_point
+        │   creates a single PluginContext per plugin (cached)
+        ▼
+plugin.on_load(ctx)                  ← register commands/panels here
+        │
+        ▼
+App._mount_plugin_panels()           ← runs after on_mount
+        │   calls Panel.factory(ctx) and mounts each widget
+        ▼
+…runtime…
+        │
+        ▼
+PluginLoader.unload(plugin_id)
+        │
+        ▼
+plugin.on_unload(ctx)                ← release resources, undo side effects
+```
+
+The cached context is also reachable via `PluginLoader.context_for(plugin_id)`
+if the host needs to drive a plugin from outside its own coroutines.
+
 ## API stability
 
-We versioned the plugin API independently of the rest of Teridex; only
+We version the plugin API independently of the rest of Teridex; only
 symbols importable from `teridex_plugins` and `teridex_core.protocols`
 are considered public.

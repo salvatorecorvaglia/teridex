@@ -46,5 +46,5 @@ async def test_history_modal_lists_entry_after_insert() -> None:
         await pilot.press("ctrl+h")
         await pilot.pause()
         modal = next(s for s in app.screen_stack if isinstance(s, HistoryModal))
-        assert len(modal._entries) >= 1
+        assert len(modal) >= 1
         await pilot.press("escape")

@@ -22,6 +22,9 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         super().__init__()
         self._entries = entries
 
+    def __len__(self) -> int:
+        return len(self._entries)
+
     def compose(self) -> ComposeResult:
         with Vertical(id="HistoryModal"):
             yield Static("[b]Query history[/]\n", id="history-title")

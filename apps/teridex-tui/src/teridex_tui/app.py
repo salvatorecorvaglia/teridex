@@ -132,6 +132,8 @@ class TeridexApp(App[None]):
         self._loader = loader
 
     async def _mount_plugin_panels(self) -> None:
+        from textual.containers import Vertical  # noqa: PLC0415
+
         loader = getattr(self, "_loader", None)
         if loader is None:
             return
@@ -154,13 +156,18 @@ class TeridexApp(App[None]):
             for w in rails["left"]:
                 await sidebar.mount(w)
         if rails["right"]:
-            rail = self.query_one("#right-rail")
-            rail.add_class("has-panels")
+            grid = self.query_one("#main-grid")
+            grid.add_class("with-right")
+            rail = Vertical(id="right-rail")
+            # Mount before the status bar so grid ordering stays correct.
+            await grid.mount(rail, before=self._status())
             for w in rails["right"]:
                 await rail.mount(w)
         if rails["bottom"]:
-            rail = self.query_one("#bottom-rail")
-            rail.add_class("has-panels")
+            grid = self.query_one("#main-grid")
+            grid.add_class("with-bottom")
+            rail = Vertical(id="bottom-rail")
+            await grid.mount(rail, before=self._status())
             for w in rails["bottom"]:
                 await rail.mount(w)
 

@@ -39,6 +39,22 @@ class _RailPlugin:
 
 
 @pytest.mark.asyncio
+async def test_no_rails_when_no_plugins() -> None:
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        # Rails are mounted only when at least one panel exists.
+        from textual.css.query import NoMatches  # noqa: PLC0415
+
+        for selector in ("#right-rail", "#bottom-rail"):
+            with pytest.raises(NoMatches):
+                app.query_one(selector)
+        grid = app.query_one("#main-grid")
+        assert not grid.has_class("with-right")
+        assert not grid.has_class("with-bottom")
+
+
+@pytest.mark.asyncio
 async def test_right_rail_panel_mounts() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
@@ -54,5 +70,6 @@ async def test_right_rail_panel_mounts() -> None:
         # Look the static widget up by id.
         widget = app.query_one("#acme-rail-text", Static)
         assert _TEXT in str(widget.render())
-        rail = app.query_one("#right-rail")
-        assert rail.has_class("has-panels")
+        # The grid grew its layout to include the right rail.
+        grid = app.query_one("#main-grid")
+        assert grid.has_class("with-right")

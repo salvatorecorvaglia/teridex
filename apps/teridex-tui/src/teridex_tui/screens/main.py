@@ -1,4 +1,11 @@
-"""Main screen — composes sidebar, editor, results, status, and plugin rails."""
+"""Main screen — composes sidebar, editor, results, status.
+
+Plugin rails (`#right-rail`, `#bottom-rail`) are NOT yielded here. The
+host app mounts them dynamically inside ``_mount_plugin_panels`` only
+when at least one panel is registered for that placement, so the grid
+falls back to a clean 2-column / 3-row layout when no plugins are
+loaded.
+"""
 
 from __future__ import annotations
 
@@ -26,9 +33,4 @@ class MainScreen(Screen[None]):
                 yield QueryTabs()
                 with Container(id="results-area"):
                     yield ResultsTable()
-            # ``#right-rail`` and ``#bottom-rail`` are populated dynamically by
-            # the app from registered plugin panels; we yield empty containers
-            # so the grid keeps its structure even with no plugins loaded.
-            yield Vertical(id="right-rail")
-            yield Vertical(id="bottom-rail")
             yield StatusBar()

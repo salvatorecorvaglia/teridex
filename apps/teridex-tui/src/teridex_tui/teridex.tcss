@@ -5,19 +5,38 @@ Screen {
     color: $foreground;
 }
 
+/* Default layout: 2 columns × 3 rows
+ *   [ sidebar  | workspace ]
+ *   [ sidebar  | workspace ]
+ *   [ status-bar (spans 2) ]
+ *
+ * Plugin rails (#right-rail, #bottom-rail) are mounted dynamically.
+ * When they appear, the host adds the .with-right / .with-bottom
+ * classes to #main-grid to extend the grid geometry.
+ */
 #main-grid {
     layout: grid;
-    /* 3 columns × 3 rows:
-     *   [ sidebar  | workspace | right-rail ]
-     *   [ sidebar  | workspace | right-rail ]
-     *   [ bottom-rail (spans all)           ]
-     *   [ status-bar (spans all)            ]
-     */
+    grid-size: 2 3;
+    grid-columns: 28 1fr;
+    grid-rows: 1fr 1fr 1;
+    height: 100%;
+    width: 100%;
+}
+
+#main-grid.with-right {
+    grid-size: 3 3;
+    grid-columns: 28 1fr auto;
+}
+
+#main-grid.with-bottom {
+    grid-size: 2 4;
+    grid-rows: 1fr 1fr auto 1;
+}
+
+#main-grid.with-right.with-bottom {
     grid-size: 3 4;
     grid-columns: 28 1fr auto;
     grid-rows: 1fr 1fr auto 1;
-    height: 100%;
-    width: 100%;
 }
 
 #sidebar {
@@ -35,27 +54,16 @@ Screen {
 
 #right-rail {
     row-span: 2;
-    width: auto;
-    min-width: 0;
-    border: round $primary 30%;
-    display: none;       /* hidden until the app mounts at least one panel */
-}
-
-#right-rail.has-panels {
-    display: block;
-    min-width: 24;
+    width: 30;
+    border: round $primary 50%;
+    padding: 0 1;
 }
 
 #bottom-rail {
     column-span: 3;
-    height: auto;
-    border-top: solid $primary 30%;
-    display: none;
-}
-
-#bottom-rail.has-panels {
-    display: block;
     height: 10;
+    border-top: solid $primary 50%;
+    padding: 0 1;
 }
 
 #tabs {
@@ -118,12 +126,14 @@ CommandPalette {
     align: center middle;
     background: $surface;
     border: thick $accent;
-    width: 70;
-    height: 22;
+    width: 80%;
+    max-width: 100;
+    height: 60%;
+    max-height: 28;
     padding: 1 2;
 }
 
 #history-list {
-    height: 14;
+    height: 1fr;
     border: round $primary;
 }
