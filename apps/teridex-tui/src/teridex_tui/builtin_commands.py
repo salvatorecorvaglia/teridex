@@ -1,0 +1,69 @@
+"""Built-in commands surfaced in the palette.
+
+These mirror keyboard shortcuts but make the action discoverable via Ctrl+P.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+
+from teridex_plugins.api import Command
+from teridex_plugins.context import PluginContext
+
+
+def _wrap(action: str) -> Callable[[PluginContext], Awaitable[None]]:
+    async def _handler(ctx: PluginContext) -> None:  # noqa: ARG001
+        # Built-ins are invoked through the app's action_* methods. We use
+        # the event bus to publish a request the app routes back to itself.
+        from teridex_tui.events import RunActionRequested
+
+        ctx.publish(RunActionRequested(action=action))
+
+    return _handler
+
+
+BUILTIN_COMMANDS: list[Command] = [
+    Command(
+        id="builtin.run_query",
+        title="Run query",
+        description="Execute the SQL in the active tab.",
+        default_binding="ctrl+enter",
+        handler=_wrap("run_query"),
+        category="Query",
+    ),
+    Command(
+        id="builtin.cancel_query",
+        title="Cancel running query",
+        default_binding="ctrl+c",
+        handler=_wrap("cancel_query"),
+        category="Query",
+    ),
+    Command(
+        id="builtin.refresh_schema",
+        title="Refresh schema",
+        default_binding="ctrl+r",
+        handler=_wrap("refresh_schema"),
+        category="Schema",
+    ),
+    Command(
+        id="builtin.new_tab",
+        title="New query tab",
+        default_binding="ctrl+t",
+        handler=_wrap("new_tab"),
+        category="Tabs",
+    ),
+    Command(
+        id="builtin.close_tab",
+        title="Close current tab",
+        default_binding="ctrl+w",
+        handler=_wrap("close_tab"),
+        category="Tabs",
+    ),
+    Command(
+        id="builtin.quit",
+        title="Quit Teridex",
+        default_binding="ctrl+q",
+        handler=_wrap("quit"),
+        category="App",
+    ),
+]

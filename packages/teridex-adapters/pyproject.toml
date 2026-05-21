@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teridex-adapters"
+version = "0.1.0"
+description = "Database adapters for Teridex (DuckDB, SQLite, PostgreSQL, MySQL)"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "teridex-core",
+    "sqlalchemy>=2.0",
+]
+
+[project.optional-dependencies]
+duckdb = ["duckdb>=1.1"]
+sqlite = ["aiosqlite>=0.20"]
+postgres = ["asyncpg>=0.29"]
+mysql = ["asyncmy>=0.2.10"]
+all = [
+    "duckdb>=1.1",
+    "aiosqlite>=0.20",
+    "asyncpg>=0.29",
+    "asyncmy>=0.2.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teridex_adapters"]
+
+[tool.uv.sources]
+teridex-core = { workspace = true }

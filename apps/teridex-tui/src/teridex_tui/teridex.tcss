@@ -1,0 +1,91 @@
+/* Teridex Textual CSS — base layout */
+
+Screen {
+    background: $background;
+    color: $foreground;
+}
+
+#main-grid {
+    layout: grid;
+    grid-size: 2 2;
+    grid-columns: 28 1fr;
+    grid-rows: 1fr 1;
+    height: 100%;
+    width: 100%;
+}
+
+#sidebar {
+    row-span: 2;
+    border: round $primary;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+#workspace {
+    layout: vertical;
+    border: round $primary;
+}
+
+#tabs {
+    height: 1;
+    background: $boost;
+}
+
+#editor-area {
+    height: 40%;
+    border-bottom: solid $primary;
+}
+
+#results-area {
+    height: 1fr;
+}
+
+#status-bar {
+    column-span: 2;
+    height: 1;
+    background: $accent;
+    color: $background;
+    padding: 0 1;
+}
+
+SchemaTree {
+    height: 100%;
+}
+
+SqlEditor {
+    height: 100%;
+}
+
+ResultsTable {
+    height: 100%;
+}
+
+CommandPalette {
+    layer: overlay;
+    align: center top;
+    width: 70%;
+    height: auto;
+    border: thick $accent;
+    background: $surface;
+    padding: 1;
+    margin-top: 4;
+}
+
+#palette-input {
+    height: 3;
+    border: round $primary;
+}
+
+#palette-list {
+    height: 12;
+    border: round $primary;
+}
+
+HelpModal {
+    align: center middle;
+    background: $surface;
+    border: thick $accent;
+    width: 60;
+    height: 20;
+    padding: 1 2;
+}

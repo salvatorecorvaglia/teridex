@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teridex-tui"
+version = "0.1.0"
+description = "Teridex terminal UI"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "teridex-core",
+    "teridex-adapters[all]",
+    "teridex-engine",
+    "teridex-plugins",
+    "textual>=0.83",
+    "rich>=13.7",
+    "rapidfuzz>=3.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teridex_tui"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"src/teridex_tui/teridex.tcss" = "share/teridex/teridex.tcss"
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/teridex_tui/teridex.tcss" = "teridex_tui/teridex.tcss"
+
+[tool.uv.sources]
+teridex-core = { workspace = true }
+teridex-adapters = { workspace = true }
+teridex-engine = { workspace = true }
+teridex-plugins = { workspace = true }

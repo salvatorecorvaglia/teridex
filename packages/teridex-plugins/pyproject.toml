@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teridex-plugins"
+version = "0.1.0"
+description = "Teridex plugin API and loader"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "teridex-core",
+    "teridex-engine",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teridex_plugins"]
+
+[tool.uv.sources]
+teridex-core = { workspace = true }
+teridex-engine = { workspace = true }

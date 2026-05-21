@@ -1,0 +1,59 @@
+[project]
+name = "teridex-workspace"
+version = "0.1.0"
+description = "Teridex — terminal-native database IDE (workspace root)"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "Teridex contributors" }]
+
+[tool.uv.workspace]
+members = ["apps/*", "packages/*"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+    "types-PyYAML",
+    "testcontainers>=4.8",
+]
+
+[tool.uv.sources]
+teridex-core = { workspace = true }
+teridex-adapters = { workspace = true }
+teridex-engine = { workspace = true }
+teridex-plugins = { workspace = true }
+teridex-cli = { workspace = true }
+teridex-tui = { workspace = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "integration: requires a live database (postgres/mysql)",
+    "slow: slow-running tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:aiosqlite.*",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["packages", "apps"]
+omit = ["**/tests/**", "**/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]

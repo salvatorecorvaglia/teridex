@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: teridex-postgres
+    environment:
+      POSTGRES_USER: teridex
+      POSTGRES_PASSWORD: teridex
+      POSTGRES_DB: teridex
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./seeds/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teridex"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mysql:
+    image: mysql:8
+    container_name: teridex-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: teridex
+      MYSQL_DATABASE: teridex
+      MYSQL_USER: teridex
+      MYSQL_PASSWORD: teridex
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./seeds/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pteridex"]
+      interval: 5s
+      timeout: 3s
+      retries: 20

@@ -1,0 +1,256 @@
+"""MySQL adapter using asyncmy (native async)."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator, Mapping
+from typing import Any, ClassVar
+
+import asyncmy
+
+from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
+from teridex_core.logging import get_logger
+from teridex_core.models.connection import Dsn
+from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
+from teridex_core.models.result import Column, ResultBatch
+from teridex_core.models.schema import (
+    ForeignKey,
+    Index,
+    SchemaObject,
+    SchemaSnapshot,
+    Table,
+    TableColumn,
+    View,
+)
+from teridex_core.protocols.adapter import Transaction
+from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters.base import AbstractAdapter
+
+logger = get_logger(__name__)
+
+
+class _MySQLTransaction:
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> "_MySQLTransaction":
+        await self._conn.begin()
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if exc_type is None:
+            await self.commit()
+        else:
+            await self.rollback()
+
+    async def commit(self) -> None:
+        await self._conn.commit()
+
+    async def rollback(self) -> None:
+        await self._conn.rollback()
+
+
+class MySQLAdapter(AbstractAdapter):
+    name: ClassVar[str] = "mysql"
+    schemes: ClassVar[tuple[str, ...]] = ("mysql",)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._conn: Any = None
+        self._cursors: dict[str, Any] = {}
+
+    async def _do_connect(self, dsn: Dsn) -> None:
+        self._conn = await asyncmy.connect(
+            user=dsn.username or "root",
+            password=dsn.password or "",
+            host=dsn.host or "localhost",
+            port=dsn.port or 3306,
+            database=dsn.database,
+            autocommit=True,
+        )
+
+    async def _do_close(self) -> None:
+        for c in list(self._cursors.values()):
+            try:
+                await c.close()
+            except Exception:
+                pass
+        self._cursors.clear()
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    async def ping(self) -> bool:
+        if self._conn is None:
+            return False
+        try:
+            cur = self._conn.cursor()
+            await cur.execute("SELECT 1")
+            await cur.close()
+            return True
+        except Exception:
+            return False
+
+    async def execute(
+        self, sql: str, params: Mapping[str, Any] | None = None
+    ) -> QueryHandle:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        handle = QueryHandle(
+            connection_id=hex(id(self._conn)),
+            sql=sql,
+            params=dict(params) if params else None,
+        )
+        handle.mark_running()
+        cur = self._conn.cursor()
+        try:
+            await cur.execute(sql, tuple(params.values()) if params else None)
+        except Exception as exc:
+            handle.mark_done(QueryStatus.FAILED)
+            await cur.close()
+            raise QueryError(str(exc), context={"sql": sql}) from exc
+        self._cursors[handle.query_id] = cur
+        handle.mark_streaming()
+        return handle
+
+    async def stream(
+        self, handle: QueryHandle, *, batch_size: int = 1000
+    ) -> AsyncIterator[ResultBatch]:
+        cur = self._cursors.get(handle.query_id)
+        if cur is None:
+            raise AdapterError("mysql: stream() called with unknown handle")
+        cancel = self._cancel_event(handle)
+
+        async def _gen() -> AsyncIterator[ResultBatch]:
+            description = cur.description or []
+            columns = [
+                Column(name=d[0], type=infer_column_type(None), type_native=None)
+                for d in description
+            ]
+            self._set_metadata(
+                handle,
+                QueryMetadata(
+                    column_names=[c.name for c in columns],
+                    column_types=[],
+                    affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
+                ),
+            )
+            if not columns:
+                handle.mark_done(QueryStatus.SUCCEEDED)
+                yield ResultBatch(columns=[], rows=[], is_last=True)
+                return
+            try:
+                while True:
+                    if cancel.is_set():
+                        handle.mark_done(QueryStatus.CANCELLED)
+                        raise QueryCancelledError(
+                            "query cancelled", context={"query_id": handle.query_id}
+                        )
+                    rows = await cur.fetchmany(batch_size)
+                    if not rows:
+                        handle.mark_done(QueryStatus.SUCCEEDED)
+                        yield ResultBatch(columns=columns, rows=[], is_last=True)
+                        return
+                    yield ResultBatch(
+                        columns=columns, rows=[tuple(r) for r in rows], is_last=False
+                    )
+            finally:
+                await cur.close()
+                self._cursors.pop(handle.query_id, None)
+
+        return _gen()
+
+    async def begin(self) -> Transaction:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        return _MySQLTransaction(self._conn)
+
+    async def introspect(self) -> SchemaSnapshot:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        conn = self._conn
+        schemas: dict[str, list[SchemaObject]] = {}
+
+        cur = conn.cursor()
+        try:
+            await cur.execute(
+                "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM information_schema.tables "
+                "WHERE TABLE_SCHEMA NOT IN ('mysql','performance_schema','information_schema','sys')"
+            )
+            tables = await cur.fetchall()
+            for schema_name, table_name, kind in tables:
+                await cur.execute(
+                    "SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT, "
+                    "ORDINAL_POSITION, COLUMN_KEY FROM information_schema.columns "
+                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION",
+                    (schema_name, table_name),
+                )
+                col_rows = await cur.fetchall()
+                columns = [
+                    TableColumn(
+                        name=c[0],
+                        type_native=c[1],
+                        type=infer_column_type(c[1]),
+                        nullable=c[2] == "YES",
+                        default=c[3],
+                        ordinal=c[4] or 0,
+                        is_primary_key=(c[5] == "PRI"),
+                    )
+                    for c in col_rows
+                ]
+                fks: list[ForeignKey] = []
+                indexes: list[Index] = []
+                if kind == "BASE TABLE":
+                    await cur.execute(
+                        "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, "
+                        "REFERENCED_COLUMN_NAME FROM information_schema.key_column_usage "
+                        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND REFERENCED_TABLE_NAME IS NOT NULL",
+                        (schema_name, table_name),
+                    )
+                    for cn, col, ref_t, ref_c in await cur.fetchall():
+                        fks.append(
+                            ForeignKey(
+                                name=cn,
+                                columns=[col],
+                                referenced_table=ref_t,
+                                referenced_columns=[ref_c],
+                            )
+                        )
+                    await cur.execute(
+                        "SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE FROM information_schema.statistics "
+                        "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY INDEX_NAME, SEQ_IN_INDEX",
+                        (schema_name, table_name),
+                    )
+                    by_idx: dict[str, dict[str, Any]] = {}
+                    for ix_name, col_name, non_unique in await cur.fetchall():
+                        entry = by_idx.setdefault(
+                            ix_name, {"cols": [], "unique": non_unique == 0}
+                        )
+                        entry["cols"].append(col_name)
+                    for ix_name, info in by_idx.items():
+                        indexes.append(
+                            Index(
+                                name=ix_name,
+                                columns=info["cols"],
+                                unique=info["unique"],
+                                primary=ix_name == "PRIMARY",
+                            )
+                        )
+                obj: SchemaObject
+                if kind == "VIEW":
+                    obj = View(name=table_name, schema_name=schema_name, columns=columns)
+                else:
+                    obj = Table(
+                        name=table_name,
+                        schema_name=schema_name,
+                        columns=columns,
+                        foreign_keys=fks,
+                        indexes=indexes,
+                    )
+                schemas.setdefault(schema_name, []).append(obj)
+        finally:
+            await cur.close()
+        return SchemaSnapshot(
+            connection_id=hex(id(conn)),
+            database=self._dsn.database if self._dsn else None,
+            schemas=schemas,
+        )
