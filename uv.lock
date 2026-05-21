@@ -1000,7 +1000,7 @@ wheels = [
 
 [[package]]
 name = "teridex-adapters"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "packages/teridex-adapters" }
 dependencies = [
     { name = "sqlalchemy" },
@@ -1044,7 +1044,7 @@ provides-extras = ["duckdb", "sqlite", "postgres", "mysql", "all"]
 
 [[package]]
 name = "teridex-cli"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "apps/teridex-cli" }
 dependencies = [
     { name = "rich" },
@@ -1069,7 +1069,7 @@ requires-dist = [
 
 [[package]]
 name = "teridex-core"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "packages/teridex-core" }
 dependencies = [
     { name = "pydantic" },
@@ -1088,7 +1088,7 @@ requires-dist = [
 
 [[package]]
 name = "teridex-engine"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "packages/teridex-engine" }
 dependencies = [
     { name = "aiosqlite" },
@@ -1103,7 +1103,7 @@ requires-dist = [
 
 [[package]]
 name = "teridex-plugins"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "packages/teridex-plugins" }
 dependencies = [
     { name = "teridex-core" },
@@ -1118,7 +1118,7 @@ requires-dist = [
 
 [[package]]
 name = "teridex-tui"
-version = "0.1.2"
+version = "0.1.0"
 source = { editable = "apps/teridex-tui" }
 dependencies = [
     { name = "rapidfuzz" },
@@ -1143,7 +1143,7 @@ requires-dist = [
 
 [[package]]
 name = "teridex-workspace"
-version = "0.1.2"
+version = "0.1.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]

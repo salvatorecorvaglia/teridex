@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "teridex-cli"
-version = "0.1.2"
+version = "0.1.0"
 description = "Teridex command-line entry point"
 readme = "README.md"
 requires-python = ">=3.13"
