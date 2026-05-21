@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiosqlite
 
+from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
@@ -16,11 +17,8 @@ from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
     ForeignKey,
     Index,
-    SchemaObject,
     SchemaSnapshot,
-    Table,
     TableColumn,
-    View,
 )
 
 if TYPE_CHECKING:
@@ -178,71 +176,73 @@ class SQLiteAdapter(AbstractAdapter):
     async def introspect(self) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        conn = self._conn
-        objects: list[SchemaObject] = []
-        async with conn.execute(
+        return await _SQLiteIntrospector(self, self._conn).build()
+
+
+class _SQLiteIntrospector(SchemaIntrospector):
+    def __init__(self, adapter: SQLiteAdapter, conn: aiosqlite.Connection) -> None:
+        self._adapter = adapter
+        self._conn = conn
+
+    def connection_id(self) -> str:
+        return hex(id(self._conn))
+
+    def database_name(self) -> str | None:
+        return self._adapter._dsn.database if self._adapter._dsn else None
+
+    async def list_objects(self) -> list[tuple[str, str, str]]:
+        async with self._conn.execute(
             "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name"
         ) as cur:
             rows = await cur.fetchall()
-        for name, kind in rows:
-            cols: list[TableColumn] = []
-            async with conn.execute(f"PRAGMA table_info({_quote_ident(name)})") as ccur:
-                for cid, cname, ctype, notnull, dflt, pk in await ccur.fetchall():
-                    cols.append(
-                        TableColumn(
-                            name=cname,
-                            type_native=ctype or "",
-                            type=infer_column_type(ctype),
-                            nullable=not notnull,
-                            default=dflt,
-                            is_primary_key=bool(pk),
-                            ordinal=cid,
-                        )
-                    )
-            fks: list[ForeignKey] = []
-            async with conn.execute(f"PRAGMA foreign_key_list({_quote_ident(name)})") as fcur:
-                for (
-                    fk_id,
-                    _seq,
-                    ref_table,
-                    fcol,
-                    tcol,
-                    on_update,
-                    on_delete,
-                    _match,
-                ) in await fcur.fetchall():
-                    fks.append(
-                        ForeignKey(
-                            name=f"fk_{name}_{fk_id}",
-                            columns=[fcol],
-                            referenced_table=ref_table,
-                            referenced_columns=[tcol],
-                            on_delete=on_delete,
-                            on_update=on_update,
-                        )
-                    )
-            indexes: list[Index] = []
-            async with conn.execute(f"PRAGMA index_list({_quote_ident(name)})") as icur:
-                idx_rows = await icur.fetchall()
-            for _seq, iname, unique, _origin, _partial in idx_rows:
-                async with conn.execute(f"PRAGMA index_info({_quote_ident(iname)})") as iicur:
-                    icols = [r[2] for r in await iicur.fetchall()]
-                indexes.append(Index(name=iname, columns=icols, unique=bool(unique)))
-            obj: SchemaObject
-            if kind == "view":
-                obj = View(name=name, schema_name="main", columns=cols)
-            else:
-                obj = Table(
-                    name=name,
-                    schema_name="main",
-                    columns=cols,
-                    foreign_keys=fks,
-                    indexes=indexes,
-                )
-            objects.append(obj)
-        return SchemaSnapshot(
-            connection_id=hex(id(conn)),
-            database=self._dsn.database if self._dsn else None,
-            schemas={"main": objects},
-        )
+        return [("main", name, kind) for name, kind in rows]
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        async with self._conn.execute(
+            f"PRAGMA table_info({_quote_ident(name)})"
+        ) as ccur:
+            rows = await ccur.fetchall()
+        return [
+            TableColumn(
+                name=cname,
+                type_native=ctype or "",
+                type=infer_column_type(ctype),
+                nullable=not notnull,
+                default=dflt,
+                is_primary_key=bool(pk),
+                ordinal=cid,
+            )
+            for cid, cname, ctype, notnull, dflt, pk in rows
+        ]
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        async with self._conn.execute(
+            f"PRAGMA foreign_key_list({_quote_ident(name)})"
+        ) as fcur:
+            rows = await fcur.fetchall()
+        return [
+            ForeignKey(
+                name=f"fk_{name}_{fk_id}",
+                columns=[fcol],
+                referenced_table=ref_table,
+                referenced_columns=[tcol],
+                on_delete=on_delete,
+                on_update=on_update,
+            )
+            for fk_id, _seq, ref_table, fcol, tcol, on_update, on_delete, _match in rows
+        ]
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        async with self._conn.execute(
+            f"PRAGMA index_list({_quote_ident(name)})"
+        ) as icur:
+            idx_rows = await icur.fetchall()
+        indexes: list[Index] = []
+        for _seq, iname, unique, _origin, _partial in idx_rows:
+            async with self._conn.execute(
+                f"PRAGMA index_info({_quote_ident(iname)})"
+            ) as iicur:
+                icols = [r[2] for r in await iicur.fetchall()]
+            indexes.append(Index(name=iname, columns=icols, unique=bool(unique)))
+        return indexes

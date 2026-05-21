@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import asyncpg
 
+from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
@@ -16,15 +17,14 @@ from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
     ForeignKey,
     Index,
-    SchemaObject,
     SchemaSnapshot,
-    Table,
     TableColumn,
     View,
 )
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
+    from typing import Literal
 
     from teridex_core.models.connection import Dsn
     from teridex_core.protocols.adapter import Transaction
@@ -236,10 +236,22 @@ class PostgresAdapter(AbstractAdapter):
     async def introspect(self) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        conn = self._conn
-        schemas: dict[str, list[SchemaObject]] = {}
+        return await _PostgresIntrospector(self, self._conn).build()
 
-        rows = await conn.fetch(
+
+class _PostgresIntrospector(SchemaIntrospector):
+    def __init__(self, adapter: PostgresAdapter, conn: asyncpg.Connection) -> None:
+        self._adapter = adapter
+        self._conn = conn
+
+    def connection_id(self) -> str:
+        return hex(id(self._conn))
+
+    def database_name(self) -> str | None:
+        return self._adapter._dsn.database if self._adapter._dsn else None
+
+    async def list_objects(self) -> list[tuple[str, str, str]]:
+        rows = await self._conn.fetch(
             """
             SELECT n.nspname AS schema_name, c.relname AS name,
                    CASE c.relkind WHEN 'v' THEN 'view'
@@ -252,98 +264,91 @@ class PostgresAdapter(AbstractAdapter):
             ORDER BY n.nspname, c.relname
             """
         )
-        for r in rows:
-            schema_name = r["schema_name"]
-            name = r["name"]
-            kind = r["kind"]
-            col_rows = await conn.fetch(
-                """
-                SELECT column_name, data_type, is_nullable, column_default, ordinal_position
-                FROM information_schema.columns
-                WHERE table_schema=$1 AND table_name=$2
-                ORDER BY ordinal_position
-                """,
-                schema_name,
-                name,
+        return [(r["schema_name"], r["name"], r["kind"]) for r in rows]
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        rows = await self._conn.fetch(
+            """
+            SELECT column_name, data_type, is_nullable, column_default, ordinal_position
+            FROM information_schema.columns
+            WHERE table_schema=$1 AND table_name=$2
+            ORDER BY ordinal_position
+            """,
+            schema,
+            name,
+        )
+        return [
+            TableColumn(
+                name=c["column_name"],
+                type_native=c["data_type"],
+                type=infer_column_type(c["data_type"]),
+                nullable=c["is_nullable"] == "YES",
+                default=c["column_default"],
+                ordinal=c["ordinal_position"] or 0,
             )
-            columns = [
-                TableColumn(
-                    name=c["column_name"],
-                    type_native=c["data_type"],
-                    type=infer_column_type(c["data_type"]),
-                    nullable=c["is_nullable"] == "YES",
-                    default=c["column_default"],
-                    ordinal=c["ordinal_position"] or 0,
-                )
-                for c in col_rows
-            ]
-            fks: list[ForeignKey] = []
-            indexes: list[Index] = []
-            if kind == "table":
-                fk_rows = await conn.fetch(
-                    """
-                    SELECT conname,
-                           pg_get_constraintdef(c.oid) AS def,
-                           array_agg(att.attname ORDER BY u.ord) AS cols
-                    FROM pg_constraint c
-                    JOIN pg_class cls ON cls.oid = c.conrelid
-                    JOIN pg_namespace ns ON ns.oid = cls.relnamespace
-                    JOIN unnest(c.conkey) WITH ORDINALITY AS u(attnum, ord) ON true
-                    JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = u.attnum
-                    WHERE c.contype = 'f' AND ns.nspname=$1 AND cls.relname=$2
-                    GROUP BY conname, c.oid
-                    """,
-                    schema_name,
-                    name,
-                )
-                for fk in fk_rows:
-                    fks.append(
-                        ForeignKey(
-                            name=fk["conname"],
-                            columns=list(fk["cols"]),
-                            referenced_table=fk["def"],
-                            referenced_columns=[],
-                        )
-                    )
-                idx_rows = await conn.fetch(
-                    """
-                    SELECT i.relname AS name, ix.indisunique AS uniq, ix.indisprimary AS pk,
-                           array_agg(a.attname ORDER BY k.ord) AS cols
-                    FROM pg_index ix
-                    JOIN pg_class i ON i.oid = ix.indexrelid
-                    JOIN pg_class t ON t.oid = ix.indrelid
-                    JOIN pg_namespace n ON n.oid = t.relnamespace
-                    JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-                    JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
-                    WHERE n.nspname=$1 AND t.relname=$2
-                    GROUP BY i.relname, ix.indisunique, ix.indisprimary
-                    """,
-                    schema_name,
-                    name,
-                )
-                for ix in idx_rows:
-                    indexes.append(
-                        Index(
-                            name=ix["name"],
-                            columns=list(ix["cols"]),
-                            unique=ix["uniq"],
-                            primary=ix["pk"],
-                        )
-                    )
-            obj: SchemaObject
-            if kind in {"view", "materialized_view"}:
-                obj = View(name=name, schema_name=schema_name, columns=columns, kind=kind)
-            else:
-                obj = Table(
-                    name=name,
-                    schema_name=schema_name,
-                    columns=columns,
-                    foreign_keys=fks,
-                    indexes=indexes,
-                )
-            schemas.setdefault(schema_name, []).append(obj)
-        return SchemaSnapshot(
-            connection_id=hex(id(conn)),
-            database=self._dsn.database if self._dsn else None,
-            schemas=schemas,
+            for c in rows
+        ]
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        rows = await self._conn.fetch(
+            """
+            SELECT conname,
+                   pg_get_constraintdef(c.oid) AS def,
+                   array_agg(att.attname ORDER BY u.ord) AS cols
+            FROM pg_constraint c
+            JOIN pg_class cls ON cls.oid = c.conrelid
+            JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+            JOIN unnest(c.conkey) WITH ORDINALITY AS u(attnum, ord) ON true
+            JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = u.attnum
+            WHERE c.contype = 'f' AND ns.nspname=$1 AND cls.relname=$2
+            GROUP BY conname, c.oid
+            """,
+            schema,
+            name,
+        )
+        return [
+            ForeignKey(
+                name=fk["conname"],
+                columns=list(fk["cols"]),
+                referenced_table=fk["def"],
+                referenced_columns=[],
+            )
+            for fk in rows
+        ]
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        rows = await self._conn.fetch(
+            """
+            SELECT i.relname AS name, ix.indisunique AS uniq, ix.indisprimary AS pk,
+                   array_agg(a.attname ORDER BY k.ord) AS cols
+            FROM pg_index ix
+            JOIN pg_class i ON i.oid = ix.indexrelid
+            JOIN pg_class t ON t.oid = ix.indrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+            WHERE n.nspname=$1 AND t.relname=$2
+            GROUP BY i.relname, ix.indisunique, ix.indisprimary
+            """,
+            schema,
+            name,
+        )
+        return [
+            Index(
+                name=ix["name"],
+                columns=list(ix["cols"]),
+                unique=ix["uniq"],
+                primary=ix["pk"],
+            )
+            for ix in rows
+        ]
+
+    def build_view(
+        self, schema: str, name: str, kind: str, columns: list[TableColumn]
+    ) -> View:
+        return View(
+            name=name,
+            schema_name=schema,
+            columns=columns,
+            kind=cast('Literal["view", "materialized_view"]', kind),
         )
