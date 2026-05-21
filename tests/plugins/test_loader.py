@@ -57,3 +57,42 @@ def test_hook_decorator_marks_function() -> None:
 
     assert is_hook(my_hook)
     assert hook_event(my_hook) == "query.before_execute"
+
+
+class _ServicesProbe:
+    """Plugin that snapshots the services dict during on_load."""
+
+    manifest = PluginManifest(id="probe", name="Probe", version="1.0.0")
+
+    def __init__(self) -> None:
+        self.eager: object = None
+        self.late_after_update: object = None
+        self.ctx: PluginContext | None = None
+
+    def on_load(self, ctx: PluginContext) -> None:
+        self.ctx = ctx
+        self.eager = ctx.get_service("event_bus")
+
+    def on_unload(self, ctx: PluginContext) -> None:
+        return
+
+
+@pytest.mark.asyncio
+async def test_services_are_exposed_at_load_and_updatable() -> None:
+    bus = EventBus()
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, bus, services={"event_bus": bus, "thing": "v1"})
+    probe = _ServicesProbe()
+    loader.load_instance(probe)
+
+    # Eager services were visible inside on_load.
+    assert probe.eager is bus
+    assert probe.ctx is not None
+    assert probe.ctx.get_service("thing") == "v1"
+
+    # Late-bound services attach via update_services and stay readable.
+    sentinel = object()
+    probe.ctx.update_services(executor=sentinel)
+    assert probe.ctx.get_service("executor") is sentinel
+
+    await bus.close()

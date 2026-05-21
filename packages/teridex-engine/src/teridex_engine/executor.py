@@ -21,7 +21,7 @@ from teridex_core.events import (
     QueryProgress,
     QueryStarted,
 )
-from teridex_core.logging import get_logger
+from teridex_core.logging import bind_context, clear_context, get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
@@ -87,6 +87,11 @@ class QueryExecutor:
             )
             raise
 
+        # Bind the query identity into the structured-logging contextvar so
+        # every log line emitted while this run is in flight carries
+        # ``query_id`` + ``adapter`` without each callsite needing to know.
+        bind_context(query_id=handle.query_id, adapter=self._adapter.name)
+
         self._bus.publish(
             QueryStarted(
                 query_id=handle.query_id,
@@ -132,6 +137,8 @@ class QueryExecutor:
                     )
                 )
                 raise
+            finally:
+                clear_context()
 
         run.rows = _wrap()
         return run

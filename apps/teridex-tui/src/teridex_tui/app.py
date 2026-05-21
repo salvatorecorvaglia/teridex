@@ -28,6 +28,7 @@ from teridex_core.logging import configure_logging, get_logger
 from teridex_engine.executor import QueryExecutor, QueryRun
 from teridex_engine.history import HistoryEntry, QueryHistory
 from teridex_engine.introspector import Introspector
+from teridex_engine.pool import ConnectionPool
 from teridex_plugins.context import PluginContext
 from teridex_plugins.loader import PluginLoader
 from teridex_plugins.registry import PluginRegistry
@@ -43,6 +44,7 @@ from teridex_tui.themes import THEMES
 from teridex_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
 
 if TYPE_CHECKING:
+    from teridex_adapters.base import AbstractAdapter
     from teridex_core.models.connection import Dsn
     from teridex_plugins.api import Command
 
@@ -72,6 +74,7 @@ class TeridexApp(App[None]):
         self.state = AppState(bus=EventBus(), plugins=PluginRegistry())
         self._initial_dsn = initial_dsn
         self._current_run: QueryRun | None = None
+        self._run_executor: QueryExecutor | None = None
         self._palette_task: asyncio.Task[None] | None = None
         if self.cfg.ui.keymap == "vim":
             for key, action, desc in VIM_BINDINGS:
@@ -95,6 +98,8 @@ class TeridexApp(App[None]):
     async def on_unmount(self) -> None:
         if self.state.history is not None:
             await self.state.history.close()
+        if self.state.pool is not None:
+            await self.state.pool.close()
         if self.state.adapter is not None:
             await self.state.adapter.close()
         await self.state.bus.close()
@@ -122,14 +127,36 @@ class TeridexApp(App[None]):
         logger.debug("theme_applied", theme=theme.name)
 
     async def _load_plugins(self) -> None:
+        # Pass eagerly-available services. Late-bound ones (executor,
+        # introspector, history) are added via ``update_services`` once
+        # ``_connect`` runs — the cached PluginContext is the same object.
         loader = PluginLoader(
             self.state.plugins,
             self.state.bus,
             enabled=self.cfg.plugins.enabled or None,
             disabled=self.cfg.plugins.disabled or None,
+            services={
+                "event_bus": self.state.bus,
+                "plugins": self.state.plugins,
+                "config": self.cfg,
+            },
         )
         loader.load_all()
         self._loader = loader
+
+    def _publish_connection_services(self) -> None:
+        """Push connect-time services into every loaded plugin's context."""
+        loader = getattr(self, "_loader", None)
+        if loader is None:
+            return
+        late = {
+            "adapter": self.state.adapter,
+            "pool": self.state.pool,
+            "introspector": self.state.introspector,
+            "history": self.state.history,
+        }
+        for manifest in self.state.plugins.manifests():
+            loader.context_for(manifest.id).update_services(**late)
 
     async def _mount_plugin_panels(self) -> None:
         from textual.containers import Vertical  # noqa: PLC0415
@@ -193,12 +220,23 @@ class TeridexApp(App[None]):
         self.state.bus.subscribe(RunActionRequested, on_action)
 
     async def _connect(self, dsn: Dsn) -> None:
-        adapter = create_adapter_for_dsn(dsn)
-        await adapter.connect(dsn)
+        async def _factory(d: Dsn) -> AbstractAdapter:
+            a = create_adapter_for_dsn(d)
+            await a.connect(d)
+            return a
+
+        # Dedicated adapter for schema introspection — never shared with
+        # query execution, so a long SELECT cannot block ``Ctrl+R``.
+        introspect_adapter = await _factory(dsn)
+
+        # Bounded pool of execution adapters. ``action_run_query`` acquires
+        # one for the lifetime of its stream and returns it on exit.
+        pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
+
         self.state.dsn = dsn
-        self.state.adapter = adapter
-        self.state.executor = QueryExecutor(adapter, self.state.bus)
-        self.state.introspector = Introspector(adapter, self.state.bus)
+        self.state.adapter = introspect_adapter
+        self.state.pool = pool
+        self.state.introspector = Introspector(introspect_adapter, self.state.bus)
         # History store
         history = QueryHistory(
             Path.home() / ".teridex" / "history.db",
@@ -206,6 +244,7 @@ class TeridexApp(App[None]):
         )
         await history.open()
         self.state.history = history
+        self._publish_connection_services()
         bar = self._status()
         bar.connection = dsn.render(mask_password=True)
         await self.action_refresh_schema()
@@ -227,7 +266,7 @@ class TeridexApp(App[None]):
     # ---- actions ------------------------------------------------------
 
     async def action_run_query(self) -> None:
-        if self.state.executor is None:
+        if self.state.pool is None:
             self._status().message = "[yellow]not connected[/]"
             return
         editor = self._tabs().current_editor
@@ -236,27 +275,33 @@ class TeridexApp(App[None]):
         sql = editor.sql
         results = self._results()
         results.reset()
-        try:
-            self._current_run = await self.state.executor.run(
-                sql, batch_size=self.cfg.ui.row_batch_size
-            )
-        except QueryError as exc:
-            self._status().message = f"[red]{exc}[/]"
-            return
-        try:
-            async for batch in self._current_run.rows:
-                results.feed(batch)
-        except QueryCancelledError:
-            self._status().message = "[yellow]cancelled[/]"
-        except TeridexError as exc:
-            self._status().message = f"[red]{exc}[/]"
-        finally:
-            await self._record_history(sql)
-            self._current_run = None
+
+        # Acquire a dedicated adapter from the pool for this run; release
+        # it in ``finally`` so a cancellation never leaks the slot.
+        async with self.state.pool.acquire() as adapter:
+            executor = QueryExecutor(adapter, self.state.bus)
+            self._run_executor = executor
+            try:
+                self._current_run = await executor.run(sql, batch_size=self.cfg.ui.row_batch_size)
+            except QueryError as exc:
+                self._status().message = f"[red]{exc}[/]"
+                self._run_executor = None
+                return
+            try:
+                async for batch in self._current_run.rows:
+                    results.feed(batch)
+            except QueryCancelledError:
+                self._status().message = "[yellow]cancelled[/]"
+            except TeridexError as exc:
+                self._status().message = f"[red]{exc}[/]"
+            finally:
+                await self._record_history(sql)
+                self._current_run = None
+                self._run_executor = None
 
     async def action_cancel_query(self) -> None:
-        if self._current_run is not None and self.state.executor is not None:
-            await self.state.executor.cancel(self._current_run)
+        if self._current_run is not None and self._run_executor is not None:
+            await self._run_executor.cancel(self._current_run)
 
     async def action_refresh_schema(self) -> None:
         if self.state.introspector is None:

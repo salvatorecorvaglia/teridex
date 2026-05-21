@@ -25,7 +25,7 @@ default_timeout_seconds = 60.0
 max_history_entries = 1000
 
 # Pool size when the TUI is configured to route queries through a
-# ConnectionPool (slice E will wire this).
+# ConnectionPool.
 pool_size = 5
 
 [logging]

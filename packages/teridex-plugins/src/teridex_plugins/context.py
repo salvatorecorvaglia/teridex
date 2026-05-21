@@ -52,3 +52,13 @@ class PluginContext:
 
     def get_service(self, name: str) -> Any:
         return self._services.get(name)
+
+    def update_services(self, **services: Any) -> None:
+        """Add (or replace) entries in this context's service bag.
+
+        The host calls this *after* :meth:`on_load` once late-bound services
+        (executor, introspector, history) become available on connect — so a
+        plugin's hooks can resolve them via :meth:`get_service` without the
+        host having to re-issue every context.
+        """
+        self._services.update(services)
