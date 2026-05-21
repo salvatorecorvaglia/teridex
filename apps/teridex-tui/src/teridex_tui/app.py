@@ -9,6 +9,7 @@ Responsibilities:
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
@@ -275,6 +276,7 @@ class TeridexApp(App[None]):
         sql = editor.sql
         results = self._results()
         results.reset()
+        results.loading = True
 
         # Acquire a dedicated adapter from the pool for this run; release
         # it in ``finally`` so a cancellation never leaks the slot.
@@ -284,20 +286,45 @@ class TeridexApp(App[None]):
             try:
                 self._current_run = await executor.run(sql, batch_size=self.cfg.ui.row_batch_size)
             except QueryError as exc:
+                results.loading = False
                 self._status().message = f"[red]{exc}[/]"
                 self._run_executor = None
                 return
             try:
                 async for batch in self._current_run.rows:
+                    results.loading = False
                     results.feed(batch)
             except QueryCancelledError:
                 self._status().message = "[yellow]cancelled[/]"
             except TeridexError as exc:
                 self._status().message = f"[red]{exc}[/]"
             finally:
+                results.loading = False
+                results.mark_done()
                 await self._record_history(sql)
                 self._current_run = None
                 self._run_executor = None
+
+    async def action_copy_cell(self) -> None:
+        text = self._results().current_cell_text()
+        if text is None:
+            self._status().message = "[yellow]nothing to copy[/]"
+            return
+        self.copy_to_clipboard(text)
+        self._status().message = "copied cell"
+
+    async def action_export_csv(self) -> None:
+        results = self._results()
+        if results.row_count == 0:
+            self._status().message = "[yellow]nothing to export[/]"
+            return
+        path = Path.home() / ".teridex" / "exports" / f"export-{int(time.time())}.csv"
+        try:
+            n = results.export_csv(path)
+        except OSError as exc:
+            self._status().message = f"[red]export failed: {exc}[/]"
+            return
+        self._status().message = f"exported {n} row{'s' if n != 1 else ''} → {path}"
 
     async def action_cancel_query(self) -> None:
         if self._current_run is not None and self._run_executor is not None:

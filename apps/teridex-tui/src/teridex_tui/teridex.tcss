@@ -98,6 +98,7 @@ SqlEditor {
 
 ResultsTable {
     height: 100%;
+    border-bottom: solid $primary 30%;
 }
 
 CommandPalette {

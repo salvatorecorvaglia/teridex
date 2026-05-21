@@ -72,6 +72,22 @@ BUILTIN_COMMANDS: list[Command] = [
         category="Tabs",
     ),
     Command(
+        id="builtin.copy_cell",
+        title="Copy current cell",
+        description="Copy the focused result cell to the system clipboard.",
+        default_binding="ctrl+y",
+        handler=_wrap("copy_cell"),
+        category="Results",
+    ),
+    Command(
+        id="builtin.export_csv",
+        title="Export results as CSV",
+        description="Write the current result set to ~/.teridex/exports/.",
+        default_binding="ctrl+e",
+        handler=_wrap("export_csv"),
+        category="Results",
+    ),
+    Command(
         id="builtin.quit",
         title="Quit Teridex",
         default_binding="ctrl+q",

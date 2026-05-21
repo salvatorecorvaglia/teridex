@@ -11,6 +11,8 @@ DEFAULT_BINDINGS: list[tuple[str, str, str]] = [
     ("ctrl+w", "close_tab", "Close tab"),
     ("ctrl+r", "refresh_schema", "Refresh schema"),
     ("ctrl+h", "show_history", "Show history"),
+    ("ctrl+y", "copy_cell", "Copy cell"),
+    ("ctrl+e", "export_csv", "Export CSV"),
     ("question_mark", "help", "Help"),
     ("ctrl+q", "quit", "Quit"),
 ]
