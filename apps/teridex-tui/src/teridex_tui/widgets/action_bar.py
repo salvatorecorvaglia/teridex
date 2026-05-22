@@ -40,4 +40,6 @@ class ActionBar(Static):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-query-btn":
-            await self.app.action_run_query()
+            # run_action dispatches by name, so this stays decoupled from the
+            # concrete App subclass (App[Any] has no action_run_query attr).
+            await self.app.run_action("run_query")

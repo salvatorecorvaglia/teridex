@@ -8,6 +8,10 @@ from pathlib import Path
 import aiosqlite
 from pydantic import BaseModel, ConfigDict, Field
 
+from teridex_core.logging import get_logger
+
+logger = get_logger(__name__)
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,20 +97,29 @@ class QueryHistory:
             (limit,),
         ) as cur:
             rows = await cur.fetchall()
-        return [
-            HistoryEntry(
-                id=r[0],
-                query_id=r[1],
-                connection_label=r[2],
-                sql=r[3],
-                status=r[4],
-                duration_ms=r[5],
-                rows=r[6],
-                error=r[7],
-                started_at=datetime.fromisoformat(r[8]),
+        entries: list[HistoryEntry] = []
+        for r in rows:
+            try:
+                started_at = datetime.fromisoformat(r[8])
+            except (ValueError, TypeError):
+                # Corrupt or legacy timestamp: skip this row rather than abort
+                # the whole fetch.
+                logger.warning("history_row_skipped", history_id=r[0], started_at=r[8])
+                continue
+            entries.append(
+                HistoryEntry(
+                    id=r[0],
+                    query_id=r[1],
+                    connection_label=r[2],
+                    sql=r[3],
+                    status=r[4],
+                    duration_ms=r[5],
+                    rows=r[6],
+                    error=r[7],
+                    started_at=started_at,
+                )
             )
-            for r in rows
-        ]
+        return entries
 
     async def _trim(self) -> None:
         conn = self._require()

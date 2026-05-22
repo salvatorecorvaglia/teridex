@@ -106,6 +106,7 @@ class TeridexApp(App[None]):
         await self._mount_plugin_panels()
         self._wire_event_listeners()
         self._results().max_rows = self.cfg.ui.max_display_rows
+        self._status().mode = "VIM" if self.cfg.ui.keymap == "vim" else "NORMAL"
         # Wire ActionBar limit from config
         with contextlib.suppress(Exception):
             self._action_bar().limit = self.cfg.ui.max_display_rows or 500
@@ -322,6 +323,7 @@ class TeridexApp(App[None]):
         results = self._results()
         results.reset()
         results.loading = True
+        self._status().truncated = False
         self._query_in_flight = True
 
         # Acquire a dedicated adapter from the pool for this run; release
@@ -351,6 +353,7 @@ class TeridexApp(App[None]):
                 finally:
                     results.loading = False
                     results.mark_done(cancelled=cancelled)
+                    self._status().truncated = results.truncated
                     await self._record_history(sql)
         except Exception as exc:
             # Failure before/around streaming — e.g. pool acquisition or
@@ -385,8 +388,12 @@ class TeridexApp(App[None]):
         self._status().message = f"exported {n} row{'s' if n != 1 else ''} → {path}"
 
     async def action_cancel_query(self) -> None:
-        if self._current_run is not None and self._run_executor is not None:
-            await self._run_executor.cancel(self._current_run)
+        # Snapshot both references before awaiting: action_run_query's finally
+        # block can null them concurrently between the check and the await.
+        run = self._current_run
+        executor = self._run_executor
+        if run is not None and executor is not None:
+            await executor.cancel(run)
 
     async def action_refresh_schema(self) -> None:
         if self.state.introspector is None:

@@ -6,12 +6,15 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from teridex_core.errors import PluginError
+from teridex_core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from teridex_core.protocols.plugin import PluginManifest
     from teridex_plugins.api import Command, Panel
+
+logger = get_logger(__name__)
 
 
 class PluginRegistry:
@@ -34,10 +37,24 @@ class PluginRegistry:
         self._panels_by_plugin.pop(plugin_id, None)
 
     def add_command(self, plugin_id: str, command: Command) -> None:
+        for owner, existing in self._commands_by_plugin.items():
+            if any(c.id == command.id for c in existing):
+                raise PluginError(
+                    f"command id collision: {command.id!r} already registered by plugin {owner!r}",
+                    context={"plugin_id": plugin_id, "command_id": command.id},
+                )
         self._commands_by_plugin[plugin_id].append(command)
+        logger.debug("plugin_command_registered", plugin_id=plugin_id, command_id=command.id)
 
     def add_panel(self, plugin_id: str, panel: Panel) -> None:
+        for owner, existing in self._panels_by_plugin.items():
+            if any(p.id == panel.id for p in existing):
+                raise PluginError(
+                    f"panel id collision: {panel.id!r} already registered by plugin {owner!r}",
+                    context={"plugin_id": plugin_id, "panel_id": panel.id},
+                )
         self._panels_by_plugin[plugin_id].append(panel)
+        logger.debug("plugin_panel_registered", plugin_id=plugin_id, panel_id=panel.id)
 
     def manifests(self) -> Iterable[PluginManifest]:
         return self._manifests.values()

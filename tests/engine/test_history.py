@@ -33,3 +33,26 @@ async def test_history_round_trip(tmp_path: Path) -> None:
         assert recent[0].query_id == "q4"
     finally:
         await h.close()
+
+
+@pytest.mark.asyncio
+async def test_recent_skips_rows_with_corrupt_timestamp(tmp_path: Path) -> None:
+    h = QueryHistory(tmp_path / "h.db", max_entries=10)
+    await h.open()
+    try:
+        await h.add(
+            HistoryEntry(
+                query_id="ok",
+                connection_label="sqlite:///:memory:",
+                sql="SELECT 1",
+                status="succeeded",
+            )
+        )
+        # Corrupt the stored timestamp directly.
+        conn = h._require()
+        await conn.execute("UPDATE history SET started_at='not-a-date' WHERE query_id='ok'")
+        await conn.commit()
+        # A bad row is skipped rather than aborting the whole fetch.
+        assert await h.recent(limit=10) == []
+    finally:
+        await h.close()

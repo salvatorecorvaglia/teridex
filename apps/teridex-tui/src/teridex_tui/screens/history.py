@@ -63,5 +63,12 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         if item is None or item.id is None or item.id == "history-empty":
             self.dismiss(None)
             return
-        idx = int(item.id.removeprefix("history-"))
+        try:
+            idx = int(item.id.removeprefix("history-"))
+        except ValueError:
+            self.dismiss(None)
+            return
+        if not 0 <= idx < len(self._entries):
+            self.dismiss(None)
+            return
         self.dismiss(self._entries[idx])

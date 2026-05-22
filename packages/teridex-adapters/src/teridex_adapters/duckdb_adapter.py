@@ -91,7 +91,10 @@ class DuckDBAdapter(AbstractAdapter):
 
             def _run() -> Any:
                 if params:
-                    return conn.execute(sql, list(params.values()))
+                    # Pass the mapping through unchanged so DuckDB binds by name
+                    # ($name placeholders). Flattening to .values() would bind
+                    # positionally and silently mismatch named parameters.
+                    return conn.execute(sql, dict(params))
                 return conn.execute(sql)
 
             return await asyncio.to_thread(_run)

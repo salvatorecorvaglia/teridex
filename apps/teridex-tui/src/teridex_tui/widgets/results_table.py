@@ -11,6 +11,7 @@ import csv
 from typing import TYPE_CHECKING
 
 from textual.widgets import DataTable
+from textual.widgets.data_table import CellDoesNotExist
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,12 +76,17 @@ class ResultsTable(DataTable[str]):
             parts.append("cancelled (partial)")
         self.border_subtitle = " · ".join(parts)
 
+    @property
+    def truncated(self) -> bool:
+        """True when the display capped the result set below its real size."""
+        return self._truncated
+
     def current_cell_text(self) -> str | None:
         if not self._initialized or self.row_count == 0:
             return None
         try:
             val = self.get_cell_at(self.cursor_coordinate)
-        except Exception:
+        except CellDoesNotExist:
             return None
         return "" if val is None else str(val)
 

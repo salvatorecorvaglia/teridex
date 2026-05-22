@@ -33,6 +33,7 @@ class StatusBar(Static):
     rows: reactive[int] = reactive(0)
     duration_ms: reactive[float] = reactive(0.0)
     has_run: reactive[bool] = reactive(False)
+    truncated: reactive[bool] = reactive(False)
 
     def __init__(self) -> None:
         super().__init__(id="status-bar")
@@ -41,8 +42,11 @@ class StatusBar(Static):
         return value or ""
 
     def render(self) -> str:
-        # Left: keybinding hints
+        # Left: keybinding hints, with the active keymap when it isn't the
+        # default — vim bindings are otherwise invisible to the user.
         shortcuts = "  ".join(f"[bold]{key}[/] {desc}" for key, desc in _FOOTER_BINDINGS)
+        if self.mode and self.mode != "NORMAL":
+            shortcuts = f"[bold reverse] {self.mode} [/]  {shortcuts}"
 
         # Right: connection / message status
         if self.message:
@@ -51,5 +55,8 @@ class StatusBar(Static):
             status = "Database Connected."
         else:
             status = "Disconnected."
+
+        if self.truncated:
+            status = f"[yellow]display truncated[/]  ·  {status}"
 
         return f"{shortcuts}  {status}"
