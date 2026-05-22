@@ -3,9 +3,11 @@
 Commands:
     teridex tui --dsn <url>         launch the TUI
     teridex run --dsn <url> "<sql>" one-shot query, prints results as a Rich table
-    teridex connect <url>           connection sanity check
+    teridex connect --dsn <url>     connection sanity check
     teridex plugins list            list discovered plugins
     teridex version                 print version + supported drivers
+
+``--dsn`` reads ``TERIDEX_DSN`` from the environment when omitted.
 """
 
 from __future__ import annotations
@@ -58,7 +60,14 @@ def version() -> None:
 
 @app.command()
 def connect(
-    dsn: Annotated[str, typer.Argument(help="Database URL, e.g. duckdb:///:memory:")],
+    dsn: Annotated[
+        str,
+        typer.Option(
+            "--dsn",
+            envvar="TERIDEX_DSN",
+            help="Database URL, e.g. duckdb:///:memory:",
+        ),
+    ],
 ) -> None:
     """Open a connection to verify the DSN is reachable."""
 
@@ -81,15 +90,21 @@ def connect(
 @app.command("run")
 def run_query(
     sql: Annotated[str, typer.Argument(help="SQL to execute.")],
-    dsn: Annotated[str, typer.Option("--dsn", help="Database URL.")],
+    dsn: Annotated[
+        str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")
+    ],
     limit: Annotated[int, typer.Option("--limit", min=1, help="Max rows to print.")] = 200,
 ) -> None:
     """Execute one query and render results as a Rich table."""
 
     async def _go() -> int:
-        parsed = Dsn.parse(dsn)
-        adapter = create_adapter_for_dsn(parsed)
-        await adapter.connect(parsed)
+        try:
+            parsed = Dsn.parse(dsn)
+            adapter = create_adapter_for_dsn(parsed)
+            await adapter.connect(parsed)
+        except Exception as exc:
+            console.print(f"[bold red]ERROR[/] {exc}")
+            return 1
         bus = EventBus()
         try:
             executor = QueryExecutor(adapter, bus)
@@ -115,6 +130,9 @@ def run_query(
                 f"[dim]{run_handle.rows_emitted} row(s) in {run_handle.duration_ms or 0:.1f} ms[/]"
             )
             return 0
+        except Exception as exc:
+            console.print(f"[bold red]ERROR[/] {exc}")
+            return 1
         finally:
             await bus.close()
             await adapter.close()
@@ -124,7 +142,12 @@ def run_query(
 
 @app.command()
 def tui(
-    dsn: Annotated[str, typer.Option("--dsn", help="Initial DSN to connect to.")] = "",
+    dsn: Annotated[
+        str,
+        typer.Option(
+            "--dsn", envvar="TERIDEX_DSN", help="Initial DSN to connect to."
+        ),
+    ] = "",
     config_path: Annotated[str, typer.Option("--config", help="Path to config TOML.")] = "",
 ) -> None:
     """Launch the Teridex TUI."""
