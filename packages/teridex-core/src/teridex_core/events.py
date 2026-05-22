@@ -100,17 +100,31 @@ class _Subscription:
 
 
 class EventBus:
-    """In-process async pub/sub."""
+    """In-process async pub/sub.
+
+    Each subscriber gets its own bounded ``asyncio.Queue``. When a subscriber
+    is slow and its queue fills, the *oldest* pending event is dropped to make
+    room for the new one — the bus prioritizes keeping publishers non-blocking
+    over delivery guarantees. Drops are counted in :attr:`dropped_events` and
+    logged at WARNING.
+    """
 
     def __init__(self, *, queue_size: int = 1024) -> None:
         self._queue_size = queue_size
         self._subs: list[_Subscription] = []
         self._closed = False
+        self.dropped_events = 0
 
-    def subscribe(self, event_type: type[E], handler: Callable[[E], Awaitable[None]]) -> None:
+    def subscribe(
+        self,
+        event_type: type[E],
+        handler: Callable[[E], Awaitable[None]],
+        *,
+        queue_size: int | None = None,
+    ) -> None:
         if self._closed:
             raise RuntimeError("EventBus is closed")
-        sub = _Subscription(event_type, handler, self._queue_size)
+        sub = _Subscription(event_type, handler, queue_size or self._queue_size)
         sub.task = asyncio.create_task(self._drain(sub), name=f"eventbus:{event_type.__name__}")
         self._subs.append(sub)
 
@@ -138,12 +152,14 @@ class EventBus:
             except asyncio.QueueFull:
                 with contextlib.suppress(asyncio.QueueEmpty):
                     sub.queue.get_nowait()
+                self.dropped_events += 1
                 logger.warning(
                     "event_queue_full",
                     event_type=type(event).__name__,
                     handler=getattr(sub.handler, "__qualname__", repr(sub.handler)),
+                    dropped_total=self.dropped_events,
                 )
-                with _suppress(asyncio.QueueFull):
+                with contextlib.suppress(asyncio.QueueFull):
                     sub.queue.put_nowait(event)
 
     async def close(self) -> None:
@@ -153,17 +169,6 @@ class EventBus:
                 sub.task.cancel()
         for sub in self._subs:
             if sub.task is not None:
-                with _suppress(asyncio.CancelledError):
+                with contextlib.suppress(asyncio.CancelledError):
                     await sub.task
         self._subs.clear()
-
-
-class _suppress:  # noqa: N801 - tiny utility
-    def __init__(self, *exc: type[BaseException]) -> None:
-        self.exc = exc
-
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, et: type[BaseException] | None, *_: Any) -> bool:
-        return et is not None and issubclass(et, self.exc)
