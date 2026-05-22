@@ -6,6 +6,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncmy
+from asyncmy import errors as asyncmy_errors
 
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
@@ -131,7 +132,7 @@ class MySQLAdapter(AbstractAdapter):
             await cur.execute("SELECT 1")
             await cur.close()
             return True
-        except Exception:
+        except asyncmy_errors.Error:
             return False
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
@@ -145,8 +146,10 @@ class MySQLAdapter(AbstractAdapter):
         handle.mark_running()
         cur = self._conn.cursor()
         try:
-            await cur.execute(sql, tuple(params.values()) if params else None)
-        except Exception as exc:
+            # asyncmy uses the ``pyformat`` paramstyle: pass the mapping
+            # directly so ``%(name)s`` placeholders bind by name.
+            await cur.execute(sql, dict(params) if params else None)
+        except asyncmy_errors.Error as exc:
             handle.mark_done(QueryStatus.FAILED)
             await cur.close()
             raise QueryError(str(exc), context={"sql": sql}) from exc
@@ -204,10 +207,25 @@ class MySQLAdapter(AbstractAdapter):
             raise AdapterError("mysql: not connected")
         return _MySQLTransaction(self._conn)
 
-    async def introspect(self) -> SchemaSnapshot:
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
-        return await _MySQLIntrospector(self, self._conn).build()
+        return await _MySQLIntrospector(self, self._conn).build(lazy=lazy)
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        return await _MySQLIntrospector(self, self._conn).fetch_columns(schema, name)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        return await _MySQLIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        if self._conn is None:
+            raise AdapterError("mysql: not connected")
+        return await _MySQLIntrospector(self, self._conn).fetch_indexes(schema, name)
 
 
 class _MySQLIntrospector(SchemaIntrospector):

@@ -10,7 +10,12 @@ if TYPE_CHECKING:
     from teridex_core.models.connection import Dsn
     from teridex_core.models.query import QueryHandle, QueryMetadata
     from teridex_core.models.result import ResultBatch
-    from teridex_core.models.schema import SchemaSnapshot
+    from teridex_core.models.schema import (
+        ForeignKey,
+        Index,
+        SchemaSnapshot,
+        TableColumn,
+    )
 
 
 @runtime_checkable
@@ -45,4 +50,8 @@ class DatabaseAdapter(Protocol):
 
     async def begin(self) -> Transaction: ...
 
-    async def introspect(self) -> SchemaSnapshot: ...
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot: ...
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]: ...
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]: ...
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]: ...

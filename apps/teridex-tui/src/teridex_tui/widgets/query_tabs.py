@@ -25,8 +25,14 @@ class QueryTabs(TabbedContent):
         self.active = tab_id
 
     def close_current(self) -> None:
-        if self.active:
-            self.remove_pane(self.active)
+        current = self.active
+        if not current:
+            return
+        # Always keep at least one tab so an editor is available; create a
+        # fresh replacement before removing the last pane.
+        if len(self.query(TabPane)) <= 1:
+            self.new_tab()
+        self.remove_pane(current)
 
     @property
     def current_editor(self) -> SqlEditor | None:

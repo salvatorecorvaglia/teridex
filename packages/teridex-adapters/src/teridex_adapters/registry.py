@@ -86,6 +86,16 @@ def default_registry() -> AdapterRegistry:
     return _default
 
 
+def reset_default_registry() -> None:
+    """Clear the process-wide registry cache.
+
+    Intended for tests so each one starts from a freshly built registry
+    instead of inheriting state through import order.
+    """
+    global _default  # noqa: PLW0603 - module-level cache for the process-wide registry
+    _default = None
+
+
 def create_adapter_for_dsn(dsn: Dsn, *, registry: AdapterRegistry | None = None) -> AbstractAdapter:
     reg = registry or default_registry()
     cls = reg.for_scheme(dsn.scheme)

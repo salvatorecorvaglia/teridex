@@ -22,9 +22,6 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         super().__init__()
         self._entries = entries
 
-    def __len__(self) -> int:
-        return len(self._entries)
-
     def compose(self) -> ComposeResult:
         with Vertical(id="HistoryModal"):
             yield Static("[b]Query history[/]\n", id="history-title")
@@ -37,7 +34,8 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
             lst.append(ListItem(Static("[dim]no history yet[/]"), id="history-empty"))
             return
         for i, entry in enumerate(self._entries):
-            preview = entry.sql.strip().splitlines()[0] if entry.sql else ""
+            preview_lines = entry.sql.strip().splitlines()
+            preview = preview_lines[0] if preview_lines else ""
             if len(preview) > 80:
                 preview = preview[:77] + "…"
             status_style = {

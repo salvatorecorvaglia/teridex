@@ -77,6 +77,55 @@ class _ServicesProbe:
         return
 
 
+def _ids(registry: PluginRegistry) -> set[str]:
+    return {m.id for m in registry.manifests()}
+
+
+@pytest.mark.asyncio
+async def test_disabled_plugin_is_not_loaded() -> None:
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, EventBus(), disabled=["sample"])
+    loader.load_instance(_SamplePlugin())
+    assert _ids(registry) == set()
+    assert registry.all_commands() == []
+
+
+@pytest.mark.asyncio
+async def test_enabled_allowlist_excludes_unlisted_plugins() -> None:
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, EventBus(), enabled=["other"])
+    loader.load_instance(_SamplePlugin())
+    assert _ids(registry) == set()
+
+
+@pytest.mark.asyncio
+async def test_enabled_allowlist_loads_listed_plugin() -> None:
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, EventBus(), enabled=["sample"])
+    loader.load_instance(_SamplePlugin())
+    assert _ids(registry) == {"sample"}
+
+
+@pytest.mark.asyncio
+async def test_incompatible_plugin_version_is_skipped() -> None:
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, EventBus())
+
+    class _FuturePlugin:
+        manifest = PluginManifest(
+            id="future", name="Future", version="1.0.0", requires_teridex=">=99.0.0"
+        )
+
+        def on_load(self, ctx: PluginContext) -> None:
+            return
+
+        def on_unload(self, ctx: PluginContext) -> None:
+            return
+
+    loader.load_instance(_FuturePlugin())
+    assert _ids(registry) == set()
+
+
 @pytest.mark.asyncio
 async def test_services_are_exposed_at_load_and_updatable() -> None:
     bus = EventBus()

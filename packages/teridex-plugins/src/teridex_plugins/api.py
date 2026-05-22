@@ -51,6 +51,9 @@ def hook_event(fn: object) -> str:
 CommandHandler = Callable[["PluginContext"], Awaitable[None]]
 
 
+_PLACEMENTS: frozenset[str] = frozenset(("left", "right", "bottom"))
+
+
 @dataclass(frozen=True, slots=True)
 class Command:
     """User-invocable action surfaced in the command palette."""
@@ -61,6 +64,12 @@ class Command:
     default_binding: str | None = None
     description: str = ""
     category: str = "Plugin"
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Command.id must be a non-empty string")
+        if not self.title.strip():
+            raise ValueError("Command.title must be a non-empty string")
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,3 +86,15 @@ class Panel:
     factory: Callable[[PluginContext], Any]
     initial_size: int = 30
     keys: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Panel.id must be a non-empty string")
+        if not self.title.strip():
+            raise ValueError("Panel.title must be a non-empty string")
+        if self.placement not in _PLACEMENTS:
+            raise ValueError(
+                f"Panel.placement must be one of {sorted(_PLACEMENTS)}, got {self.placement!r}"
+            )
+        if self.initial_size <= 0:
+            raise ValueError("Panel.initial_size must be a positive integer")

@@ -18,8 +18,6 @@ from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
-    ForeignKey,
-    Index,
     SchemaObject,
     SchemaSnapshot,
     Table,
@@ -82,7 +80,7 @@ class DuckDBAdapter(AbstractAdapter):
         try:
             await self._exec_sync("SELECT 1")
             return True
-        except Exception:
+        except duckdb.Error:
             return False
 
     async def _exec_sync(self, sql: str, params: Mapping[str, Any] | None = None) -> Any:
@@ -177,7 +175,7 @@ class DuckDBAdapter(AbstractAdapter):
     async def begin(self) -> Transaction:
         return _DuckDBTransaction(self)
 
-    async def introspect(self) -> SchemaSnapshot:
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
         conn = self._conn
@@ -190,30 +188,12 @@ class DuckDBAdapter(AbstractAdapter):
                 "WHERE table_schema NOT IN ('pg_catalog','information_schema')"
             ).fetchall()
             for schema_name, table_name, kind in tables:
-                cols = conn.execute(
-                    "SELECT column_name, data_type, is_nullable, column_default, ordinal_position "
-                    "FROM information_schema.columns "
-                    "WHERE table_schema=? AND table_name=? ORDER BY ordinal_position",
-                    [schema_name, table_name],
-                ).fetchall()
-                columns = [
-                    TableColumn(
-                        name=c[0],
-                        type_native=c[1],
-                        type=infer_column_type(c[1]),
-                        nullable=c[2] == "YES",
-                        default=c[3],
-                        ordinal=c[4] or 0,
-                    )
-                    for c in cols
-                ]
                 obj: SchemaObject
                 if kind == "VIEW":
-                    obj = View(name=table_name, schema_name=schema_name, columns=columns)
+                    obj = View(name=table_name, schema_name=schema_name, columns=[])
                 else:
-                    obj = Table(name=table_name, schema_name=schema_name, columns=columns)
+                    obj = Table(name=table_name, schema_name=schema_name, columns=[])
                 schemas.setdefault(schema_name, []).append(obj)
-            _ = ForeignKey, Index  # reserved for future native catalog queries
             return SchemaSnapshot(
                 connection_id=connection_id(conn),
                 database=self._dsn.database if self._dsn else None,
@@ -225,3 +205,30 @@ class DuckDBAdapter(AbstractAdapter):
         # the same connection from another worker thread.
         async with self._lock:
             return await asyncio.to_thread(_introspect)
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        if self._conn is None:
+            raise AdapterError("duckdb: not connected")
+        conn = self._conn
+
+        def _fetch() -> list[TableColumn]:
+            cols = conn.execute(
+                "SELECT column_name, data_type, is_nullable, column_default, ordinal_position "
+                "FROM information_schema.columns "
+                "WHERE table_schema=? AND table_name=? ORDER BY ordinal_position",
+                [schema, name],
+            ).fetchall()
+            return [
+                TableColumn(
+                    name=c[0],
+                    type_native=c[1],
+                    type=infer_column_type(c[1]),
+                    nullable=c[2] == "YES",
+                    default=c[3],
+                    ordinal=c[4] or 0,
+                )
+                for c in cols
+            ]
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)

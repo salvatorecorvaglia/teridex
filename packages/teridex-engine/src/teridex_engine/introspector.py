@@ -8,7 +8,12 @@ from teridex_core.events import EventBus, SchemaRefreshed
 from teridex_core.logging import get_logger
 
 if TYPE_CHECKING:
-    from teridex_core.models.schema import SchemaSnapshot
+    from teridex_core.models.schema import (
+        ForeignKey,
+        Index,
+        SchemaSnapshot,
+        TableColumn,
+    )
     from teridex_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
@@ -25,9 +30,9 @@ class Introspector:
         self._bus = bus
         self._cache: SchemaSnapshot | None = None
 
-    async def snapshot(self, *, force: bool = False) -> SchemaSnapshot:
+    async def snapshot(self, *, force: bool = False, lazy: bool = False) -> SchemaSnapshot:
         if self._cache is None or force:
-            self._cache = await self._adapter.introspect()
+            self._cache = await self._adapter.introspect(lazy=lazy)
             self._bus.publish(SchemaRefreshed(connection_id=self._cache.connection_id))
             logger.debug(
                 "schema_refreshed",
@@ -36,8 +41,17 @@ class Introspector:
             )
         return self._cache
 
-    async def refresh(self) -> SchemaSnapshot:
-        return await self.snapshot(force=True)
+    async def refresh(self, *, lazy: bool = False) -> SchemaSnapshot:
+        return await self.snapshot(force=True, lazy=lazy)
 
     def invalidate(self) -> None:
         self._cache = None
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        return await self._adapter.fetch_columns(schema, name)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        return await self._adapter.fetch_foreign_keys(schema, name)
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        return await self._adapter.fetch_indexes(schema, name)

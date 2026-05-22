@@ -39,23 +39,33 @@ class ConnectionPool:
         if self._closed:
             raise RuntimeError("pool is closed")
         await self._sem.acquire()
+        # From here on, any failure path must release the semaphore — only the
+        # successful ``return`` keeps the slot, to be freed later by ``_release``.
         try:
-            return self._idle.get_nowait()
-        except asyncio.QueueEmpty:
-            pass
-        async with self._lock:
-            if len(self._all) < self._size:
-                adapter = await self._factory(self._dsn)
-                self._all.append(adapter)
-                return adapter
-        # Someone else created one — wait for an idle one. Track the waiter
-        # so ``close()`` can wake it instead of leaving it hung forever.
-        getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
-        self._waiters.add(getter)
-        try:
-            return await getter
-        finally:
-            self._waiters.discard(getter)
+            try:
+                return self._idle.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            # Decide under the lock so ``close()`` cannot race the waiter set:
+            # either build a new adapter or register a tracked waiter.
+            async with self._lock:
+                if self._closed:
+                    raise RuntimeError("pool is closed")
+                if len(self._all) < self._size:
+                    adapter = await self._factory(self._dsn)
+                    self._all.append(adapter)
+                    return adapter
+                # Someone else created one — wait for an idle adapter. Track
+                # the waiter so ``close()`` can wake it instead of hanging it.
+                getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
+                self._waiters.add(getter)
+            try:
+                return await getter
+            finally:
+                self._waiters.discard(getter)
+        except BaseException:
+            self._sem.release()
+            raise
 
     async def _release(self, adapter: DatabaseAdapter) -> None:
         if self._closed:
@@ -74,13 +84,17 @@ class ConnectionPool:
             await self._release(adapter)
 
     async def close(self) -> None:
-        self._closed = True
-        for getter in self._waiters:
-            getter.cancel()
-        self._waiters.clear()
-        for adapter in self._all:
+        # Hold the lock so a concurrent ``_acquire`` either observes ``_closed``
+        # before registering a waiter or is woken by the cancellation below.
+        async with self._lock:
+            self._closed = True
+            for getter in self._waiters:
+                getter.cancel()
+            self._waiters.clear()
+            adapters = list(self._all)
+            self._all.clear()
+        for adapter in adapters:
             try:
                 await adapter.close()
             except Exception:
                 logger.exception("pool_close_adapter_failed")
-        self._all.clear()

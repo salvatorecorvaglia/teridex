@@ -21,7 +21,12 @@ if TYPE_CHECKING:
 
     from teridex_core.models.connection import Dsn
     from teridex_core.models.result import ResultBatch
-    from teridex_core.models.schema import SchemaSnapshot
+    from teridex_core.models.schema import (
+        ForeignKey,
+        Index,
+        SchemaSnapshot,
+        TableColumn,
+    )
     from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
@@ -38,7 +43,15 @@ def connection_id(conn: object) -> str:
 
 
 class AbstractAdapter(ABC):
-    """Skeleton implementation of :class:`DatabaseAdapter`."""
+    """Skeleton implementation of :class:`DatabaseAdapter`.
+
+    Threading/concurrency contract: an adapter instance is **single-owner** —
+    it serves one query at a time. The engine enforces this by handing every
+    run a dedicated adapter from :class:`~teridex_engine.pool.ConnectionPool`.
+    The per-handle ``_cancel_flags`` / ``_metadata`` dicts are therefore only
+    mutated from one logical caller; they are not guarded for concurrent
+    ``execute`` calls on the same instance.
+    """
 
     name: ClassVar[str] = "abstract"
     schemes: ClassVar[tuple[str, ...]] = ()
@@ -127,4 +140,13 @@ class AbstractAdapter(ABC):
     async def begin(self) -> Transaction: ...
 
     @abstractmethod
-    async def introspect(self) -> SchemaSnapshot: ...
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot: ...
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        return []
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        return []
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        return []

@@ -8,14 +8,17 @@ wide schemas instead of O(objects * columns).
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from textual.widgets import Tree
 
+from teridex_core.models.schema import SchemaObject
+
 if TYPE_CHECKING:
     from textual.widgets.tree import TreeNode
 
-    from teridex_core.models.schema import SchemaObject, SchemaSnapshot
+    from teridex_core.models.schema import SchemaSnapshot
 
 
 class SchemaTree(Tree[object]):
@@ -43,14 +46,46 @@ class SchemaTree(Tree[object]):
                 parent.add(obj.name, data=obj, expand=False)
         self.root.expand()
 
-    def on_tree_node_expanded(self, event: Tree.NodeExpanded[object]) -> None:
+    async def on_tree_node_expanded(self, event: Tree.NodeExpanded[object]) -> None:
         node = event.node
         obj = node.data
-        if obj is None:
+        if not isinstance(obj, SchemaObject):
             return
         if id(node) in self._populated:
             return
-        self._fill_object_node(node, obj)  # type: ignore[arg-type]
+
+        # Fetch columns/indexes/foreign keys lazily if not already present.
+        if not obj.columns:
+            app_state = getattr(self.app, "state", None)
+            introspector = (
+                getattr(app_state, "introspector", None) if app_state is not None else None
+            )
+            if introspector is not None:
+                schema_name = obj.schema_name or ""
+                try:
+                    cols = await introspector.fetch_columns(schema_name, obj.name)
+                    if obj.kind == "table":
+                        fks = await introspector.fetch_foreign_keys(schema_name, obj.name)
+                        indexes = await introspector.fetch_indexes(schema_name, obj.name)
+                    else:
+                        fks = []
+                        indexes = []
+
+                    obj = obj.model_copy(
+                        update={
+                            "columns": cols,
+                            "indexes": indexes,
+                            "foreign_keys": fks,
+                        }
+                    )
+                    node.data = obj
+                except Exception as exc:
+                    status = getattr(self.app, "_status", None)
+                    if status is not None:
+                        with contextlib.suppress(Exception):
+                            status().message = f"[red]Failed to introspect {obj.name}: {exc}[/]"
+
+        self._fill_object_node(node, obj)
         self._populated.add(id(node))
 
     def _fill_object_node(self, node: TreeNode[object], obj: SchemaObject) -> None:

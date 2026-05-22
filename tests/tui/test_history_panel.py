@@ -6,6 +6,8 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
+from textual.widgets import ListView  # noqa: E402
+
 from teridex_core.config import TeridexConfig  # noqa: E402
 from teridex_core.models.connection import Dsn  # noqa: E402
 from teridex_engine.history import HistoryEntry  # noqa: E402
@@ -46,5 +48,6 @@ async def test_history_modal_lists_entry_after_insert() -> None:
         await pilot.press("ctrl+h")
         await pilot.pause()
         modal = next(s for s in app.screen_stack if isinstance(s, HistoryModal))
-        assert len(modal) >= 1
+        listing = modal.query_one("#history-list", ListView)
+        assert len(listing.children) >= 1
         await pilot.press("escape")

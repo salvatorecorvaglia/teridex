@@ -22,6 +22,7 @@ from rich.table import Table
 
 from teridex_adapters import create_adapter_for_dsn, default_registry
 from teridex_core.config import load_config
+from teridex_core.errors import QueryCancelledError, QueryError, TeridexError
 from teridex_core.events import EventBus
 from teridex_core.logging import configure_logging, get_logger
 from teridex_core.models.connection import Dsn
@@ -105,7 +106,7 @@ def run_query(
             adapter = create_adapter_for_dsn(parsed)
             await adapter.connect(parsed)
         except Exception as exc:
-            console.print(f"[bold red]ERROR[/] {exc}")
+            console.print(f"[bold red]CONNECTION ERROR[/] {exc}")
             return 1
         bus = EventBus()
         try:
@@ -132,7 +133,14 @@ def run_query(
                 f"[dim]{run_handle.rows_emitted} row(s) in {run_handle.duration_ms or 0:.1f} ms[/]"
             )
             return 0
+        except QueryCancelledError:
+            console.print("[yellow]query cancelled[/]")
+            return 1
+        except (QueryError, TeridexError) as exc:
+            console.print(f"[bold red]QUERY ERROR[/] {exc}")
+            return 1
         except Exception as exc:
+            logger.exception("cli_run_unexpected_error")
             console.print(f"[bold red]ERROR[/] {exc}")
             return 1
         finally:
@@ -163,6 +171,16 @@ def tui(
     except Exception as exc:
         console.print(f"[bold red]ERROR[/] {exc}")
         raise typer.Exit(code=1) from exc
+    # Ensure the terminal advertises truecolor support so Textual renders
+    # the theme's hex colours correctly.  In some environments (IDE embedded
+    # terminals, subprocesses, screen sessions) COLORTERM / TERM may be
+    # unset, which causes Textual to degrade to basic 16-colour mode where
+    # foreground and background can collapse to the same shade.
+    import os  # noqa: PLC0415
+
+    os.environ.setdefault("COLORTERM", "truecolor")
+    os.environ.setdefault("TERM", "xterm-256color")
+
     TeridexApp(config=cfg, initial_dsn=initial_dsn).run()
 
 

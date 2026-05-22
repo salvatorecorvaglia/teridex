@@ -55,14 +55,24 @@ class SchemaIntrospector(ABC):
     def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
         return View(name=name, schema_name=schema, columns=columns)
 
-    async def build(self) -> SchemaSnapshot:
+    async def build(self, *, lazy: bool = False) -> SchemaSnapshot:
         schemas: dict[str, list[SchemaObject]] = {}
         for schema_name, name, kind in await self.list_objects():
-            cols = await self.fetch_columns(schema_name, name)
             obj: SchemaObject
+            if lazy:
+                cols = []
+                fks = []
+                indexes = []
+            else:
+                cols = await self.fetch_columns(schema_name, name)
+                if kind == "table":
+                    fks = await self.fetch_foreign_keys(schema_name, name)
+                    indexes = await self.fetch_indexes(schema_name, name)
+                else:
+                    fks = []
+                    indexes = []
+
             if kind == "table":
-                fks = await self.fetch_foreign_keys(schema_name, name)
-                indexes = await self.fetch_indexes(schema_name, name)
                 obj = Table(
                     name=name,
                     schema_name=schema_name,

@@ -43,9 +43,11 @@ from teridex_tui.screens.history import HistoryModal
 from teridex_tui.screens.main import MainScreen
 from teridex_tui.state import AppState
 from teridex_tui.themes import THEMES
-from teridex_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
+from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, StatusBar
 
 if TYPE_CHECKING:
+    from textual.widget import Widget
+
     from teridex_adapters.base import AbstractAdapter
     from teridex_core.models.connection import Dsn
     from teridex_plugins.api import Command
@@ -72,7 +74,14 @@ class TeridexApp(App[None]):
     ) -> None:
         super().__init__()
         self.cfg = config or load_config()
-        configure_logging(level=self.cfg.logging.level, json=self.cfg.logging.json_lines)
+        log_dir = Path.home() / ".teridex"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        configure_logging(
+            level=self.cfg.logging.level,
+            json=self.cfg.logging.json_lines,
+            log_file=log_dir / "teridex.log",
+            force=True,
+        )
         self.state = AppState(bus=EventBus(), plugins=PluginRegistry())
         self._initial_dsn = initial_dsn
         self._current_run: QueryRun | None = None
@@ -92,12 +101,16 @@ class TeridexApp(App[None]):
 
     async def on_mount(self) -> None:
         self._apply_theme()
+        self._apply_border_titles()
         await self._load_plugins()
         await self._mount_plugin_panels()
         self._wire_event_listeners()
         self._results().max_rows = self.cfg.ui.max_display_rows
+        # Wire ActionBar limit from config
+        with contextlib.suppress(Exception):
+            self._action_bar().limit = self.cfg.ui.max_display_rows or 500
         if self._initial_dsn is not None:
-            await self._connect(self._initial_dsn)
+            self.run_worker(self._connect(self._initial_dsn))
 
     async def on_unmount(self) -> None:
         if self._palette_task is not None and not self._palette_task.done():
@@ -133,6 +146,15 @@ class TeridexApp(App[None]):
         self.register_theme(tx)
         self.theme = tx.name
         logger.debug("theme_applied", theme=theme.name)
+
+    def _apply_border_titles(self) -> None:
+        """Set border titles on panels."""
+        with contextlib.suppress(Exception):
+            self.query_one("#sidebar").border_title = "Data Catalog"
+        with contextlib.suppress(Exception):
+            self.query_one("#editor-panel").border_title = "Query Editor"
+        with contextlib.suppress(Exception):
+            self.query_one("#results-panel").border_title = "Query Results"
 
     async def _load_plugins(self) -> None:
         # Pass eagerly-available services. Late-bound ones (executor,
@@ -172,7 +194,7 @@ class TeridexApp(App[None]):
         loader = getattr(self, "_loader", None)
         if loader is None:
             return
-        rails: dict[str, list] = {  # type: ignore[type-arg]
+        rails: dict[str, list[Widget]] = {
             "left": [],
             "right": [],
             "bottom": [],
@@ -214,6 +236,7 @@ class TeridexApp(App[None]):
             bar = self._status()
             bar.rows = ev.rows
             bar.duration_ms = ev.duration_ms
+            bar.has_run = True
             bar.message = "ok"
 
         async def on_failed(ev: QueryFailed) -> None:
@@ -228,34 +251,42 @@ class TeridexApp(App[None]):
         self.state.bus.subscribe(RunActionRequested, on_action)
 
     async def _connect(self, dsn: Dsn) -> None:
-        async def _factory(d: Dsn) -> AbstractAdapter:
-            a = create_adapter_for_dsn(d)
-            await a.connect(d)
-            return a
-
-        # Dedicated adapter for schema introspection — never shared with
-        # query execution, so a long SELECT cannot block ``Ctrl+R``.
-        introspect_adapter = await _factory(dsn)
-
-        # Bounded pool of execution adapters. ``action_run_query`` acquires
-        # one for the lifetime of its stream and returns it on exit.
-        pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
-
-        self.state.dsn = dsn
-        self.state.adapter = introspect_adapter
-        self.state.pool = pool
-        self.state.introspector = Introspector(introspect_adapter, self.state.bus)
-        # History store
-        history = QueryHistory(
-            Path.home() / ".teridex" / "history.db",
-            max_entries=self.cfg.engine.max_history_entries,
-        )
-        await history.open()
-        self.state.history = history
-        self._publish_connection_services()
         bar = self._status()
-        bar.connection = dsn.render(mask_password=True)
-        await self.action_refresh_schema()
+        bar.message = "connecting…"
+        try:
+
+            async def _factory(d: Dsn) -> AbstractAdapter:
+                a = create_adapter_for_dsn(d)
+                await a.connect(d)
+                return a
+
+            # Dedicated adapter for schema introspection — never shared with
+            # query execution, so a long SELECT cannot block ``Ctrl+R``.
+            introspect_adapter = await _factory(dsn)
+
+            # Bounded pool of execution adapters. ``action_run_query`` acquires
+            # one for the lifetime of its stream and returns it on exit.
+            pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
+
+            self.state.dsn = dsn
+            self.state.adapter = introspect_adapter
+            self.state.pool = pool
+            self.state.introspector = Introspector(introspect_adapter, self.state.bus)
+            # History store
+            history = QueryHistory(
+                Path.home() / ".teridex" / "history.db",
+                max_entries=self.cfg.engine.max_history_entries,
+            )
+            await history.open()
+            self.state.history = history
+            self._publish_connection_services()
+            bar.connection = dsn.render(mask_password=True)
+            await self.action_refresh_schema()
+            # Clear transient message so the footer shows "Database Connected."
+            bar.message = ""
+        except Exception as exc:
+            logger.exception("connection_failed", dsn=dsn.render(mask_password=True))
+            bar.message = f"[red]Connection failed: {exc}[/]"
 
     # ---- widget shortcuts ---------------------------------------------
 
@@ -271,6 +302,9 @@ class TeridexApp(App[None]):
     def _tree(self) -> SchemaTree:
         return self.query_one(SchemaTree)
 
+    def _action_bar(self) -> ActionBar:
+        return self.query_one(ActionBar)
+
     # ---- actions ------------------------------------------------------
 
     async def action_run_query(self) -> None:
@@ -282,6 +316,7 @@ class TeridexApp(App[None]):
             return
         editor = self._tabs().current_editor
         if editor is None or not editor.sql.strip():
+            self._status().message = "[yellow]nothing to run[/]"
             return
         sql = editor.sql
         results = self._results()
@@ -317,6 +352,12 @@ class TeridexApp(App[None]):
                     results.loading = False
                     results.mark_done(cancelled=cancelled)
                     await self._record_history(sql)
+        except Exception as exc:
+            # Failure before/around streaming — e.g. pool acquisition or
+            # connection setup. Clear the spinner so the table isn't stuck.
+            logger.exception("run_query_failed")
+            results.loading = False
+            self._status().message = f"[red]{exc}[/]"
         finally:
             self._current_run = None
             self._run_executor = None
@@ -352,12 +393,26 @@ class TeridexApp(App[None]):
             return
         self._status().message = "refreshing schema…"
         try:
-            snap = await self.state.introspector.refresh()
+            snap = await self.state.introspector.refresh(lazy=True)
         except TeridexError as exc:
             self._status().message = f"[red]schema: {exc}[/]"
             return
         self._tree().populate(snap)
         self._status().message = f"schema refreshed · {snap.object_count} object(s)"
+
+    async def action_focus_editor_top(self) -> None:
+        editor = self._tabs().current_editor
+        if editor is None:
+            return
+        editor.focus()
+        editor.move_cursor((0, 0))
+
+    async def action_focus_editor_bottom(self) -> None:
+        editor = self._tabs().current_editor
+        if editor is None:
+            return
+        editor.focus()
+        editor.move_cursor(editor.document.end)
 
     async def action_new_tab(self) -> None:
         self._tabs().new_tab()
@@ -378,7 +433,18 @@ class TeridexApp(App[None]):
                 event_bus=self.state.bus,
                 registry=self.state.plugins,
             )
-            self._palette_task = asyncio.ensure_future(result.handler(ctx))
+            task = asyncio.ensure_future(result.handler(ctx))
+            self._palette_task = task
+
+            def _report(done: asyncio.Task[None]) -> None:
+                if done.cancelled():
+                    return
+                exc = done.exception()
+                if exc is not None:
+                    logger.exception("command_handler_failed", exc_info=exc)
+                    self._status().message = f"[red]command failed: {exc}[/]"
+
+            task.add_done_callback(_report)
 
         await self.push_screen(CommandPaletteScreen(commands), _on_pick)
 

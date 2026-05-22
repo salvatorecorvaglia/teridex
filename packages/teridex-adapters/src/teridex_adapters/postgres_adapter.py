@@ -66,7 +66,6 @@ class PostgresAdapter(AbstractAdapter):
     def __init__(self) -> None:
         super().__init__()
         self._conn: asyncpg.Connection | None = None
-        self._pending: dict[str, str] = {}  # query_id -> sql (for streaming via cursor)
         self._backend_pid: int | None = None
 
     async def _do_connect(self, dsn: Dsn) -> None:
@@ -103,9 +102,9 @@ class PostgresAdapter(AbstractAdapter):
             params=dict(params) if params else None,
         )
         handle.mark_running()
-        # We defer actual execution to stream() so we can use a server-side cursor
-        # for SELECTs and ``execute`` for DML.
-        self._pending[handle.query_id] = sql
+        # Actual execution is deferred to stream() so we can use a server-side
+        # cursor for SELECTs and ``execute`` for DML. The SQL travels on the
+        # handle itself — no per-adapter bookkeeping dict to leak.
         handle.mark_streaming()
         return handle
 
@@ -114,9 +113,9 @@ class PostgresAdapter(AbstractAdapter):
     ) -> AsyncIterator[ResultBatch]:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        sql = self._pending.pop(handle.query_id, None)
-        if sql is None:
-            raise AdapterError("postgres: stream() called with unknown handle")
+        sql = handle.sql
+        if not sql:
+            raise AdapterError("postgres: stream() called with an empty handle")
         cancel = self._cancel_event(handle)
         conn = self._conn
 
@@ -138,7 +137,7 @@ class PostgresAdapter(AbstractAdapter):
 
             try:
                 async with conn.transaction():
-                    cur = conn.cursor(sql)
+                    cur = await conn.cursor(sql)
                     first = await cur.fetch(1)
                     if not first:
                         # empty result set — derive columns from a prepared stmt
@@ -165,7 +164,7 @@ class PostgresAdapter(AbstractAdapter):
                     record0 = first[0]
                     columns = [
                         Column(name=k, type=infer_column_type(None), type_native=None)
-                        for k in record0
+                        for k in record0.keys()  # noqa: SIM118
                     ]
                     self._set_metadata(
                         handle,
@@ -200,9 +199,6 @@ class PostgresAdapter(AbstractAdapter):
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
-        # Drop any deferred SQL for this handle so an abandoned (never
-        # streamed) query does not leak an entry in ``_pending``.
-        self._pending.pop(handle.query_id, None)
         # The live connection is busy running the user's query, so we can't
         # use it to issue pg_cancel_backend — open a short-lived side
         # connection instead and target the saved backend PID.
@@ -236,10 +232,25 @@ class PostgresAdapter(AbstractAdapter):
             raise AdapterError("postgres: not connected")
         return _PostgresTransaction(self._conn)
 
-    async def introspect(self) -> SchemaSnapshot:
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        return await _PostgresIntrospector(self, self._conn).build()
+        return await _PostgresIntrospector(self, self._conn).build(lazy=lazy)
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        if self._conn is None:
+            raise AdapterError("postgres: not connected")
+        return await _PostgresIntrospector(self, self._conn).fetch_columns(schema, name)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        if self._conn is None:
+            raise AdapterError("postgres: not connected")
+        return await _PostgresIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        if self._conn is None:
+            raise AdapterError("postgres: not connected")
+        return await _PostgresIntrospector(self, self._conn).fetch_indexes(schema, name)
 
 
 class _PostgresIntrospector(SchemaIntrospector):

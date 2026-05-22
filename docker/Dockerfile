@@ -20,7 +20,9 @@ COPY pyproject.toml uv.lock* ./
 COPY packages ./packages
 COPY apps ./apps
 
-RUN uv sync --frozen --no-dev --all-extras || uv sync --no-dev --all-extras
+# Fail loud if uv.lock is stale rather than silently regenerating it — the
+# lock file is committed and the image must build from exactly those pins.
+RUN uv sync --frozen --no-dev --all-extras
 
 # ---- Runtime --------------------------------------------------------
 FROM python:3.13-slim AS runtime

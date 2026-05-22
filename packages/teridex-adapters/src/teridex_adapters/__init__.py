@@ -5,6 +5,7 @@ from teridex_adapters.registry import (
     AdapterRegistry,
     create_adapter_for_dsn,
     default_registry,
+    reset_default_registry,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "AdapterRegistry",
     "create_adapter_for_dsn",
     "default_registry",
+    "reset_default_registry",
 ]

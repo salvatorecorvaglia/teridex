@@ -20,6 +20,7 @@ async def test_connect_populates_pool() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         assert isinstance(app.state.pool, ConnectionPool)
         # Introspector adapter is dedicated (not from the pool).
         assert app.state.adapter is not None
@@ -30,6 +31,7 @@ async def test_pool_serves_two_concurrent_queries() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         pool = app.state.pool
         assert pool is not None
 
@@ -43,4 +45,4 @@ async def test_pool_serves_two_concurrent_queries() -> None:
                 return emitted
 
         results = await asyncio.gather(run_one(), run_one())
-        assert results == [1, 1]
+        assert list(results) == [1, 1]

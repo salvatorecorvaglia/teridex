@@ -88,3 +88,5 @@ CLAUDE.md
 *.duckdb
 teridex.log
 .teridex/
+*.log
+scratch/

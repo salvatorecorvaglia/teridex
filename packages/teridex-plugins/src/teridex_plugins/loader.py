@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from importlib.metadata import EntryPoint, entry_points
 from typing import TYPE_CHECKING, Any
 
+from teridex_core import __version__ as _teridex_version
 from teridex_core.errors import PluginError, PluginLoadError
 from teridex_core.events import EventBus, PluginLoaded, PluginUnloaded
 from teridex_core.logging import get_logger
@@ -17,6 +19,49 @@ if TYPE_CHECKING:
     from teridex_plugins.registry import PluginRegistry
 
 logger = get_logger(__name__)
+
+_SPEC_CLAUSE = re.compile(r"\s*(>=|<=|==|!=|>|<)\s*([0-9][0-9.]*)\s*")
+
+
+def _parse_version(value: str) -> tuple[int, ...]:
+    """Parse a dotted version into an int tuple (non-numeric suffixes dropped)."""
+    parts: list[int] = []
+    for chunk in value.split("."):
+        digits = "".join(c for c in chunk if c.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
+def version_satisfies(version: str, specifier: str) -> bool:
+    """Check ``version`` against a comma-separated PEP 440-ish ``specifier``.
+
+    Supports ``>= <= == != > <``. Unrecognized clauses are ignored rather than
+    treated as a failure, so an exotic constraint never silently hides a plugin.
+    """
+    spec = specifier.strip()
+    if not spec:
+        return True
+    current = _parse_version(version)
+    for clause in spec.split(","):
+        match = _SPEC_CLAUSE.fullmatch(clause)
+        if match is None:
+            continue
+        op, target_str = match.group(1), match.group(2)
+        target = _parse_version(target_str)
+        width = max(len(current), len(target))
+        lhs = current + (0,) * (width - len(current))
+        rhs = target + (0,) * (width - len(target))
+        ok = {
+            ">=": lhs >= rhs,
+            "<=": lhs <= rhs,
+            "==": lhs == rhs,
+            "!=": lhs != rhs,
+            ">": lhs > rhs,
+            "<": lhs < rhs,
+        }[op]
+        if not ok:
+            return False
+    return True
 
 
 class PluginLoader:
@@ -85,6 +130,14 @@ class PluginLoader:
             )
         if not self._is_allowed(manifest.id):
             logger.info("plugin_skipped", plugin_id=manifest.id)
+            return
+        if not version_satisfies(_teridex_version, manifest.requires_teridex):
+            logger.warning(
+                "plugin_incompatible",
+                plugin_id=manifest.id,
+                requires_teridex=manifest.requires_teridex,
+                teridex_version=_teridex_version,
+            )
             return
         self._registry.add_plugin(manifest)
         ctx = PluginContext(

@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from structlog.types import EventDict, Processor
 
 _request_context: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -39,15 +41,26 @@ def configure_logging(
     *,
     level: str = "INFO",
     json: bool | None = None,
+    log_file: Path | None = None,
+    force: bool = False,
 ) -> None:
-    """Configure structlog + stdlib logging. Idempotent."""
+    """Configure structlog + stdlib logging. Idempotent unless force=True."""
 
     global _configured  # noqa: PLW0603 - module-level idempotency flag
-    if _configured:
+    if _configured and not force:
         return
 
+    stream: Any = sys.stderr
+    if log_file is not None:
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            stream = log_file.open("a", encoding="utf-8")
+        except OSError:
+            # Fallback to sys.stderr if log file cannot be opened
+            stream = sys.stderr
+
     if json is None:
-        json = not sys.stderr.isatty()
+        json = not stream.isatty() if hasattr(stream, "isatty") else True
 
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -67,14 +80,15 @@ def configure_logging(
         wrapper_class=structlog.make_filtering_bound_logger(
             logging.getLevelNamesMapping().get(level.upper(), logging.INFO)
         ),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-        cache_logger_on_first_use=True,
+        logger_factory=structlog.PrintLoggerFactory(file=stream),
+        cache_logger_on_first_use=False,
     )
 
     logging.basicConfig(
         format="%(message)s",
-        stream=sys.stderr,
+        stream=stream,
         level=level.upper(),
+        force=True,
     )
 
     _configured = True

@@ -62,7 +62,7 @@ Two themes ship by default: `monokai` (warm) and `nord` (cool). Set the active t
 
 Teridex reads (in order) defaults → `~/.config/teridex/config.toml` → environment (`TERIDEX_*`, double-underscore nested, e.g. `TERIDEX_UI__THEME=nord`) → CLI flags.
 
-A working sample lives at [`docs/config.example.toml`](docs/config.example.toml).
+A working sample lives at [`config.example.toml`](config.example.toml).
 
 ## Project layout
 
@@ -71,10 +71,9 @@ apps/        # User-facing entry points (CLI, TUI)
 packages/    # Library code (core, adapters, engine, plugins)
 tests/       # Unit + integration suites
 docker/      # Container image + dev compose
-docs/        # Architecture, plugin authoring, contributing
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ## Development
 
@@ -93,7 +92,7 @@ TERIDEX_TEST_MARKERS=integration ./scripts/test.sh
 
 ## Plugins
 
-Plugins are ordinary Python packages that expose a `teridex.plugins` entry point. They can contribute commands (palette + keybindings), dockable panels (left / right / bottom rails), and hook into engine events. See [docs/PLUGINS.md](docs/PLUGINS.md).
+Plugins are ordinary Python packages that expose a `teridex.plugins` entry point. They can contribute commands (palette + keybindings), dockable panels (left / right / bottom rails), and hook into engine events. See [PLUGINS.md](PLUGINS.md).
 
 ## License
 

@@ -173,10 +173,25 @@ class SQLiteAdapter(AbstractAdapter):
             raise AdapterError("sqlite: not connected")
         return _SQLiteTransaction(self._conn)
 
-    async def introspect(self) -> SchemaSnapshot:
+    async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        return await _SQLiteIntrospector(self, self._conn).build()
+        return await _SQLiteIntrospector(self, self._conn).build(lazy=lazy)
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
+        if self._conn is None:
+            raise AdapterError("sqlite: not connected")
+        return await _SQLiteIntrospector(self, self._conn).fetch_columns(schema, name)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        if self._conn is None:
+            raise AdapterError("sqlite: not connected")
+        return await _SQLiteIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        if self._conn is None:
+            raise AdapterError("sqlite: not connected")
+        return await _SQLiteIntrospector(self, self._conn).fetch_indexes(schema, name)
 
 
 class _SQLiteIntrospector(SchemaIntrospector):

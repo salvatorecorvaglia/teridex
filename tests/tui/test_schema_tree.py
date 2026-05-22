@@ -49,6 +49,7 @@ async def test_columns_only_appear_after_expansion() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         tree = app.query_one(SchemaTree)
         tree.populate(_snapshot())
         await pilot.pause()
@@ -81,6 +82,7 @@ async def test_re_expansion_does_not_duplicate() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         tree = app.query_one(SchemaTree)
         tree.populate(_snapshot())
         await pilot.pause()
