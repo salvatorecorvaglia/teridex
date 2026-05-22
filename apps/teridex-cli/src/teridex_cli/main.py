@@ -72,11 +72,15 @@ def connect(
     """Open a connection to verify the DSN is reachable."""
 
     async def _go() -> int:
-        parsed = Dsn.parse(dsn)
-        adapter = create_adapter_for_dsn(parsed)
-        await adapter.connect(parsed)
-        ok = await adapter.ping()
-        await adapter.close()
+        try:
+            parsed = Dsn.parse(dsn)
+            adapter = create_adapter_for_dsn(parsed)
+            await adapter.connect(parsed)
+            ok = await adapter.ping()
+            await adapter.close()
+        except Exception as exc:
+            console.print(f"[bold red]ERROR[/] {exc}")
+            return 1
         console.print(
             f"[bold green]OK[/] connected to {parsed.scheme}://…/{parsed.database or ''}"
             if ok
@@ -90,9 +94,7 @@ def connect(
 @app.command("run")
 def run_query(
     sql: Annotated[str, typer.Argument(help="SQL to execute.")],
-    dsn: Annotated[
-        str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")
-    ],
+    dsn: Annotated[str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")],
     limit: Annotated[int, typer.Option("--limit", min=1, help="Max rows to print.")] = 200,
 ) -> None:
     """Execute one query and render results as a Rich table."""
@@ -144,9 +146,7 @@ def run_query(
 def tui(
     dsn: Annotated[
         str,
-        typer.Option(
-            "--dsn", envvar="TERIDEX_DSN", help="Initial DSN to connect to."
-        ),
+        typer.Option("--dsn", envvar="TERIDEX_DSN", help="Initial DSN to connect to."),
     ] = "",
     config_path: Annotated[str, typer.Option("--config", help="Path to config TOML.")] = "",
 ) -> None:
@@ -157,8 +157,12 @@ def tui(
 
     from teridex_tui.app import TeridexApp  # noqa: PLC0415
 
-    cfg = load_config(Path(config_path) if config_path else None)
-    initial_dsn = Dsn.parse(dsn) if dsn else None
+    try:
+        cfg = load_config(Path(config_path) if config_path else None)
+        initial_dsn = Dsn.parse(dsn) if dsn else None
+    except Exception as exc:
+        console.print(f"[bold red]ERROR[/] {exc}")
+        raise typer.Exit(code=1) from exc
     TeridexApp(config=cfg, initial_dsn=initial_dsn).run()
 
 

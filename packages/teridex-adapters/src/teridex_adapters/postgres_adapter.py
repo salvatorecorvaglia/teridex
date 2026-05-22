@@ -9,7 +9,7 @@ import asyncpg
 
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -98,7 +98,7 @@ class PostgresAdapter(AbstractAdapter):
         if self._conn is None:
             raise AdapterError("postgres: not connected")
         handle = QueryHandle(
-            connection_id=hex(id(self._conn)),
+            connection_id=connection_id(self._conn),
             sql=sql,
             params=dict(params) if params else None,
         )
@@ -200,6 +200,9 @@ class PostgresAdapter(AbstractAdapter):
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        # Drop any deferred SQL for this handle so an abandoned (never
+        # streamed) query does not leak an entry in ``_pending``.
+        self._pending.pop(handle.query_id, None)
         # The live connection is busy running the user's query, so we can't
         # use it to issue pg_cancel_backend — open a short-lived side
         # connection instead and target the saved backend PID.
@@ -245,7 +248,7 @@ class _PostgresIntrospector(SchemaIntrospector):
         self._conn = conn
 
     def connection_id(self) -> str:
-        return hex(id(self._conn))
+        return connection_id(self._conn)
 
     def database_name(self) -> str | None:
         return self._adapter._dsn.database if self._adapter._dsn else None
@@ -292,26 +295,35 @@ class _PostgresIntrospector(SchemaIntrospector):
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         rows = await self._conn.fetch(
             """
-            SELECT conname,
-                   pg_get_constraintdef(c.oid) AS def,
-                   array_agg(att.attname ORDER BY u.ord) AS cols
+            SELECT c.conname AS name,
+                   rns.nspname AS ref_schema,
+                   rcls.relname AS ref_table,
+                   array_agg(att.attname ORDER BY u.ord) AS cols,
+                   array_agg(ratt.attname ORDER BY u.ord) AS ref_cols
             FROM pg_constraint c
             JOIN pg_class cls ON cls.oid = c.conrelid
             JOIN pg_namespace ns ON ns.oid = cls.relnamespace
-            JOIN unnest(c.conkey) WITH ORDINALITY AS u(attnum, ord) ON true
-            JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = u.attnum
+            JOIN pg_class rcls ON rcls.oid = c.confrelid
+            JOIN pg_namespace rns ON rns.oid = rcls.relnamespace
+            JOIN unnest(c.conkey, c.confkey) WITH ORDINALITY AS u(attnum, refattnum, ord)
+                 ON true
+            JOIN pg_attribute att
+                 ON att.attrelid = c.conrelid AND att.attnum = u.attnum
+            JOIN pg_attribute ratt
+                 ON ratt.attrelid = c.confrelid AND ratt.attnum = u.refattnum
             WHERE c.contype = 'f' AND ns.nspname=$1 AND cls.relname=$2
-            GROUP BY conname, c.oid
+            GROUP BY c.conname, rns.nspname, rcls.relname
             """,
             schema,
             name,
         )
         return [
             ForeignKey(
-                name=fk["conname"],
+                name=fk["name"],
                 columns=list(fk["cols"]),
-                referenced_table=fk["def"],
-                referenced_columns=[],
+                referenced_schema=fk["ref_schema"],
+                referenced_table=fk["ref_table"],
+                referenced_columns=list(fk["ref_cols"]),
             )
             for fk in rows
         ]
@@ -343,9 +355,7 @@ class _PostgresIntrospector(SchemaIntrospector):
             for ix in rows
         ]
 
-    def build_view(
-        self, schema: str, name: str, kind: str, columns: list[TableColumn]
-    ) -> View:
+    def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
         return View(
             name=name,
             schema_name=schema,

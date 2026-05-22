@@ -15,9 +15,7 @@ from teridex_tui.app import TeridexApp  # noqa: E402
 
 @pytest.mark.asyncio
 async def test_query_with_rows_sets_count_subtitle(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    app = TeridexApp(
-        config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:")
-    )
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         editor = app._tabs().current_editor
@@ -33,9 +31,7 @@ async def test_query_with_rows_sets_count_subtitle(tmp_path) -> None:  # type: i
 
 @pytest.mark.asyncio
 async def test_query_with_no_rows_sets_empty_subtitle() -> None:
-    app = TeridexApp(
-        config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:")
-    )
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         editor = app._tabs().current_editor
@@ -52,9 +48,7 @@ async def test_query_with_no_rows_sets_empty_subtitle() -> None:
 @pytest.mark.asyncio
 async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
-    app = TeridexApp(
-        config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:")
-    )
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         editor = app._tabs().current_editor

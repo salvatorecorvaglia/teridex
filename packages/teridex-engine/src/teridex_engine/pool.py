@@ -33,6 +33,7 @@ class ConnectionPool:
         self._all: list[DatabaseAdapter] = []
         self._closed = False
         self._lock = asyncio.Lock()
+        self._waiters: set[asyncio.Future[DatabaseAdapter]] = set()
 
     async def _acquire(self) -> DatabaseAdapter:
         if self._closed:
@@ -47,8 +48,14 @@ class ConnectionPool:
                 adapter = await self._factory(self._dsn)
                 self._all.append(adapter)
                 return adapter
-        # Someone else created one — wait for an idle one.
-        return await self._idle.get()
+        # Someone else created one — wait for an idle one. Track the waiter
+        # so ``close()`` can wake it instead of leaving it hung forever.
+        getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
+        self._waiters.add(getter)
+        try:
+            return await getter
+        finally:
+            self._waiters.discard(getter)
 
     async def _release(self, adapter: DatabaseAdapter) -> None:
         if self._closed:
@@ -68,6 +75,9 @@ class ConnectionPool:
 
     async def close(self) -> None:
         self._closed = True
+        for getter in self._waiters:
+            getter.cancel()
+        self._waiters.clear()
         for adapter in self._all:
             try:
                 await adapter.close()

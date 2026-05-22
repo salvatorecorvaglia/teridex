@@ -36,7 +36,7 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="command-palette"):
-            yield Static("[b]Command palette[/b]")
+            yield Static("[b]Command palette[/b]", id="palette-title")
             yield Input(placeholder="Search commands…", id="palette-input")
             yield ListView(id="palette-list")
 
@@ -61,16 +61,20 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
             ranked = list(self._all)
         else:
             # process.extract with a dict input returns (choice, score, key).
+            # ``limit=None`` ranks every command so no match is silently hidden.
             id_to_cmd = {c.id: c for c in self._all}
             matches = process.extract(
                 q,
                 {c.id: c.title for c in self._all},
                 scorer=fuzz.WRatio,
-                limit=20,
+                limit=None,
             )
             ranked = [id_to_cmd[key] for (_title, _score, key) in matches]
         for cmd in ranked:
             lst.append(ListItem(Static(_Entry(cmd).label), id=f"cmd-{cmd.id}"))
+        self.query_one("#palette-title", Static).update(
+            f"[b]Command palette[/b]  [dim]{len(ranked)}/{len(self._all)}[/]"
+        )
 
     def _submit(self) -> None:
         lst = self.query_one("#palette-list", ListView)

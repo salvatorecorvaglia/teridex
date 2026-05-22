@@ -19,3 +19,15 @@ async def test_app_boots_in_memory_sqlite() -> None:
         await pilot.pause()
         assert app.state.adapter is not None
         assert app.state.adapter.connected
+
+
+@pytest.mark.asyncio
+async def test_run_query_rejects_reentry_while_in_flight() -> None:
+    # Regression: a second run while one is in flight must not clobber the
+    # current run handle — it should be rejected up front.
+    app = TeridexApp(config=TeridexConfig())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._query_in_flight = True
+        await app.action_run_query()
+        assert "already running" in app._status().message

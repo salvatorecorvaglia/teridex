@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from typer.testing import CliRunner
 
 from teridex_cli.main import app
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 runner = CliRunner()
 
@@ -38,11 +43,26 @@ def test_connect_with_envvar_succeeds() -> None:
 
 
 def test_run_with_bad_dsn_exits_nonzero() -> None:
-    result = runner.invoke(
-        app, ["run", "--dsn", "not-a-real-scheme://x", "SELECT 1"]
-    )
+    result = runner.invoke(app, ["run", "--dsn", "not-a-real-scheme://x", "SELECT 1"])
     assert result.exit_code != 0
     assert "ERROR" in result.stdout
+
+
+def test_connect_with_bad_dsn_exits_cleanly() -> None:
+    # A bad DSN must produce a clean error message, not a raw traceback.
+    result = runner.invoke(app, ["connect", "--dsn", "not-a-real-scheme://x"])
+    assert result.exit_code != 0
+    assert "ERROR" in result.stdout
+    assert "Traceback" not in result.stdout
+
+
+def test_tui_with_malformed_config_exits_cleanly(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.toml"
+    bad.write_text("this is = not valid = toml\n")
+    result = runner.invoke(app, ["tui", "--config", str(bad)])
+    assert result.exit_code != 0
+    assert "ERROR" in result.stdout
+    assert "Traceback" not in result.stdout
 
 
 def test_run_executes_query_and_prints_rows() -> None:

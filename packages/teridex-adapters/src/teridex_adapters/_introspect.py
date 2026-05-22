@@ -52,9 +52,7 @@ class SchemaIntrospector(ABC):
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         return []
 
-    def build_view(
-        self, schema: str, name: str, kind: str, columns: list[TableColumn]
-    ) -> View:
+    def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
         return View(name=name, schema_name=schema, columns=columns)
 
     async def build(self) -> SchemaSnapshot:

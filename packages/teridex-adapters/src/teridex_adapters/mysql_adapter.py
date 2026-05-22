@@ -9,7 +9,7 @@ import asyncmy
 
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -138,7 +138,7 @@ class MySQLAdapter(AbstractAdapter):
         if self._conn is None:
             raise AdapterError("mysql: not connected")
         handle = QueryHandle(
-            connection_id=hex(id(self._conn)),
+            connection_id=connection_id(self._conn),
             sql=sql,
             params=dict(params) if params else None,
         )
@@ -216,7 +216,7 @@ class _MySQLIntrospector(SchemaIntrospector):
         self._conn = conn
 
     def connection_id(self) -> str:
-        return hex(id(self._conn))
+        return connection_id(self._conn)
 
     def database_name(self) -> str | None:
         return self._adapter._dsn.database if self._adapter._dsn else None
@@ -236,10 +236,7 @@ class _MySQLIntrospector(SchemaIntrospector):
             " WHERE TABLE_SCHEMA NOT IN"
             " ('mysql','performance_schema','information_schema','sys')"
         )
-        return [
-            (schema, name, "view" if raw == "VIEW" else "table")
-            for schema, name, raw in rows
-        ]
+        return [(schema, name, "view" if raw == "VIEW" else "table") for schema, name, raw in rows]
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         rows = await self._fetch(

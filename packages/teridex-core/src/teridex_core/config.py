@@ -17,6 +17,9 @@ class UIConfig(BaseModel):
     keymap: Literal["default", "vim"] = "default"
     show_status_bar: bool = True
     row_batch_size: int = Field(default=1000, ge=10, le=100_000)
+    # Max rows held in the results grid. ``0`` means unlimited; a positive
+    # cap protects memory on very large result sets.
+    max_display_rows: int = Field(default=10_000, ge=0)
 
 
 class EngineConfig(BaseModel):

@@ -89,6 +89,12 @@ class PluginUnloaded(Event):
     plugin_id: str
 
 
+# Lifecycle-terminal events: losing one of these strands UI state (a query
+# stuck "running"), so they are never chosen as the victim when a queue
+# overflows — see :meth:`EventBus.publish`.
+_TERMINAL_EVENTS: tuple[type[Event], ...] = (QueryCompleted, QueryFailed, QueryCancelled)
+
+
 class _Subscription:
     __slots__ = ("event_type", "handler", "queue", "task")
 
@@ -150,17 +156,35 @@ class EventBus:
             try:
                 sub.queue.put_nowait(event)
             except asyncio.QueueFull:
-                with contextlib.suppress(asyncio.QueueEmpty):
-                    sub.queue.get_nowait()
-                self.dropped_events += 1
-                logger.warning(
-                    "event_queue_full",
-                    event_type=type(event).__name__,
-                    handler=getattr(sub.handler, "__qualname__", repr(sub.handler)),
-                    dropped_total=self.dropped_events,
-                )
-                with contextlib.suppress(asyncio.QueueFull):
-                    sub.queue.put_nowait(event)
+                self._handle_overflow(sub, event)
+
+    def _handle_overflow(self, sub: _Subscription, event: Event) -> None:
+        """Make room in a full queue, preserving lifecycle-terminal events.
+
+        The oldest event is evicted unless it is terminal — in that case the
+        *incoming* event is dropped instead, so a ``QueryCompleted`` is never
+        lost to a flood of ``QueryProgress``.
+        """
+        oldest: Event | None = None
+        with contextlib.suppress(asyncio.QueueEmpty):
+            oldest = sub.queue.get_nowait()
+        self.dropped_events += 1
+        if oldest is not None and isinstance(oldest, _TERMINAL_EVENTS):
+            # Keep the terminal event; the incoming event is the casualty.
+            with contextlib.suppress(asyncio.QueueFull):
+                sub.queue.put_nowait(oldest)
+            dropped = type(event).__name__
+        else:
+            with contextlib.suppress(asyncio.QueueFull):
+                sub.queue.put_nowait(event)
+            dropped = type(oldest).__name__ if oldest is not None else "?"
+        logger.warning(
+            "event_queue_full",
+            event_type=type(event).__name__,
+            dropped_event=dropped,
+            handler=getattr(sub.handler, "__qualname__", repr(sub.handler)),
+            dropped_total=self.dropped_events,
+        )
 
     async def close(self) -> None:
         self._closed = True

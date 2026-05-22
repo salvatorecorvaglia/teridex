@@ -76,9 +76,7 @@ async def test_introspect_handles_quoted_identifiers() -> None:
         async for _ in await a.stream(h):
             pass
         snap = await a.introspect()
-        target = next(
-            o for o in snap.schemas["main"] if o.name == 'weird"name\'with-quotes'
-        )
+        target = next(o for o in snap.schemas["main"] if o.name == "weird\"name'with-quotes")
         col_names = [c.name for c in target.columns]
         assert col_names == ["id", "val"]
         assert any(i.name == "ix_weird'name" for i in target.indexes)

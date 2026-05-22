@@ -9,6 +9,7 @@ Responsibilities:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -76,6 +77,7 @@ class TeridexApp(App[None]):
         self._initial_dsn = initial_dsn
         self._current_run: QueryRun | None = None
         self._run_executor: QueryExecutor | None = None
+        self._query_in_flight = False
         self._palette_task: asyncio.Task[None] | None = None
         if self.cfg.ui.keymap == "vim":
             for key, action, desc in VIM_BINDINGS:
@@ -93,10 +95,15 @@ class TeridexApp(App[None]):
         await self._load_plugins()
         await self._mount_plugin_panels()
         self._wire_event_listeners()
+        self._results().max_rows = self.cfg.ui.max_display_rows
         if self._initial_dsn is not None:
             await self._connect(self._initial_dsn)
 
     async def on_unmount(self) -> None:
+        if self._palette_task is not None and not self._palette_task.done():
+            self._palette_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._palette_task
         if self.state.history is not None:
             await self.state.history.close()
         if self.state.pool is not None:
@@ -267,6 +274,9 @@ class TeridexApp(App[None]):
     # ---- actions ------------------------------------------------------
 
     async def action_run_query(self) -> None:
+        if self._query_in_flight:
+            self._status().message = "[yellow]a query is already running[/]"
+            return
         if self.state.pool is None:
             self._status().message = "[yellow]not connected[/]"
             return
@@ -277,33 +287,40 @@ class TeridexApp(App[None]):
         results = self._results()
         results.reset()
         results.loading = True
+        self._query_in_flight = True
 
         # Acquire a dedicated adapter from the pool for this run; release
         # it in ``finally`` so a cancellation never leaks the slot.
-        async with self.state.pool.acquire() as adapter:
-            executor = QueryExecutor(adapter, self.state.bus)
-            self._run_executor = executor
-            try:
-                self._current_run = await executor.run(sql, batch_size=self.cfg.ui.row_batch_size)
-            except QueryError as exc:
-                results.loading = False
-                self._status().message = f"[red]{exc}[/]"
-                self._run_executor = None
-                return
-            try:
-                async for batch in self._current_run.rows:
+        try:
+            async with self.state.pool.acquire() as adapter:
+                executor = QueryExecutor(adapter, self.state.bus)
+                self._run_executor = executor
+                try:
+                    self._current_run = await executor.run(
+                        sql, batch_size=self.cfg.ui.row_batch_size
+                    )
+                except QueryError as exc:
                     results.loading = False
-                    results.feed(batch)
-            except QueryCancelledError:
-                self._status().message = "[yellow]cancelled[/]"
-            except TeridexError as exc:
-                self._status().message = f"[red]{exc}[/]"
-            finally:
-                results.loading = False
-                results.mark_done()
-                await self._record_history(sql)
-                self._current_run = None
-                self._run_executor = None
+                    self._status().message = f"[red]{exc}[/]"
+                    return
+                cancelled = False
+                try:
+                    async for batch in self._current_run.rows:
+                        results.loading = False
+                        results.feed(batch)
+                except QueryCancelledError:
+                    cancelled = True
+                    self._status().message = "[yellow]cancelled[/]"
+                except TeridexError as exc:
+                    self._status().message = f"[red]{exc}[/]"
+                finally:
+                    results.loading = False
+                    results.mark_done(cancelled=cancelled)
+                    await self._record_history(sql)
+        finally:
+            self._current_run = None
+            self._run_executor = None
+            self._query_in_flight = False
 
     async def action_copy_cell(self) -> None:
         text = self._results().current_cell_text()
@@ -333,12 +350,14 @@ class TeridexApp(App[None]):
     async def action_refresh_schema(self) -> None:
         if self.state.introspector is None:
             return
+        self._status().message = "refreshing schema…"
         try:
             snap = await self.state.introspector.refresh()
         except TeridexError as exc:
             self._status().message = f"[red]schema: {exc}[/]"
             return
         self._tree().populate(snap)
+        self._status().message = f"schema refreshed · {snap.object_count} object(s)"
 
     async def action_new_tab(self) -> None:
         self._tabs().new_tab()

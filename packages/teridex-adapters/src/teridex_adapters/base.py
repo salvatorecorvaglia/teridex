@@ -27,6 +27,16 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def connection_id(conn: object) -> str:
+    """Stable per-process identifier for a driver connection object.
+
+    Used for ``QueryHandle.connection_id`` / ``SchemaSnapshot.connection_id``.
+    The value only needs to be stable for the connection's lifetime and
+    distinct between live connections — ``id()`` satisfies both.
+    """
+    return hex(id(conn))
+
+
 class AbstractAdapter(ABC):
     """Skeleton implementation of :class:`DatabaseAdapter`."""
 

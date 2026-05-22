@@ -9,7 +9,7 @@ import aiosqlite
 
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -95,7 +95,7 @@ class SQLiteAdapter(AbstractAdapter):
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
         handle = QueryHandle(
-            connection_id=hex(id(self._conn)),
+            connection_id=connection_id(self._conn),
             sql=sql,
             params=dict(params) if params else None,
         )
@@ -185,7 +185,7 @@ class _SQLiteIntrospector(SchemaIntrospector):
         self._conn = conn
 
     def connection_id(self) -> str:
-        return hex(id(self._conn))
+        return connection_id(self._conn)
 
     def database_name(self) -> str | None:
         return self._adapter._dsn.database if self._adapter._dsn else None
@@ -199,9 +199,7 @@ class _SQLiteIntrospector(SchemaIntrospector):
         return [("main", name, kind) for name, kind in rows]
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
-        async with self._conn.execute(
-            f"PRAGMA table_info({_quote_ident(name)})"
-        ) as ccur:
+        async with self._conn.execute(f"PRAGMA table_info({_quote_ident(name)})") as ccur:
             rows = await ccur.fetchall()
         return [
             TableColumn(
@@ -217,9 +215,7 @@ class _SQLiteIntrospector(SchemaIntrospector):
         ]
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        async with self._conn.execute(
-            f"PRAGMA foreign_key_list({_quote_ident(name)})"
-        ) as fcur:
+        async with self._conn.execute(f"PRAGMA foreign_key_list({_quote_ident(name)})") as fcur:
             rows = await fcur.fetchall()
         return [
             ForeignKey(
@@ -234,15 +230,11 @@ class _SQLiteIntrospector(SchemaIntrospector):
         ]
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        async with self._conn.execute(
-            f"PRAGMA index_list({_quote_ident(name)})"
-        ) as icur:
+        async with self._conn.execute(f"PRAGMA index_list({_quote_ident(name)})") as icur:
             idx_rows = await icur.fetchall()
         indexes: list[Index] = []
         for _seq, iname, unique, _origin, _partial in idx_rows:
-            async with self._conn.execute(
-                f"PRAGMA index_info({_quote_ident(iname)})"
-            ) as iicur:
+            async with self._conn.execute(f"PRAGMA index_info({_quote_ident(iname)})") as iicur:
                 icols = [r[2] for r in await iicur.fetchall()]
             indexes.append(Index(name=iname, columns=icols, unique=bool(unique)))
         return indexes

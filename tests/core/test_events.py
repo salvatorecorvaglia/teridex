@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from teridex_core.events import EventBus, QueryCompleted, QueryStarted
+from teridex_core.events import Event, EventBus, QueryCompleted, QueryStarted
 
 
 @pytest.mark.asyncio
@@ -93,6 +93,37 @@ async def test_overflow_drops_oldest_and_counts() -> None:
             break
     # The newest event must survive the drop-oldest policy.
     assert "5" in received
+    await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_overflow_preserves_terminal_event() -> None:
+    bus = EventBus(queue_size=2)
+    received: list[Event] = []
+    release = asyncio.Event()
+
+    async def slow(ev: Event) -> None:
+        await release.wait()
+        received.append(ev)
+
+    bus.subscribe(Event, slow)
+    # The drainer pulls the first event and blocks on ``release``; the queue
+    # itself can then hold 2 before it overflows.
+    bus.publish(QueryStarted(query_id="warmup", connection_id="c", sql_preview=""))
+    await asyncio.sleep(0)
+    bus.publish(QueryCompleted(query_id="done", rows=1, duration_ms=1.0))
+    # Flood with non-terminal events — these should evict each other, never
+    # the QueryCompleted already queued behind them.
+    for i in range(10):
+        bus.publish(QueryStarted(query_id=str(i), connection_id="c", sql_preview=""))
+        await asyncio.sleep(0)
+    assert bus.dropped_events >= 1
+    release.set()
+    for _ in range(200):
+        await asyncio.sleep(0)
+        if any(isinstance(e, QueryCompleted) for e in received):
+            break
+    assert any(isinstance(e, QueryCompleted) for e in received)
     await bus.close()
 
 

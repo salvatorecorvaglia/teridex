@@ -1107,14 +1107,10 @@ version = "0.1.0"
 source = { editable = "packages/teridex-plugins" }
 dependencies = [
     { name = "teridex-core" },
-    { name = "teridex-engine" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "teridex-core", editable = "packages/teridex-core" },
-    { name = "teridex-engine", editable = "packages/teridex-engine" },
-]
+requires-dist = [{ name = "teridex-core", editable = "packages/teridex-core" }]
 
 [[package]]
 name = "teridex-tui"

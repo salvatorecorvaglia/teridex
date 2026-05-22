@@ -102,7 +102,13 @@ class QueryExecutor:
 
         # Capture the source iterator locally so the closure cannot recursively
         # iterate ``run.rows`` after we reassign it to the wrapper below.
-        source = await self._adapter.stream(handle, batch_size=batch_size)
+        # If ``stream()`` fails here, ``_wrap``'s ``finally`` never runs, so we
+        # must clear the logging context ourselves.
+        try:
+            source = await self._adapter.stream(handle, batch_size=batch_size)
+        except BaseException:
+            clear_context()
+            raise
         run = QueryRun(handle=handle, rows=source)
 
         async def _wrap() -> AsyncIterator[ResultBatch]:

@@ -128,16 +128,17 @@ class PluginLoader:
         if plugin is None:
             raise PluginError(f"plugin not loaded: {plugin_id!r}", context={"plugin_id": plugin_id})
         on_unload = getattr(plugin, "on_unload", None)
-        ctx = self._contexts.pop(plugin_id, None) or PluginContext(
-            plugin_id=plugin_id,
-            event_bus=self._bus,
-            registry=self._registry,
-            services=self._services,
-        )
+        ctx = self._contexts.pop(plugin_id, None)
         if callable(on_unload):
-            try:
-                on_unload(ctx)
-            except Exception:
-                logger.exception("plugin_on_unload_failed", plugin_id=plugin_id)
+            if ctx is None:
+                # No tracked context — the plugin was never fully loaded.
+                # Skip on_unload rather than handing it a fabricated context
+                # that shares none of the state it saw in on_load.
+                logger.warning("plugin_unload_without_context", plugin_id=plugin_id)
+            else:
+                try:
+                    on_unload(ctx)
+                except Exception:
+                    logger.exception("plugin_on_unload_failed", plugin_id=plugin_id)
         self._registry.remove_plugin(plugin_id)
         self._bus.publish(PluginUnloaded(plugin_id=plugin_id))

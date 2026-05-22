@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import duckdb
 
 from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import AbstractAdapter
+from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -99,9 +99,10 @@ class DuckDBAdapter(AbstractAdapter):
             return await asyncio.to_thread(_run)
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
-        cid = id(self._conn)
         handle = QueryHandle(
-            connection_id=hex(cid), sql=sql, params=dict(params) if params else None
+            connection_id=connection_id(self._conn),
+            sql=sql,
+            params=dict(params) if params else None,
         )
         handle.mark_running()
         try:
@@ -171,9 +172,7 @@ class DuckDBAdapter(AbstractAdapter):
         try:
             await asyncio.to_thread(conn.interrupt)
         except Exception as exc:
-            logger.warning(
-                "duckdb_interrupt_failed", query_id=handle.query_id, error=str(exc)
-            )
+            logger.warning("duckdb_interrupt_failed", query_id=handle.query_id, error=str(exc))
 
     async def begin(self) -> Transaction:
         return _DuckDBTransaction(self)
@@ -216,9 +215,13 @@ class DuckDBAdapter(AbstractAdapter):
                 schemas.setdefault(schema_name, []).append(obj)
             _ = ForeignKey, Index  # reserved for future native catalog queries
             return SchemaSnapshot(
-                connection_id=hex(id(conn)),
+                connection_id=connection_id(conn),
                 database=self._dsn.database if self._dsn else None,
                 schemas=schemas,
             )
 
-        return await asyncio.to_thread(_introspect)
+        # Hold the per-connection lock: DuckDB connections are not safe for
+        # concurrent use across threads, and a query stream may be touching
+        # the same connection from another worker thread.
+        async with self._lock:
+            return await asyncio.to_thread(_introspect)

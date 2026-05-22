@@ -54,6 +54,48 @@ async def test_duckdb_cancel_interrupts_running_query() -> None:
         await a.close()
 
 
+async def _drain(a: DuckDBAdapter, sql: str) -> list[tuple]:  # type: ignore[type-arg]
+    h = await a.execute(sql)
+    out: list[tuple] = []  # type: ignore[type-arg]
+    async for batch in await a.stream(h):
+        out.extend(r for r in batch.rows if r)
+    return out
+
+
+@pytest.mark.asyncio
+async def test_duckdb_transaction_commit_persists() -> None:
+    a = DuckDBAdapter()
+    await a.connect(Dsn.parse("duckdb:///:memory:"))
+    try:
+        await _drain(a, "CREATE TABLE t (id INTEGER)")
+        async with await a.begin():
+            await _drain(a, "INSERT INTO t VALUES (1)")
+        assert await _drain(a, "SELECT count(*) FROM t") == [(1,)]
+    finally:
+        await a.close()
+
+
+@pytest.mark.asyncio
+async def test_duckdb_transaction_rollback_discards() -> None:
+    a = DuckDBAdapter()
+    await a.connect(Dsn.parse("duckdb:///:memory:"))
+    try:
+        await _drain(a, "CREATE TABLE t (id INTEGER)")
+        await _drain(a, "INSERT INTO t VALUES (1)")
+
+        async def _failing_txn() -> None:
+            async with await a.begin():
+                await _drain(a, "INSERT INTO t VALUES (2)")
+                raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await _failing_txn()
+        # The second insert must have been rolled back.
+        assert await _drain(a, "SELECT count(*) FROM t") == [(1,)]
+    finally:
+        await a.close()
+
+
 @pytest.mark.asyncio
 async def test_duckdb_introspect_smoke() -> None:
     a = DuckDBAdapter()

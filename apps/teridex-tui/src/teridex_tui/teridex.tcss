@@ -71,11 +71,6 @@ Screen {
     background: $boost;
 }
 
-#editor-area {
-    height: 40%;
-    border-bottom: solid $primary;
-}
-
 #results-area {
     height: 1fr;
 }
