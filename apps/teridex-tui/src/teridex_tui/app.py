@@ -26,7 +26,7 @@ from teridex_core.events import (
     QueryFailed,
     QueryStarted,
 )
-from teridex_core.logging import configure_logging, get_logger
+from teridex_core.logging import clear_context, configure_logging, get_logger
 from teridex_engine.executor import QueryExecutor, QueryRun
 from teridex_engine.history import HistoryEntry, QueryHistory
 from teridex_engine.introspector import Introspector
@@ -76,10 +76,18 @@ class TeridexApp(App[None]):
         self.cfg = config or load_config()
         log_dir = Path.home() / ".teridex"
         log_dir.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(Exception):
+            log_dir.chmod(0o700)
+        log_file = log_dir / "teridex.log"
+        if not log_file.exists():
+            with contextlib.suppress(Exception):
+                log_file.touch()
+        with contextlib.suppress(Exception):
+            log_file.chmod(0o600)
         configure_logging(
             level=self.cfg.logging.level,
             json=self.cfg.logging.json_lines,
-            log_file=log_dir / "teridex.log",
+            log_file=log_file,
             force=True,
         )
         self.state = AppState(bus=EventBus(), plugins=PluginRegistry())
@@ -254,6 +262,8 @@ class TeridexApp(App[None]):
     async def _connect(self, dsn: Dsn) -> None:
         bar = self._status()
         bar.message = "connecting…"
+        introspect_adapter = None
+        history = None
         try:
 
             async def _factory(d: Dsn) -> AbstractAdapter:
@@ -288,6 +298,17 @@ class TeridexApp(App[None]):
         except Exception as exc:
             logger.exception("connection_failed", dsn=dsn.render(mask_password=True))
             bar.message = f"[red]Connection failed: {exc}[/]"
+            self.state.dsn = None
+            self.state.adapter = None
+            self.state.pool = None
+            self.state.introspector = None
+            self.state.history = None
+            if introspect_adapter is not None:
+                with contextlib.suppress(Exception):
+                    await introspect_adapter.close()
+            if history is not None:
+                with contextlib.suppress(Exception):
+                    await history.close()
 
     # ---- widget shortcuts ---------------------------------------------
 
@@ -365,6 +386,7 @@ class TeridexApp(App[None]):
             self._current_run = None
             self._run_executor = None
             self._query_in_flight = False
+            clear_context()
 
     async def action_copy_cell(self) -> None:
         text = self._results().current_cell_text()

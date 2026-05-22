@@ -195,3 +195,45 @@ async def test_handler_exception_does_not_kill_subscription() -> None:
             break
     assert received == ["b"]
     await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_overflow_grows_queue_for_terminal_events() -> None:
+    bus = EventBus(queue_size=2)
+    received: list[Event] = []
+    release = asyncio.Event()
+
+    async def slow(ev: Event) -> None:
+        await release.wait()
+        received.append(ev)
+
+    bus.subscribe(Event, slow)
+    # The first event is pulled by the drainer and blocks on `release`
+    bus.publish(QueryCompleted(query_id="in_flight", rows=0, duration_ms=0.0))
+    await asyncio.sleep(0)
+
+    # Fill the queue (max size 2) with terminal events
+    bus.publish(QueryCompleted(query_id="t1", rows=0, duration_ms=0.0))
+    bus.publish(QueryCompleted(query_id="t2", rows=0, duration_ms=0.0))
+    await asyncio.sleep(0)
+
+    # Publish another terminal event when the queue is already full of terminal events
+    bus.publish(QueryCompleted(query_id="t3", rows=0, duration_ms=0.0))
+    await asyncio.sleep(0)
+
+    # No events should be reported as dropped
+    assert bus.dropped_events == 0
+
+    release.set()
+    # Wait for all events to drain
+    for _ in range(100):
+        await asyncio.sleep(0)
+        if len(received) >= 4:
+            break
+
+    # We should have received all 4 events, in order
+    assert len(received) == 4
+    assert all(isinstance(e, QueryCompleted) for e in received)
+    query_ids = [e.query_id for e in received if isinstance(e, QueryCompleted)]
+    assert query_ids == ["in_flight", "t1", "t2", "t3"]
+    await bus.close()

@@ -134,6 +134,14 @@ class AbstractAdapter(ABC):
     def _set_metadata(self, handle: QueryHandle, meta: QueryMetadata) -> None:
         self._metadata[handle.query_id] = meta
 
+    def _forget(self, handle: QueryHandle) -> None:
+        self._cancel_flags.pop(handle.query_id, None)
+        self._metadata.pop(handle.query_id, None)
+
+    async def reset(self) -> None:
+        self._cancel_flags.clear()
+        self._metadata.clear()
+
     # ---- transactions / introspection --------------------------------
 
     @abstractmethod

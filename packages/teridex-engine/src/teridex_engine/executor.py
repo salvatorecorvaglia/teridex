@@ -73,6 +73,11 @@ class QueryExecutor:
         """Start execution and return a :class:`QueryRun` whose ``rows`` you iterate.
 
         The returned iterator emits events as it consumes the stream.
+
+        Note: The caller must iterate `run.rows` to ensure that lifecycle events
+        are sent and the structured logging context is cleared via `clear_context()`.
+        If the iterator is discarded without being fully consumed, the caller
+        should manually call `clear_context()`.
         """
         started = time.perf_counter()
         try:

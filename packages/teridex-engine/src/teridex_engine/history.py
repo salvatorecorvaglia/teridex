@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,6 +53,13 @@ class QueryHistory:
 
     async def open(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(Exception):
+            self._path.parent.chmod(0o700)
+        if not self._path.exists():
+            with contextlib.suppress(Exception):
+                self._path.touch()
+        with contextlib.suppress(Exception):
+            self._path.chmod(0o600)
         self._conn = await aiosqlite.connect(self._path)
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()

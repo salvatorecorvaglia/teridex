@@ -68,12 +68,20 @@ class ConnectionPool:
             raise
 
     async def _release(self, adapter: DatabaseAdapter) -> None:
-        if self._closed:
-            await adapter.close()
+        try:
+            await adapter.reset()
+        except Exception:
+            logger.exception("pool_release_reset_failed")
+
+        async with self._lock:
+            if self._closed:
+                if adapter in self._all:
+                    self._all.remove(adapter)
+                    await adapter.close()
+                self._sem.release()
+                return
+            await self._idle.put(adapter)
             self._sem.release()
-            return
-        await self._idle.put(adapter)
-        self._sem.release()
 
     @asynccontextmanager
     async def acquire(self) -> AsyncIterator[DatabaseAdapter]:

@@ -66,3 +66,23 @@ async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: i
             rows = list(csv.reader(f))
         assert rows[0] == ["a", "b"]
         assert rows[1:] == [["1", "hi"], ["2", "bye"]]
+
+
+@pytest.mark.asyncio
+async def test_query_with_duplicate_columns() -> None:
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        editor = app._tabs().current_editor
+        assert editor is not None
+        editor.text = "SELECT 1 AS a, 2 AS a"
+        await app.action_run_query()
+        await pilot.pause()
+        results = app._results()
+        assert results.loading is False
+        assert results.row_count == 1
+        cols = list(results.columns.values())
+        assert len(cols) == 2
+        assert str(cols[0].label) == "a"
+        assert str(cols[1].label) == "a"

@@ -143,22 +143,25 @@ class DuckDBAdapter(AbstractAdapter):
                     column_types=[c.type_native or "" for c in columns],
                 ),
             )
-            if not columns:
-                handle.mark_done(QueryStatus.SUCCEEDED)
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-                return
-            while True:
-                if cancel.is_set():
-                    handle.mark_done(QueryStatus.CANCELLED)
-                    raise QueryCancelledError(
-                        "query cancelled", context={"query_id": handle.query_id}
-                    )
-                rows = await asyncio.to_thread(conn.fetchmany, batch_size)
-                if not rows:
+            try:
+                if not columns:
                     handle.mark_done(QueryStatus.SUCCEEDED)
-                    yield ResultBatch(columns=columns, rows=[], is_last=True)
+                    yield ResultBatch(columns=[], rows=[], is_last=True)
                     return
-                yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
+                while True:
+                    if cancel.is_set():
+                        handle.mark_done(QueryStatus.CANCELLED)
+                        raise QueryCancelledError(
+                            "query cancelled", context={"query_id": handle.query_id}
+                        )
+                    rows = await asyncio.to_thread(conn.fetchmany, batch_size)
+                    if not rows:
+                        handle.mark_done(QueryStatus.SUCCEEDED)
+                        yield ResultBatch(columns=columns, rows=[], is_last=True)
+                        return
+                    yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
+            finally:
+                self._forget(handle)
 
         return _gen()
 

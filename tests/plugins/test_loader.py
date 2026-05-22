@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -143,5 +143,46 @@ async def test_services_are_exposed_at_load_and_updatable() -> None:
     sentinel = object()
     probe.ctx.update_services(executor=sentinel)
     assert probe.ctx.get_service("executor") is sentinel
+
+    await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_recovery_from_collision_or_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 1. Create a successful plugin
+    class SuccessPlugin:
+        manifest = PluginManifest(id="success_plugin", name="Success", version="1.0.0")
+
+        def on_load(self, ctx: PluginContext) -> None:
+            pass
+
+    class MockEntryPoint:
+        def __init__(self, name: str, load_fn: Any) -> None:
+            self.name = name
+            self.load = load_fn
+
+    # 2. Create a mock entry point that fails
+    def mock_load_fail() -> type:
+        raise RuntimeError("simulated instantiation failure")
+
+    ep_fail = MockEntryPoint(name="fail_plugin", load_fn=mock_load_fail)
+
+    # 3. Create a mock entry point that succeeds
+    ep_success = MockEntryPoint(name="success_plugin", load_fn=lambda: SuccessPlugin)
+
+    registry = PluginRegistry()
+    bus = EventBus()
+    loader = PluginLoader(registry, bus)
+
+    # Mock loader.discover to return both entry points
+    monkeypatch.setattr(loader, "discover", lambda: [ep_fail, ep_success])
+
+    # Call load_all() and verify it doesn't raise, and succeeds in loading the second plugin!
+    loader.load_all()
+
+    # The success plugin should be registered
+    assert "success_plugin" in {m.id for m in registry.manifests()}
+    # The fail plugin should not be registered
+    assert "fail_plugin" not in {m.id for m in registry.manifests()}
 
     await bus.close()

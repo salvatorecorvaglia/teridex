@@ -91,6 +91,10 @@ class MySQLAdapter(AbstractAdapter):
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        cur = self._cursors.pop(handle.query_id, None)
+        if cur is not None:
+            with contextlib.suppress(Exception):
+                await cur.close()
         # The live connection is busy with the running statement; open a
         # side connection and issue KILL QUERY against the saved thread id.
         if self._thread_id is None or self._dsn is None:
@@ -123,6 +127,13 @@ class MySQLAdapter(AbstractAdapter):
         finally:
             with contextlib.suppress(Exception):
                 side.close()
+
+    async def reset(self) -> None:
+        await super().reset()
+        for cur in list(self._cursors.values()):
+            with contextlib.suppress(Exception):
+                await cur.close()
+        self._cursors.clear()
 
     async def ping(self) -> bool:
         if self._conn is None:
@@ -160,10 +171,22 @@ class MySQLAdapter(AbstractAdapter):
     async def stream(
         self, handle: QueryHandle, *, batch_size: int = 1000
     ) -> AsyncIterator[ResultBatch]:
+        cancel = self._cancel_event(handle)
+        if cancel.is_set():
+
+            async def _gen_cancelled() -> AsyncIterator[ResultBatch]:
+                handle.mark_done(QueryStatus.CANCELLED)
+                if handle.query_id:
+                    raise QueryCancelledError(
+                        "query cancelled", context={"query_id": handle.query_id}
+                    )
+                yield ResultBatch(columns=[], rows=[], is_last=True)
+
+            return _gen_cancelled()
+
         cur = self._cursors.get(handle.query_id)
         if cur is None:
             raise AdapterError("mysql: stream() called with unknown handle")
-        cancel = self._cancel_event(handle)
 
         async def _gen() -> AsyncIterator[ResultBatch]:
             description = cur.description or []
@@ -199,6 +222,7 @@ class MySQLAdapter(AbstractAdapter):
             finally:
                 await cur.close()
                 self._cursors.pop(handle.query_id, None)
+                self._forget(handle)
 
         return _gen()
 

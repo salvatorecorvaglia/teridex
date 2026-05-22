@@ -105,7 +105,7 @@ class PluginLoader:
         for ep in self.discover():
             try:
                 self.load_entry_point(ep)
-            except PluginLoadError:
+            except (PluginLoadError, PluginError):
                 logger.exception("plugin_load_failed", entry_point=ep.name)
 
     def load_entry_point(self, ep: EntryPoint) -> None:

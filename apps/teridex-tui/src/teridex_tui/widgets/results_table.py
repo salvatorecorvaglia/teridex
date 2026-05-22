@@ -7,6 +7,7 @@ mistaken for the full result set.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 from typing import TYPE_CHECKING
 
@@ -42,8 +43,8 @@ class ResultsTable(DataTable[str]):
     def feed(self, batch: ResultBatch) -> None:
         if not self._initialized and batch.columns:
             self._column_names = [c.name for c in batch.columns]
-            for col in batch.columns:
-                self.add_column(col.name, key=col.name)
+            for i, col in enumerate(batch.columns):
+                self.add_column(col.name, key=str(i))
             self._initialized = True
         if not batch.rows:
             return
@@ -92,7 +93,12 @@ class ResultsTable(DataTable[str]):
 
     def export_csv(self, path: Path) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(Exception):
+            path.parent.chmod(0o700)
+        # Touch or create to ensure we can chmod it early, or just chmod after open
         with path.open("w", newline="", encoding="utf-8") as f:
+            with contextlib.suppress(Exception):
+                path.chmod(0o600)
             w = csv.writer(f)
             w.writerow(self._column_names)
             for i in range(self.row_count):

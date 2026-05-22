@@ -120,80 +120,84 @@ class PostgresAdapter(AbstractAdapter):
         conn = self._conn
 
         async def _gen() -> AsyncIterator[ResultBatch]:
-            stripped = sql.lstrip().lower()
-            if not stripped.startswith(("select", "with", "show", "explain")):
-                # DML / DDL — execute and finalize.
-                try:
-                    status = await conn.execute(sql)
-                except asyncpg.PostgresError as exc:
-                    handle.mark_done(QueryStatus.FAILED)
-                    raise QueryError(str(exc), context={"sql": sql}) from exc
-                handle.mark_done(QueryStatus.SUCCEEDED)
-                self._set_metadata(
-                    handle, QueryMetadata(server_message=status, column_names=[], column_types=[])
-                )
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-                return
-
             try:
-                async with conn.transaction():
-                    cur = await conn.cursor(sql)
-                    first = await cur.fetch(1)
-                    if not first:
-                        # empty result set — derive columns from a prepared stmt
-                        stmt = await conn.prepare(sql)
-                        attrs = stmt.get_attributes()
-                        columns = [
-                            Column(
-                                name=a.name,
-                                type=infer_column_type(a.type.name),
-                                type_native=a.type.name,
-                            )
-                            for a in attrs
-                        ]
-                        self._set_metadata(
-                            handle,
-                            QueryMetadata(
-                                column_names=[c.name for c in columns],
-                                column_types=[c.type_native or "" for c in columns],
-                            ),
-                        )
-                        handle.mark_done(QueryStatus.SUCCEEDED)
-                        yield ResultBatch(columns=columns, rows=[], is_last=True)
-                        return
-                    record0 = first[0]
-                    columns = [
-                        Column(name=k, type=infer_column_type(None), type_native=None)
-                        for k in record0.keys()  # noqa: SIM118
-                    ]
+                stripped = sql.lstrip().lower()
+                if not stripped.startswith(("select", "with", "show", "explain")):
+                    # DML / DDL — execute and finalize.
+                    try:
+                        status = await conn.execute(sql)
+                    except asyncpg.PostgresError as exc:
+                        handle.mark_done(QueryStatus.FAILED)
+                        raise QueryError(str(exc), context={"sql": sql}) from exc
+                    handle.mark_done(QueryStatus.SUCCEEDED)
                     self._set_metadata(
                         handle,
-                        QueryMetadata(column_names=[c.name for c in columns], column_types=[]),
+                        QueryMetadata(server_message=status, column_names=[], column_types=[]),
                     )
-                    yield ResultBatch(
-                        columns=columns,
-                        rows=[tuple(r.values()) for r in first],
-                        is_last=False,
-                    )
-                    while True:
-                        if cancel.is_set():
-                            handle.mark_done(QueryStatus.CANCELLED)
-                            raise QueryCancelledError(
-                                "query cancelled", context={"query_id": handle.query_id}
+                    yield ResultBatch(columns=[], rows=[], is_last=True)
+                    return
+
+                try:
+                    async with conn.transaction():
+                        cur = await conn.cursor(sql)
+                        first = await cur.fetch(1)
+                        if not first:
+                            # empty result set — derive columns from a prepared stmt
+                            stmt = await conn.prepare(sql)
+                            attrs = stmt.get_attributes()
+                            columns = [
+                                Column(
+                                    name=a.name,
+                                    type=infer_column_type(a.type.name),
+                                    type_native=a.type.name,
+                                )
+                                for a in attrs
+                            ]
+                            self._set_metadata(
+                                handle,
+                                QueryMetadata(
+                                    column_names=[c.name for c in columns],
+                                    column_types=[c.type_native or "" for c in columns],
+                                ),
                             )
-                        records = await cur.fetch(batch_size)
-                        if not records:
                             handle.mark_done(QueryStatus.SUCCEEDED)
                             yield ResultBatch(columns=columns, rows=[], is_last=True)
                             return
+                        record0 = first[0]
+                        columns = [
+                            Column(name=k, type=infer_column_type(None), type_native=None)
+                            for k in record0.keys()  # noqa: SIM118
+                        ]
+                        self._set_metadata(
+                            handle,
+                            QueryMetadata(column_names=[c.name for c in columns], column_types=[]),
+                        )
                         yield ResultBatch(
                             columns=columns,
-                            rows=[tuple(r.values()) for r in records],
+                            rows=[tuple(r.values()) for r in first],
                             is_last=False,
                         )
-            except asyncpg.PostgresError as exc:
-                handle.mark_done(QueryStatus.FAILED)
-                raise QueryError(str(exc), context={"sql": sql}) from exc
+                        while True:
+                            if cancel.is_set():
+                                handle.mark_done(QueryStatus.CANCELLED)
+                                raise QueryCancelledError(
+                                    "query cancelled", context={"query_id": handle.query_id}
+                                )
+                            records = await cur.fetch(batch_size)
+                            if not records:
+                                handle.mark_done(QueryStatus.SUCCEEDED)
+                                yield ResultBatch(columns=columns, rows=[], is_last=True)
+                                return
+                            yield ResultBatch(
+                                columns=columns,
+                                rows=[tuple(r.values()) for r in records],
+                                is_last=False,
+                            )
+                except asyncpg.PostgresError as exc:
+                    handle.mark_done(QueryStatus.FAILED)
+                    raise QueryError(str(exc), context={"sql": sql}) from exc
+            finally:
+                self._forget(handle)
 
         return _gen()
 

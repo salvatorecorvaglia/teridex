@@ -161,30 +161,48 @@ class EventBus:
     def _handle_overflow(self, sub: _Subscription, event: Event) -> None:
         """Make room in a full queue, preserving lifecycle-terminal events.
 
-        The oldest event is evicted unless it is terminal — in that case the
-        *incoming* event is dropped instead, so a ``QueryCompleted`` is never
-        lost to a flood of ``QueryProgress``.
+        If the incoming event is terminal, we must ensure it is delivered.
+        We scan the queue for a non-terminal event to evict (from oldest to newest).
+        If we find one, we remove it to make room.
+        If all events in the queue are terminal, and the incoming event is also
+        terminal, we append it directly (growing the queue).
+        Otherwise, if the incoming event is not terminal and we can't evict
+        anything (e.g., queue has only terminal events), the incoming event is dropped.
         """
-        oldest: Event | None = None
-        with contextlib.suppress(asyncio.QueueEmpty):
-            oldest = sub.queue.get_nowait()
-        self.dropped_events += 1
-        if oldest is not None and isinstance(oldest, _TERMINAL_EVENTS):
-            # Keep the terminal event; the incoming event is the casualty.
-            with contextlib.suppress(asyncio.QueueFull):
-                sub.queue.put_nowait(oldest)
-            dropped = type(event).__name__
+        # Find a non-terminal event to evict (scanning oldest to newest)
+        evict_idx = -1
+        # sub.queue._queue is the internal deque.
+        for i, q_ev in enumerate(sub.queue._queue):  # type: ignore[attr-defined]
+            if not isinstance(q_ev, _TERMINAL_EVENTS):
+                evict_idx = i
+                break
+
+        if evict_idx != -1:
+            # We found a non-terminal event to evict. Remove it from the deque.
+            evicted = sub.queue._queue[evict_idx]  # type: ignore[attr-defined]
+            del sub.queue._queue[evict_idx]  # type: ignore[attr-defined]
+            self.dropped_events += 1
+            # Put the incoming event. It will succeed because qsize < maxsize.
+            sub.queue.put_nowait(event)
+            dropped = type(evicted).__name__
+        # All events currently in the queue are terminal events.
+        elif isinstance(event, _TERMINAL_EVENTS):
+            # Growing the queue is allowed for terminal events to prevent losing them.
+            sub.queue._queue.append(event)  # type: ignore[attr-defined]
+            dropped = None
         else:
-            with contextlib.suppress(asyncio.QueueFull):
-                sub.queue.put_nowait(event)
-            dropped = type(oldest).__name__ if oldest is not None else "?"
-        logger.warning(
-            "event_queue_full",
-            event_type=type(event).__name__,
-            dropped_event=dropped,
-            handler=getattr(sub.handler, "__qualname__", repr(sub.handler)),
-            dropped_total=self.dropped_events,
-        )
+            # Incoming event is non-terminal, we drop it.
+            self.dropped_events += 1
+            dropped = type(event).__name__
+
+        if dropped is not None:
+            logger.warning(
+                "event_queue_full",
+                event_type=type(event).__name__,
+                dropped_event=dropped,
+                handler=getattr(sub.handler, "__qualname__", repr(sub.handler)),
+                dropped_total=self.dropped_events,
+            )
 
     async def close(self) -> None:
         self._closed = True

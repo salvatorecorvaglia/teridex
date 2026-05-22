@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
 from teridex_adapters.sqlite_adapter import SQLiteAdapter
 from teridex_core.errors import QueryCancelledError
 from teridex_core.models.connection import Dsn
+
+if TYPE_CHECKING:
+    import pathlib
 
 
 @pytest.mark.asyncio
@@ -97,3 +102,37 @@ async def test_cancel_sets_status() -> None:
                 pass
     finally:
         await a.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_dml_persistence(tmp_path: pathlib.Path) -> None:
+
+    db_file = tmp_path / "test.db"
+    dsn = Dsn.parse(f"sqlite:///{db_file}")
+
+    # First connection: create table and insert data
+    a1 = SQLiteAdapter()
+    await a1.connect(dsn)
+    try:
+        h1 = await a1.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+        async for _ in await a1.stream(h1):
+            pass
+        h2 = await a1.execute("INSERT INTO users (id, name) VALUES (1, 'Alice')")
+        async for _ in await a1.stream(h2):
+            pass
+    finally:
+        await a1.close()
+
+    # Second connection: verify the data is persisted and readable
+    a2 = SQLiteAdapter()
+    await a2.connect(dsn)
+    try:
+        h3 = await a2.execute("SELECT id, name FROM users")
+        rows = []
+        async for batch in await a2.stream(h3):
+            rows.extend(batch.rows)
+        # Filter out empty terminator batches
+        rows = [r for r in rows if r]
+        assert rows == [(1, "Alice")]
+    finally:
+        await a2.close()

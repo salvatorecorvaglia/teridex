@@ -24,7 +24,7 @@ from teridex_adapters import create_adapter_for_dsn, default_registry
 from teridex_core.config import load_config
 from teridex_core.errors import QueryCancelledError, QueryError, TeridexError
 from teridex_core.events import EventBus
-from teridex_core.logging import configure_logging, get_logger
+from teridex_core.logging import clear_context, configure_logging, get_logger
 from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor
 
@@ -144,6 +144,7 @@ def run_query(
             console.print(f"[bold red]ERROR[/] {exc}")
             return 1
         finally:
+            clear_context()
             await bus.close()
             await adapter.close()
 

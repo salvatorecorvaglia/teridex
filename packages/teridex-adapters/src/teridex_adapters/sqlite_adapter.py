@@ -49,10 +49,10 @@ class _SQLiteTransaction:
             await self.rollback()
 
     async def commit(self) -> None:
-        await self._conn.commit()
+        await self._conn.execute("COMMIT")
 
     async def rollback(self) -> None:
-        await self._conn.rollback()
+        await self._conn.execute("ROLLBACK")
 
 
 class SQLiteAdapter(AbstractAdapter):
@@ -66,7 +66,7 @@ class SQLiteAdapter(AbstractAdapter):
 
     async def _do_connect(self, dsn: Dsn) -> None:
         path = dsn.database or ":memory:"
-        self._conn = await aiosqlite.connect(path)
+        self._conn = await aiosqlite.connect(path, isolation_level=None)
         # WAL mode is fine on file dbs, no-op on memory.
         if path != ":memory:":
             with contextlib.suppress(aiosqlite.Error):
@@ -112,10 +112,22 @@ class SQLiteAdapter(AbstractAdapter):
     async def stream(
         self, handle: QueryHandle, *, batch_size: int = 1000
     ) -> AsyncIterator[ResultBatch]:
+        cancel = self._cancel_event(handle)
+        if cancel.is_set():
+
+            async def _gen_cancelled() -> AsyncIterator[ResultBatch]:
+                handle.mark_done(QueryStatus.CANCELLED)
+                if handle.query_id:
+                    raise QueryCancelledError(
+                        "query cancelled", context={"query_id": handle.query_id}
+                    )
+                yield ResultBatch(columns=[], rows=[], is_last=True)
+
+            return _gen_cancelled()
+
         cur = self._cursors.get(handle.query_id)
         if cur is None:
             raise AdapterError("sqlite: stream() called with unknown handle")
-        cancel = self._cancel_event(handle)
 
         async def _gen() -> AsyncIterator[ResultBatch]:
             description: list[Any] = list(cur.description or [])
@@ -151,11 +163,16 @@ class SQLiteAdapter(AbstractAdapter):
             finally:
                 await cur.close()
                 self._cursors.pop(handle.query_id, None)
+                self._forget(handle)
 
         return _gen()
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        cur = self._cursors.pop(handle.query_id, None)
+        if cur is not None:
+            with contextlib.suppress(Exception):
+                await cur.close()
         # sqlite3.Connection.interrupt() is thread-safe and causes any
         # in-flight statement on the connection to raise OperationalError.
         # We bypass aiosqlite's async wrapper because it queues onto the
@@ -167,6 +184,13 @@ class SQLiteAdapter(AbstractAdapter):
             return
         with contextlib.suppress(Exception):
             inner.interrupt()
+
+    async def reset(self) -> None:
+        await super().reset()
+        for cur in list(self._cursors.values()):
+            with contextlib.suppress(Exception):
+                await cur.close()
+        self._cursors.clear()
 
     async def begin(self) -> Transaction:
         if self._conn is None:
