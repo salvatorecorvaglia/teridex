@@ -75,11 +75,11 @@ uv run teridex plugins list
 
 Set `ui.keymap = "vim"` in your config to add these extra bindings on top of the defaults:
 
-| Key      | Action            |
-| -------- | ----------------- |
-| `:`      | Command palette   |
-| `g g`    | Top of editor     |
-| `G`      | Bottom of editor  |
+| Key   | Action           |
+| ----- | ---------------- |
+| `:`   | Command palette  |
+| `g g` | Top of editor    |
+| `G`   | Bottom of editor |
 
 ## Themes
 
@@ -114,8 +114,6 @@ docker/              Dockerfile + dev compose (Postgres + MySQL)
 scripts/             dev.sh, fmt.sh, lint.sh, test.sh, check.sh
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
-
 ## Development
 
 ```bash
@@ -131,10 +129,6 @@ TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex \
 TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex \
 TERIDEX_TEST_MARKERS=integration ./scripts/test.sh
 ```
-
-## Plugins
-
-Plugins are ordinary Python packages that expose a `teridex.plugins` entry point. They can contribute commands (palette + keybindings), dockable panels (left / right / bottom rails), and hook into engine events. See [PLUGINS.md](PLUGINS.md).
 
 ## Contributing
 
