@@ -4,6 +4,8 @@
 
 Teridex is a TUI database client built on a clean async core and a plugin-first architecture. It combines a rich query editor, lazy schema browser, virtualized result tables, and a fuzzy command palette — all inside your terminal.
 
+---
+
 ## Features
 
 - **Fast** — Textual + Rich, virtualized result tables, streamed row batches.
@@ -15,10 +17,14 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 - **Query history** — persistent local history store with recall from the TUI.
 - **Export** — copy individual cells or export full result sets to CSV.
 
+---
+
 ## Requirements
 
 - Python **≥ 3.13**
 - [`uv`](https://docs.astral.sh/uv/) package manager
+
+---
 
 ## Quick start
 
@@ -45,6 +51,8 @@ uv run teridex plugins list
 
 `--dsn` can also be set via the `TERIDEX_DSN` environment variable.
 
+---
+
 ## Supported databases
 
 | Engine     | URL scheme                     | Driver      |
@@ -53,6 +61,8 @@ uv run teridex plugins list
 | SQLite     | `sqlite://`                    | `aiosqlite` |
 | PostgreSQL | `postgres://`, `postgresql://` | `asyncpg`   |
 | MySQL      | `mysql://`                     | `asyncmy`   |
+
+---
 
 ## Keybindings (default keymap)
 
@@ -81,15 +91,21 @@ Set `ui.keymap = "vim"` in your config to add these extra bindings on top of the
 | `g g` | Top of editor    |
 | `G`   | Bottom of editor |
 
+---
+
 ## Themes
 
 Two themes ship by default: **monokai** (warm) and **nord** (cool). Set the active theme with `ui.theme` in your config.
+
+---
 
 ## Configuration
 
 Teridex reads (in order) defaults → `~/.config/teridex/config.toml` → environment (`TERIDEX_*`, double-underscore nested, e.g. `TERIDEX_UI__THEME=nord`) → CLI flags.
 
 A working sample lives at [`config.example.toml`](config.example.toml).
+
+---
 
 ## Project layout
 
@@ -114,6 +130,8 @@ docker/              Dockerfile + dev compose (Postgres + MySQL)
 scripts/             dev.sh, fmt.sh, lint.sh, test.sh, check.sh
 ```
 
+---
+
 ## Development
 
 ```bash
@@ -130,14 +148,20 @@ TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex \
 TERIDEX_TEST_MARKERS=integration ./scripts/test.sh
 ```
 
-## Contributing
+---
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, coding standards, and the adapter conformance guide.
+## 🤝 Contributing
 
-## Security
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-See [SECURITY.md](SECURITY.md) for the vulnerability reporting policy.
+## 🔐 Security
 
-## License
+If you discover a security vulnerability, please see our [Security Policy](SECURITY.md).
 
-MIT — see [LICENSE](LICENSE).
+## 📝 License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+
+---
+
+**Author**: [Salvatore Corvaglia](https://github.com/salvatorecorvaglia)
