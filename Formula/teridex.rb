@@ -1,7 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
-class Teridex < Formula
+class Teridex < formula
   include Language::Python::Virtualenv
 
   desc "Modern, terminal-native database IDE — keyboard-first, async, pluggable"

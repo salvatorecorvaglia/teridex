@@ -62,12 +62,12 @@ jobs:
           cd tap
 
           # Update url + sha256 in the formula
-          sed -i "s|url \"https://github.com/salvatorecorvaglia/teridex/archive/.*\"|url \"${TARBALL_URL}\"|" Formula/teridex.rb
-          sed -i "s|sha256 \"[a-fA-F0-9]*\"|sha256 \"${SHA256}\"|"                                        Formula/teridex.rb
+          sed -i "s|url \"https://github.com/salvatorecorvaglia/teridex/archive/.*\"|url \"${TARBALL_URL}\"|" formula/teridex.rb
+          sed -i "s|sha256 \"[a-fA-F0-9]*\"|sha256 \"${SHA256}\"|"                                        formula/teridex.rb
 
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/teridex.rb
+          git add formula/teridex.rb
 
           # Only push if there are changes
           if ! git diff --cached --quiet; then
@@ -75,5 +75,5 @@ jobs:
             git push
             echo "✅ Tap updated to ${VERSION} (sha256: ${SHA256})"
           else
-            echo "ℹ️  Formula already up to date"
+            echo "ℹ️  formula already up to date"
           fi
