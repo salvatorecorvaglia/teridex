@@ -266,4 +266,3 @@ class _DuckDBIntrospector(SchemaIntrospector):
 
         async with self._lock:
             return await asyncio.to_thread(_fetch)
-
