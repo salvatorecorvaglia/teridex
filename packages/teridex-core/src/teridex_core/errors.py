@@ -33,7 +33,15 @@ class AdapterError(TeridexError):
     code = "teridex.adapter"
 
 
-class ConnectionError(AdapterError):
+class AdapterConnectionError(AdapterError):
+    """Raised when a database adapter cannot establish or maintain a connection.
+
+    .. note:: Deliberately not named ``ConnectionError`` to avoid shadowing
+       Python's builtin :class:`ConnectionError` (a subclass of
+       :class:`OSError`), which would silently catch the wrong exception type
+       in modules that import from this package.
+    """
+
     code = "teridex.adapter.connection"
 
 

@@ -169,9 +169,10 @@ CommandPalette {
     border: round $primary;
 }
 
-/* ── Help & History modals ── */
+/* ── Help, History & Connection modals ── */
 #HelpModal,
-#HistoryModal {
+#HistoryModal,
+#ConnectionModal {
     align: center middle;
     background: $surface;
     border: thick $accent;
@@ -185,4 +186,23 @@ CommandPalette {
 #history-list {
     height: 1fr;
     border: round $primary;
+}
+
+#conn-input {
+    height: 3;
+    border: round $primary;
+    margin-bottom: 1;
+}
+
+#conn-presets {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#conn-submit-btn {
+    dock: bottom;
+    min-width: 14;
+    background: $primary;
+    color: $background;
+    text-style: bold;
 }

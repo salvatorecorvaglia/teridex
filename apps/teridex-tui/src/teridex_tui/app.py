@@ -27,6 +27,7 @@ from teridex_core.events import (
     QueryStarted,
 )
 from teridex_core.logging import clear_context, configure_logging, get_logger
+from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor, QueryRun
 from teridex_engine.history import HistoryEntry, QueryHistory
 from teridex_engine.introspector import Introspector
@@ -38,6 +39,7 @@ from teridex_tui.builtin_commands import BUILTIN_COMMANDS
 from teridex_tui.events import RunActionRequested
 from teridex_tui.keymaps import DEFAULT_BINDINGS, VIM_BINDINGS
 from teridex_tui.screens.command_palette import CommandPaletteScreen
+from teridex_tui.screens.connection import ConnectionScreen
 from teridex_tui.screens.help import HelpModal
 from teridex_tui.screens.history import HistoryModal
 from teridex_tui.screens.main import MainScreen
@@ -49,7 +51,6 @@ if TYPE_CHECKING:
     from textual.widget import Widget
 
     from teridex_adapters.base import AbstractAdapter
-    from teridex_core.models.connection import Dsn
     from teridex_plugins.api import Command
 
 logger = get_logger(__name__)
@@ -120,6 +121,8 @@ class TeridexApp(App[None]):
             self._action_bar().limit = self.cfg.ui.max_display_rows or 500
         if self._initial_dsn is not None:
             self.run_worker(self._connect(self._initial_dsn))
+        else:
+            self._show_connection_dialog()
 
     async def on_unmount(self) -> None:
         if self._palette_task is not None and not self._palette_task.done():
@@ -309,6 +312,25 @@ class TeridexApp(App[None]):
             if history is not None:
                 with contextlib.suppress(Exception):
                     await history.close()
+
+    def _show_connection_dialog(self) -> None:
+        """Push the connection dialog and connect on result."""
+
+        def _on_dsn(raw: str | None) -> None:
+            if raw is None:
+                return
+            try:
+                dsn = Dsn.parse(raw)
+            except Exception as exc:
+                self._status().message = f"[red]invalid DSN: {exc}[/]"
+                return
+            self.run_worker(self._connect(dsn))
+
+        self.push_screen(ConnectionScreen(), _on_dsn)
+
+    async def action_connect(self) -> None:
+        """Show the connection dialog (callable from the command palette)."""
+        self._show_connection_dialog()
 
     # ---- widget shortcuts ---------------------------------------------
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -101,13 +102,16 @@ class MySQLAdapter(AbstractAdapter):
             return
         dsn = self._dsn
         try:
-            side = await asyncmy.connect(
-                user=dsn.username or "root",
-                password=dsn.password or "",
-                host=dsn.host or "localhost",
-                port=dsn.port or 3306,
-                database=dsn.database,
-                autocommit=True,
+            side = await asyncio.wait_for(
+                asyncmy.connect(
+                    user=dsn.username or "root",
+                    password=dsn.password or "",
+                    host=dsn.host or "localhost",
+                    port=dsn.port or 3306,
+                    database=dsn.database,
+                    autocommit=True,
+                ),
+                timeout=5.0,
             )
         except Exception as exc:
             logger.warning(

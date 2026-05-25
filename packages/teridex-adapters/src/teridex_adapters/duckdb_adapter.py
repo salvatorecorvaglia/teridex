@@ -11,18 +11,19 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import duckdb
 
+from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
+from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 from teridex_core.models.schema import (
-    SchemaObject,
+    ForeignKey,
+    Index,
     SchemaSnapshot,
-    Table,
     TableColumn,
-    View,
 )
 
 if TYPE_CHECKING:
@@ -184,37 +185,64 @@ class DuckDBAdapter(AbstractAdapter):
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
-        conn = self._conn
-
-        def _introspect() -> SchemaSnapshot:
-            schemas: dict[str, list[SchemaObject]] = {}
-            tables = conn.execute(
-                "SELECT table_schema, table_name, table_type "
-                "FROM information_schema.tables "
-                "WHERE table_schema NOT IN ('pg_catalog','information_schema')"
-            ).fetchall()
-            for schema_name, table_name, kind in tables:
-                obj: SchemaObject
-                if kind == "VIEW":
-                    obj = View(name=table_name, schema_name=schema_name, columns=[])
-                else:
-                    obj = Table(name=table_name, schema_name=schema_name, columns=[])
-                schemas.setdefault(schema_name, []).append(obj)
-            return SchemaSnapshot(
-                connection_id=connection_id(conn),
-                database=self._dsn.database if self._dsn else None,
-                schemas=schemas,
-            )
-
-        # Hold the per-connection lock: DuckDB connections are not safe for
-        # concurrent use across threads, and a query stream may be touching
-        # the same connection from another worker thread.
-        async with self._lock:
-            return await asyncio.to_thread(_introspect)
+        introspector = _DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        return await introspector.build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
+        introspector = _DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        return await introspector.fetch_columns(schema, name)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        return []
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        return []
+
+
+class _DuckDBIntrospector(SchemaIntrospector):
+    """DuckDB-specific schema introspector.
+
+    All synchronous DuckDB calls run via ``asyncio.to_thread`` under the
+    adapter's connection lock to maintain DuckDB's single-threaded safety.
+    """
+
+    def __init__(
+        self,
+        conn: duckdb.DuckDBPyConnection,
+        dsn: Dsn | None,
+        lock: asyncio.Lock,
+    ) -> None:
+        self._conn = conn
+        self._dsn = dsn
+        self._lock = lock
+
+    def connection_id(self) -> str:
+        return connection_id(self._conn)
+
+    def database_name(self) -> str | None:
+        return self._dsn.database if self._dsn else None
+
+    async def list_objects(self) -> list[tuple[str, str, str]]:
+        conn = self._conn
+
+        def _list() -> list[tuple[str, str, str]]:
+            rows = conn.execute(
+                "SELECT table_schema, table_name, table_type "
+                "FROM information_schema.tables "
+                "WHERE table_schema NOT IN ('pg_catalog','information_schema')"
+            ).fetchall()
+            result: list[tuple[str, str, str]] = []
+            for schema_name, table_name, kind_raw in rows:
+                kind = "view" if kind_raw == "VIEW" else "table"
+                result.append((schema_name, table_name, kind))
+            return result
+
+        async with self._lock:
+            return await asyncio.to_thread(_list)
+
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         conn = self._conn
 
         def _fetch() -> list[TableColumn]:
@@ -238,3 +266,4 @@ class DuckDBAdapter(AbstractAdapter):
 
         async with self._lock:
             return await asyncio.to_thread(_fetch)
+

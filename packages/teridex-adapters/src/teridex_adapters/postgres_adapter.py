@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -210,14 +211,17 @@ class PostgresAdapter(AbstractAdapter):
             return
         dsn = self._dsn
         try:
-            side = await asyncpg.connect(
-                user=dsn.username,
-                password=dsn.password,
-                host=dsn.host or "localhost",
-                port=dsn.port or 5432,
-                database=dsn.database,
+            side = await asyncio.wait_for(
+                asyncpg.connect(
+                    user=dsn.username,
+                    password=dsn.password,
+                    host=dsn.host or "localhost",
+                    port=dsn.port or 5432,
+                    database=dsn.database,
+                ),
+                timeout=5.0,
             )
-        except (asyncpg.PostgresError, OSError) as exc:
+        except (asyncpg.PostgresError, OSError, TimeoutError) as exc:
             logger.warning(
                 "postgres_cancel_side_connect_failed",
                 query_id=handle.query_id,

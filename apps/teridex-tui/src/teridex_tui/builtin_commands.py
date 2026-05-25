@@ -88,6 +88,13 @@ BUILTIN_COMMANDS: list[Command] = [
         category="Results",
     ),
     Command(
+        id="builtin.connect",
+        title="Connect to database",
+        description="Open the connection dialog to connect to a new database.",
+        handler=_wrap("connect"),
+        category="App",
+    ),
+    Command(
         id="builtin.quit",
         title="Quit Teridex",
         default_binding="ctrl+q",

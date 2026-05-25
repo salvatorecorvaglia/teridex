@@ -95,13 +95,66 @@ class PluginUnloaded(Event):
 _TERMINAL_EVENTS: tuple[type[Event], ...] = (QueryCompleted, QueryFailed, QueryCancelled)
 
 
+class _BoundedChannel:
+    """Bounded async channel with custom eviction semantics.
+
+    Uses :class:`collections.deque` and :class:`asyncio.Event` instead of
+    :class:`asyncio.Queue` so that overflow handling never touches private
+    internals. Terminal events are never evicted; non-terminal events are
+    evicted oldest-first when the channel overflows.
+    """
+
+    __slots__ = ("_buf", "_maxsize", "_ready")
+
+    def __init__(self, maxsize: int) -> None:
+        from collections import deque  # noqa: PLC0415
+
+        self._buf: deque[Event] = deque()
+        self._maxsize = maxsize
+        self._ready = asyncio.Event()
+
+    def qsize(self) -> int:
+        return len(self._buf)
+
+    @property
+    def full(self) -> bool:
+        return len(self._buf) >= self._maxsize
+
+    def put_nowait(self, event: Event) -> None:
+        """Append *event* to the channel, raising ``asyncio.QueueFull`` when full."""
+        if self.full:
+            raise asyncio.QueueFull
+        self._buf.append(event)
+        self._ready.set()
+
+    def force_append(self, event: Event) -> None:
+        """Unconditionally append (grows beyond ``maxsize``)."""
+        self._buf.append(event)
+        self._ready.set()
+
+    def evict_oldest_non_terminal(self) -> Event | None:
+        """Remove and return the oldest non-terminal event, or ``None``."""
+        for i, ev in enumerate(self._buf):
+            if not isinstance(ev, _TERMINAL_EVENTS):
+                del self._buf[i]
+                return ev
+        return None
+
+    async def get(self) -> Event:
+        """Wait for and return the next event."""
+        while not self._buf:
+            self._ready.clear()
+            await self._ready.wait()
+        return self._buf.popleft()
+
+
 class _Subscription:
     __slots__ = ("event_type", "handler", "queue", "task")
 
     def __init__(self, event_type: type[Event], handler: Handler, queue_size: int) -> None:
         self.event_type = event_type
         self.handler = handler
-        self.queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=queue_size)
+        self.queue = _BoundedChannel(maxsize=queue_size)
         self.task: asyncio.Task[None] | None = None
 
 
@@ -169,29 +222,20 @@ class EventBus:
         Otherwise, if the incoming event is not terminal and we can't evict
         anything (e.g., queue has only terminal events), the incoming event is dropped.
         """
-        # Find a non-terminal event to evict (scanning oldest to newest)
-        evict_idx = -1
-        # sub.queue._queue is the internal deque.
-        for i, q_ev in enumerate(sub.queue._queue):  # type: ignore[attr-defined]
-            if not isinstance(q_ev, _TERMINAL_EVENTS):
-                evict_idx = i
-                break
+        evicted = sub.queue.evict_oldest_non_terminal()
 
-        if evict_idx != -1:
-            # We found a non-terminal event to evict. Remove it from the deque.
-            evicted = sub.queue._queue[evict_idx]  # type: ignore[attr-defined]
-            del sub.queue._queue[evict_idx]  # type: ignore[attr-defined]
+        if evicted is not None:
+            # We found a non-terminal event to evict. Channel now has room.
             self.dropped_events += 1
-            # Put the incoming event. It will succeed because qsize < maxsize.
             sub.queue.put_nowait(event)
             dropped = type(evicted).__name__
-        # All events currently in the queue are terminal events.
         elif isinstance(event, _TERMINAL_EVENTS):
-            # Growing the queue is allowed for terminal events to prevent losing them.
-            sub.queue._queue.append(event)  # type: ignore[attr-defined]
+            # All queued events are terminal — grow beyond maxsize rather than
+            # losing a lifecycle-critical event.
+            sub.queue.force_append(event)
             dropped = None
         else:
-            # Incoming event is non-terminal, we drop it.
+            # Incoming event is non-terminal and nothing can be evicted — drop it.
             self.dropped_events += 1
             dropped = type(event).__name__
 
