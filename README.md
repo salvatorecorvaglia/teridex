@@ -26,12 +26,28 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 
 ---
 
-## Quick start
+## Installation
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap salvatorecorvaglia/teridex
+brew install teridex
+```
+
+### From source
 
 ```bash
 git clone https://github.com/salvatorecorvaglia/teridex.git
 cd teridex
 ./scripts/dev.sh          # uv sync + pre-commit install
+```
+
+---
+
+## Quick start
+
+```bash
 
 # Launch the TUI
 uv run teridex tui --dsn duckdb:///:memory:
