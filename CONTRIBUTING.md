@@ -25,6 +25,16 @@ cd teridex
 `./scripts/check.sh -k schema_tree -v` runs the full lint + type stack
 and then a filtered test subset.
 
+## Test suites & structure
+
+The test suite is partitioned to mirror the layered package structure. Run specific subsets by targeting their test files or using `-k` flags:
+
+- **TUI & UI Component Tests** (`tests/tui/`): Covers screen and widget behavior, rendering states, help modals, schema tree displays, and vim keymap behavior (e.g., `test_app_smoke.py`, `test_schema_tree.py`, `test_results_pane.py`).
+- **Adapter Conformance Tests** (`tests/adapters/`): Verifies database driver implementations. All adapters (DuckDB, SQLite, PostgreSQL, MySQL) must pass the shared conformance scenarios located in `tests/adapters/_conformance.py`.
+- **Engine execution & Pool orchestration** (`tests/engine/`): Tests transaction boundaries, QueryExecutor, ConnectionPool behavior, and QueryHistory persistence.
+- **Core logic & Infrastructure** (`tests/core/`): Tests dependency injection (`test_di.py`), JSON/structured logging formatters, custom configuration layers (`test_config.py`), and the event bus (`test_events.py`).
+- **Plugin lifecycle** (`tests/plugins/`): Verifies API hooks, plugin load discovery, and context isolation.
+
 ## Coding standards
 
 - **Strict mypy** across the codebase; new code must type-check.
@@ -50,20 +60,23 @@ boundaries.
 
 ## Releasing
 
-Releases are manual today. To cut one:
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`) when a release tag is pushed. To prepare and cut a release:
 
-1. Update `CHANGELOG.md` (graduate the `[Unreleased]` stanza to the
-   new version).
-2. Bump `version = "x.y.z"` in every `pyproject.toml`
-   (workspace root + 6 members) and `__version__` in
-   `packages/teridex-core/src/teridex_core/__init__.py`.
-3. Run `uv sync --all-extras --all-packages --dev` to refresh
-   `uv.lock`.
-4. `./scripts/check.sh` must exit 0.
-5. Commit and tag `vx.y.z`.
+1. Update `CHANGELOG.md` (graduate the `[Unreleased]` stanza to the new version).
+2. Bump `version = "x.y.z"` in every `pyproject.toml` (workspace root + 6 member packages) and `__version__` in `packages/teridex-core/src/teridex_core/__init__.py`.
+3. Run `uv sync --all-extras --all-packages --dev` to refresh `uv.lock`.
+4. Run `./scripts/check.sh` and ensure it exits 0.
+5. Commit your changes to `main` and push them.
+6. Create and push a version tag (e.g. `vx.y.z`):
+   ```bash
+   git tag vx.y.z
+   git push origin vx.y.z
+   ```
 
-A `.github/workflows/release.yml` that automates wheel builds + GHCR
-publish is on the roadmap (gap #7).
+The release workflow will automatically trigger on tag push to:
+- Run all quality gates (linting + mypy + pytest).
+- Generate a new GitHub release with release notes.
+- Clone the Homebrew tap at `salvatorecorvaglia/homebrew-teridex` and automatically update the `teridex.rb` formula with the new package archive URL and computed SHA-256.
 
 ## 📜 Code of Conduct
 

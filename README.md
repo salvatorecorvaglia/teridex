@@ -121,6 +121,36 @@ Teridex reads (in order) defaults → `~/.config/teridex/config.toml` → enviro
 
 A working sample lives at [`config.example.toml`](config.example.toml).
 
+### Settings reference
+
+| Setting Key | Type | Default Value | Description / Validations |
+| :--- | :--- | :--- | :--- |
+| `ui.theme` | `string` | `"monokai"` | Theme name. Built-ins: `"monokai"` (warm) \| `"nord"` (cool). |
+| `ui.keymap` | `string` | `"default"` | Keymap bindings mode. `"default"` or `"vim"`. |
+| `ui.show_status_bar` | `boolean` | `true` | Toggle visibility of the bottom status bar. |
+| `ui.row_batch_size` | `integer` | `1000` | Number of rows fetched per batch from adapters. Range: `10` to `100,000`. |
+| `ui.max_display_rows` | `integer` | `10,000` | Max rows held in results grid. Capped for memory safety (`0` for unlimited). |
+| `engine.default_timeout_seconds` | `float` | `60.0` | Default timeout for query execution in seconds. Must be `> 0`. |
+| `engine.max_history_entries` | `integer` | `1000` | Bounded size of local query-history database. Must be `>= 10`. |
+| `engine.pool_size` | `integer` | `5` | Size of concurrent database connection pool. Range: `1` to `64`. |
+| `logging.level` | `string` | `"INFO"` | Logging filter level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`. |
+| `logging.json_lines` | `boolean \| null` | `null` | Emit logs as single JSON lines. `null` auto-detects based on TTY. |
+| `plugins.enabled` | `list[str]` | `[]` | List of plugins allowed to load. Empty loads all discovered. |
+| `plugins.disabled` | `list[str]` | `[]` | List of plugins to explicitly block. |
+| `connections` | `object` | `{}` | Saved connection DSNs mapped by connection name. |
+
+---
+
+## 🛡️ Resource & Safety Limits
+
+To guarantee terminal responsiveness, protect database servers from connection exhaustion, and prevent memory issues, Teridex enforces several safety boundaries:
+
+- **Query Timeouts**: Runaway queries are automatically cancelled after a soft limit of `60.0` seconds (`engine.default_timeout_seconds`), protecting the database and client from resource starvation.
+- **Connection Pools**: Database connections are strictly managed using a bounded, lazy pool capped at `5` connections (`engine.pool_size`) by default. This protects backend servers from database connection exhaustion.
+- **Row Stream Batching**: Rows are fetched asynchronously and rendered into the `DataTable` in chunks of `1000` (`ui.row_batch_size`) to maintain smooth UI frame rates and zero typing lag.
+- **TUI Memory Guard**: To prevent terminal rendering freezes, the results grid is capped at displaying `10,000` rows (`ui.max_display_rows`) by default.
+- **Query History**: The local query history store retains a maximum of `1000` entries (`engine.max_history_entries`) to prevent infinite growth.
+
 ---
 
 ## Project layout
