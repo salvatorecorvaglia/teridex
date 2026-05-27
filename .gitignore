@@ -67,7 +67,17 @@ coverage.xml
 !.env.example
 !.env.template
 
-# AI / Agent Assistants / LLMs
+# Teridex (Project-specific Database / Log files)
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+teridex.log
+.teridex/
+*.log
+scratch/
+
+# AI Tools
 .openai/
 .chatgpt/
 gpt-config.json
@@ -79,14 +89,5 @@ claude-settings.json
 .prompts/
 .prompt-cache/
 .ai/
+.antigravitycli/
 CLAUDE.md
-
-# Teridex (Project-specific Database / Log files)
-*.db
-*.sqlite
-*.sqlite3
-*.duckdb
-teridex.log
-.teridex/
-*.log
-scratch/
