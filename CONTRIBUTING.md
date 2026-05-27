@@ -1,4 +1,4 @@
-# Contributing to Teridex
+# Contributing to Teridex 📟
 
 ## Setup
 
@@ -12,14 +12,14 @@ cd teridex
 
 ## Day-to-day commands
 
-| Task | Command |
-|---|---|
-| All gates (lint + types + tests) | `./scripts/check.sh` |
-| Format + autofix | `./scripts/fmt.sh` |
-| Lint + type-check | `./scripts/lint.sh` |
-| Run unit tests | `./scripts/test.sh` |
-| Bring up integration DBs | `docker compose -f docker/docker-compose.yml up -d` |
-| Run integration tests | `TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex TERIDEX_TEST_MARKERS=integration ./scripts/test.sh` |
+| Task                             | Command                                                                                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All gates (lint + types + tests) | `./scripts/check.sh`                                                                                                                                                                   |
+| Format + autofix                 | `./scripts/fmt.sh`                                                                                                                                                                     |
+| Lint + type-check                | `./scripts/lint.sh`                                                                                                                                                                    |
+| Run unit tests                   | `./scripts/test.sh`                                                                                                                                                                    |
+| Bring up integration DBs         | `docker compose -f docker/docker-compose.yml up -d`                                                                                                                                    |
+| Run integration tests            | `TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex TERIDEX_TEST_MARKERS=integration ./scripts/test.sh` |
 
 `scripts/check.sh` forwards extra arguments to pytest, so
 `./scripts/check.sh -k schema_tree -v` runs the full lint + type stack
@@ -27,11 +27,11 @@ and then a filtered test subset.
 
 ## Coding standards
 
-* **Strict mypy** across the codebase; new code must type-check.
-* **Ruff** for format + lint. Use `./scripts/fmt.sh` before committing.
-* **Async-first**: no blocking I/O in adapters or the TUI event loop.
-* **No silent excepts**: every except logs or re-raises.
-* **Small modules**: prefer composition over inheritance.
+- **Strict mypy** across the codebase; new code must type-check.
+- **Ruff** for format + lint. Use `./scripts/fmt.sh` before committing.
+- **Async-first**: no blocking I/O in adapters or the TUI event loop.
+- **No silent excepts**: every except logs or re-raises.
+- **Small modules**: prefer composition over inheritance.
 
 ## Layering rule
 
@@ -64,3 +64,11 @@ Releases are manual today. To cut one:
 
 A `.github/workflows/release.yml` that automates wheel builds + GHCR
 publish is on the roadmap (gap #7).
+
+## 📜 Code of Conduct
+
+Please maintain a respectful and professional tone in all communications.
+
+---
+
+Happy coding! 🌑
