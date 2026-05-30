@@ -43,6 +43,16 @@ cd teridex
 ./scripts/dev.sh          # uv sync + pre-commit install
 ```
 
+### Docker
+
+```bash
+# Build the image
+docker build -f docker/Dockerfile -t teridex .
+
+# Run a one-shot query
+docker run --rm teridex run --dsn duckdb:///:memory: "SELECT 42"
+```
+
 ---
 
 ## Quick start
@@ -123,21 +133,21 @@ A working sample lives at [`config.example.toml`](config.example.toml).
 
 ### Settings reference
 
-| Setting Key | Type | Default Value | Description / Validations |
-| :--- | :--- | :--- | :--- |
-| `ui.theme` | `string` | `"monokai"` | Theme name. Built-ins: `"monokai"` (warm) \| `"nord"` (cool). |
-| `ui.keymap` | `string` | `"default"` | Keymap bindings mode. `"default"` or `"vim"`. |
-| `ui.show_status_bar` | `boolean` | `true` | Toggle visibility of the bottom status bar. |
-| `ui.row_batch_size` | `integer` | `1000` | Number of rows fetched per batch from adapters. Range: `10` to `100,000`. |
-| `ui.max_display_rows` | `integer` | `10,000` | Max rows held in results grid. Capped for memory safety (`0` for unlimited). |
-| `engine.default_timeout_seconds` | `float` | `60.0` | Default timeout for query execution in seconds. Must be `> 0`. |
-| `engine.max_history_entries` | `integer` | `1000` | Bounded size of local query-history database. Must be `>= 10`. |
-| `engine.pool_size` | `integer` | `5` | Size of concurrent database connection pool. Range: `1` to `64`. |
-| `logging.level` | `string` | `"INFO"` | Logging filter level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`. |
-| `logging.json_lines` | `boolean \| null` | `null` | Emit logs as single JSON lines. `null` auto-detects based on TTY. |
-| `plugins.enabled` | `list[str]` | `[]` | List of plugins allowed to load. Empty loads all discovered. |
-| `plugins.disabled` | `list[str]` | `[]` | List of plugins to explicitly block. |
-| `connections` | `object` | `{}` | Saved connection DSNs mapped by connection name. |
+| Setting Key                      | Type              | Default Value | Description / Validations                                                    |
+| :------------------------------- | :---------------- | :------------ | :--------------------------------------------------------------------------- |
+| `ui.theme`                       | `string`          | `"monokai"`   | Theme name. Built-ins: `"monokai"` (warm) \| `"nord"` (cool).                |
+| `ui.keymap`                      | `string`          | `"default"`   | Keymap bindings mode. `"default"` or `"vim"`.                                |
+| `ui.show_status_bar`             | `boolean`         | `true`        | Toggle visibility of the bottom status bar.                                  |
+| `ui.row_batch_size`              | `integer`         | `1000`        | Number of rows fetched per batch from adapters. Range: `10` to `100,000`.    |
+| `ui.max_display_rows`            | `integer`         | `10,000`      | Max rows held in results grid. Capped for memory safety (`0` for unlimited). |
+| `engine.default_timeout_seconds` | `float`           | `60.0`        | Default timeout for query execution in seconds. Must be `> 0`.               |
+| `engine.max_history_entries`     | `integer`         | `1000`        | Bounded size of local query-history database. Must be `>= 10`.               |
+| `engine.pool_size`               | `integer`         | `5`           | Size of concurrent database connection pool. Range: `1` to `64`.             |
+| `logging.level`                  | `string`          | `"INFO"`      | Logging filter level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`.           |
+| `logging.json_lines`             | `boolean \| null` | `null`        | Emit logs as single JSON lines. `null` auto-detects based on TTY.            |
+| `plugins.enabled`                | `list[str]`       | `[]`          | List of plugins allowed to load. Empty loads all discovered.                 |
+| `plugins.disabled`               | `list[str]`       | `[]`          | List of plugins to explicitly block.                                         |
+| `connections`                    | `object`          | `{}`          | Saved connection DSNs mapped by connection name.                             |
 
 ---
 
@@ -194,11 +204,23 @@ TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex \
 TERIDEX_TEST_MARKERS=integration ./scripts/test.sh
 ```
 
+### CI / CD
+
+Every push to `main` and every pull request runs the **CI** workflow (`.github/workflows/ci.yml`), which:
+
+1. Syncs the full workspace with `uv sync --frozen`.
+2. Runs linting (`ruff format --check`, `ruff check`, `mypy --strict`).
+3. Runs the unit test suite with a **70 % branch-coverage gate**.
+
+Pushing a version tag (`v*`) triggers the **Release** workflow (`.github/workflows/release.yml`), which re-runs all quality gates, creates a GitHub Release with auto-generated notes, and updates the [Homebrew tap](https://github.com/salvatorecorvaglia/homebrew-teridex) formula.
+
 ---
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the list of people who have helped build Teridex.
 
 ## 🔐 Security
 

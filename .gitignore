@@ -1,4 +1,4 @@
-# OS / System
+# ── OS / System ──────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
@@ -6,21 +6,26 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# IDEs and Editors
+# ── IDEs and Editors ────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 *.bak
+*.sublime-project
+*.sublime-workspace
 
-# Python
+# ── Python bytecode / runtime ───────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# ── Distribution / Packaging ───────────────────────────────────────
 build/
 develop-eggs/
 dist/
@@ -39,14 +44,14 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual Environments and uv
+# ── Virtual Environments and uv ────────────────────────────────────
 .venv/
 venv/
 env/
 .uv-cache/
 pip-wheel-metadata/
 
-# Tools and Caches
+# ── Linting / Type-checking / Testing ──────────────────────────────
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
@@ -55,29 +60,40 @@ pip-wheel-metadata/
 .tox/
 .dmypy.json
 dmypy.json
+.pre-commit-cache/
+
+# ── Coverage ────────────────────────────────────────────────────────
 .coverage
 .coverage.*
 htmlcov/
 coverage.xml
 *.cover
 
-# Environment / Secrets
+# ── Jupyter / Notebooks ────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Environment / Secrets ──────────────────────────────────────────
 .env
 .env.*
 !.env.example
 !.env.template
+config.toml
+!config.example.toml
 
-# Teridex (Project-specific Database / Log files)
+# ── Docker (local overrides) ───────────────────────────────────────
+docker-compose.override.yml
+
+# ── Teridex (project-specific) ─────────────────────────────────────
 *.db
 *.sqlite
 *.sqlite3
 *.duckdb
+*.log
 teridex.log
 .teridex/
-*.log
 scratch/
 
-# AI Tools
+# ── AI Tools ────────────────────────────────────────────────────────
 .openai/
 .chatgpt/
 gpt-config.json
@@ -90,4 +106,5 @@ claude-settings.json
 .prompt-cache/
 .ai/
 .antigravitycli/
+.gemini/
 CLAUDE.md

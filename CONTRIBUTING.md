@@ -25,6 +25,16 @@ cd teridex
 `./scripts/check.sh -k schema_tree -v` runs the full lint + type stack
 and then a filtered test subset.
 
+## Pull request workflow
+
+1. Fork the repository and create a feature branch from `main`.
+2. Make your changes (see **Coding standards** below).
+3. Run `./scripts/check.sh` and ensure it exits 0.
+4. Commit with a clear, descriptive message.
+5. Open a pull request against `main`.
+
+CI (`.github/workflows/ci.yml`) will automatically lint, type-check, and run the test suite with a **70 % branch-coverage gate** on every PR. All checks must pass before merge.
+
 ## Test suites & structure
 
 The test suite is partitioned to mirror the layered package structure. Run specific subsets by targeting their test files or using `-k` flags:
@@ -35,19 +45,33 @@ The test suite is partitioned to mirror the layered package structure. Run speci
 - **Core logic & Infrastructure** (`tests/core/`): Tests dependency injection (`test_di.py`), JSON/structured logging formatters, custom configuration layers (`test_config.py`), and the event bus (`test_events.py`).
 - **Plugin lifecycle** (`tests/plugins/`): Verifies API hooks, plugin load discovery, and context isolation.
 
+### Coverage
+
+The project enforces a **minimum 70 % branch coverage** gate (`fail_under = 70` in `pyproject.toml`). New code should include tests that maintain or improve coverage. Run `./scripts/test.sh` locally — it generates a `term-missing` coverage report so you can spot uncovered lines.
+
 ## Coding standards
 
 - **Strict mypy** across the codebase; new code must type-check.
-- **Ruff** for format + lint. Use `./scripts/fmt.sh` before committing.
+- **Ruff** for format + lint (line length: 100). Use `./scripts/fmt.sh` before committing.
 - **Async-first**: no blocking I/O in adapters or the TUI event loop.
 - **No silent excepts**: every except logs or re-raises.
 - **Small modules**: prefer composition over inheritance.
+- **EditorConfig**: The project ships an `.editorconfig` (UTF-8, LF, 4-space indent, 2-space for YAML/TOML/JSON). Please ensure your editor respects it.
 
 ## Layering rule
 
 `teridex_core` depends on nothing internal. Outer packages may depend on
 inner ones, never the reverse. `mypy --strict` enforces import
 boundaries.
+
+```
+teridex-core          ← pure domain (zero internal deps)
+  └─ teridex-adapters ← DB drivers
+  └─ teridex-plugins  ← plugin API
+     └─ teridex-engine   ← orchestration
+        └─ teridex-tui   ← Textual app
+        └─ teridex-cli   ← Typer CLI
+```
 
 ## Adding a database adapter
 
@@ -60,7 +84,7 @@ boundaries.
 
 ## Releasing
 
-Releases are automated via GitHub Actions (`.github/workflows/release.yml`) when a release tag is pushed. To prepare and cut a release:
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`) when a version tag is pushed. To prepare and cut a release:
 
 1. Update `CHANGELOG.md` (graduate the `[Unreleased]` stanza to the new version).
 2. Bump `version = "x.y.z"` in every `pyproject.toml` (workspace root + 6 member packages) and `__version__` in `packages/teridex-core/src/teridex_core/__init__.py`.
@@ -68,12 +92,13 @@ Releases are automated via GitHub Actions (`.github/workflows/release.yml`) when
 4. Run `./scripts/check.sh` and ensure it exits 0.
 5. Commit your changes to `main` and push them.
 6. Create and push a version tag (e.g. `vx.y.z`):
-   ```bash
-   git tag vx.y.z
-   git push origin vx.y.z
-   ```
+    ```bash
+    git tag vx.y.z
+    git push origin vx.y.z
+    ```
 
 The release workflow will automatically trigger on tag push to:
+
 - Run all quality gates (linting + mypy + pytest).
 - Generate a new GitHub release with release notes.
 - Clone the Homebrew tap at `salvatorecorvaglia/homebrew-teridex` and automatically update the `teridex.rb` formula with the new package archive URL and computed SHA-256.
