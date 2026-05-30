@@ -35,6 +35,7 @@ class _RailPlugin:
         )
 
     def on_unload(self, ctx: PluginContext) -> None:
+        # No cleanup needed for testing dummy plugin.
         pass
 
 
