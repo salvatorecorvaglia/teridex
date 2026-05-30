@@ -20,6 +20,7 @@ async def test_history_modal_opens_empty() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         await pilot.press("ctrl+h")
         await pilot.pause()
         modals = [s for s in app.screen_stack if isinstance(s, HistoryModal)]
@@ -34,6 +35,7 @@ async def test_history_modal_lists_entry_after_insert() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         assert app.state.history is not None
         await app.state.history.add(
             HistoryEntry(

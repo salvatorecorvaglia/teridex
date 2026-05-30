@@ -17,6 +17,7 @@ async def test_help_modal_opens_and_dismisses() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         await pilot.press("question_mark")
         await pilot.pause()
         # The modal should now be on the screen stack.

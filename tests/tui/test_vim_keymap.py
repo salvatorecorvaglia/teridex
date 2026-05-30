@@ -22,6 +22,7 @@ async def test_default_keymap_lacks_vim_bindings() -> None:
     )
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         keys = set(app._bindings.key_to_bindings.keys())
         assert _VIM_ONLY.isdisjoint(keys), (
             f"vim-only bindings leaked into default keymap: {keys & _VIM_ONLY}"
@@ -36,6 +37,7 @@ async def test_vim_keymap_registers_extra_bindings() -> None:
     )
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         keys = set(app._bindings.key_to_bindings.keys())
         missing = _VIM_ONLY - keys
         assert not missing, f"vim keymap did not register: {missing}"

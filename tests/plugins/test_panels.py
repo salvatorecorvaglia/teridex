@@ -43,6 +43,7 @@ async def test_no_rails_when_no_plugins() -> None:
     app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
+        await app.workers.wait_for_complete()
         # Rails are mounted only when at least one panel exists.
         from textual.css.query import NoMatches  # noqa: PLC0415
 
@@ -62,6 +63,7 @@ async def test_right_rail_panel_mounts() -> None:
         # The app loads entry-point plugins in ``on_mount``; we inject *after*
         # mount and then re-mount the panel ourselves to verify the seam.
         await pilot.pause()
+        await app.workers.wait_for_complete()
 
         loader: PluginLoader = app._loader  # type: ignore[attr-defined]
         loader.load_instance(_RailPlugin())
