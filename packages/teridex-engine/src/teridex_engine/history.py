@@ -132,8 +132,8 @@ class QueryHistory:
     async def _trim(self) -> None:
         conn = self._require()
         await conn.execute(
-            "DELETE FROM history WHERE id IN ("
-            "  SELECT id FROM history ORDER BY started_at DESC LIMIT -1 OFFSET ?"
+            "DELETE FROM history WHERE id NOT IN ("
+            "  SELECT id FROM history ORDER BY started_at DESC LIMIT ?"
             ")",
             (self._max,),
         )

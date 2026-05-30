@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 from urllib.parse import quote, unquote, urlparse
 from uuid import uuid4
@@ -12,6 +13,11 @@ from teridex_core.errors import ConfigError
 
 Scheme = Literal["duckdb", "sqlite", "postgres", "postgresql", "mysql"]
 _VALID_SCHEMES = {"duckdb", "sqlite", "postgres", "postgresql", "mysql"}
+
+
+def mask_dsn_password(url: str) -> str:
+    """Mask credentials in a DSN URL to prevent password leaks in logs/errors."""
+    return re.sub(r"([^:]+://[^:]+:)[^@]+(@)", r"\1***\2", url)
 
 
 class Dsn(BaseModel):
@@ -37,12 +43,13 @@ class Dsn(BaseModel):
 
     @classmethod
     def parse(cls, url: str) -> Dsn:
+        masked = mask_dsn_password(url)
         try:
             parsed = urlparse(url)
         except ValueError as exc:
-            raise ConfigError(f"invalid DSN: {url}", context={"error": str(exc)}) from exc
+            raise ConfigError(f"invalid DSN: {masked}", context={"error": str(exc)}) from exc
         if not parsed.scheme:
-            raise ConfigError(f"DSN missing scheme: {url}")
+            raise ConfigError(f"DSN missing scheme: {masked}")
         # path: "/dbname" or "/path/to/file.db" or "/:memory:"
         database: str | None
         if parsed.path in ("", "/"):

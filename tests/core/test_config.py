@@ -33,3 +33,19 @@ def test_load_config_missing_file_returns_defaults(tmp_path: Path) -> None:
     out = load_config(tmp_path / "absent.toml")
     assert out.ui.theme == "monokai"
     assert out.engine.pool_size == 5
+
+
+def test_load_config_deep_merges_overrides(tmp_path: Path) -> None:
+    cfg = tmp_path / "teridex.toml"
+    cfg.write_text(
+        dedent(
+            """
+            [ui]
+            theme = "nord"
+            keymap = "vim"
+            """
+        )
+    )
+    out = load_config(cfg, ui={"theme": "monokai"})
+    assert out.ui.theme == "monokai"
+    assert out.ui.keymap == "vim"

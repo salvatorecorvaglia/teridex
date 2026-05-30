@@ -64,6 +64,16 @@ def default_config_path() -> Path:
     return Path.home() / ".config" / "teridex" / "config.toml"
 
 
+def _deep_merge(base: dict[str, Any], custom: dict[str, Any]) -> dict[str, Any]:
+    res = dict(base)
+    for k, v in custom.items():
+        if isinstance(v, dict) and k in res and isinstance(res[k], dict):
+            res[k] = _deep_merge(res[k], v)
+        else:
+            res[k] = v
+    return res
+
+
 def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
     """Load configuration. File is optional; env/CLI overrides win."""
     data: dict[str, Any] = {}
@@ -78,7 +88,7 @@ def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
                 context={"path": str(cfg_path), "error": str(exc)},
             ) from exc
 
-    data.update(overrides)
+    data = _deep_merge(data, overrides)
     try:
         return TeridexConfig.model_validate(data)
     except Exception as exc:  # pydantic ValidationError

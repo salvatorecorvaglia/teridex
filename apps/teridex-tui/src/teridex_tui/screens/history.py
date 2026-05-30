@@ -32,6 +32,7 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         lst = self.query_one("#history-list", ListView)
         if not self._entries:
             lst.append(ListItem(Static("[dim]no history yet[/]"), id="history-empty"))
+            lst.focus()
             return
         for i, entry in enumerate(self._entries):
             preview_lines = entry.sql.strip().splitlines()
@@ -50,6 +51,7 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
                 f"{entry.rows or 0} rows[/]"
             )
             lst.append(ListItem(Static(label), id=f"history-{i}"))
+        lst.focus()
 
     def on_key(self, event: Key) -> None:
         if event.key == "escape":

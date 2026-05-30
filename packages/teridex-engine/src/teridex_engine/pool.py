@@ -34,13 +34,15 @@ class ConnectionPool:
         self._closed = False
         self._lock = asyncio.Lock()
         self._waiters: set[asyncio.Future[DatabaseAdapter]] = set()
+        self._tasks: set[asyncio.Task[None]] = set()
 
     async def _acquire(self) -> DatabaseAdapter:
         if self._closed:
             raise RuntimeError("pool is closed")
         await self._sem.acquire()
-        # From here on, any failure path must release the semaphore — only the
-        # successful ``return`` keeps the slot, to be freed later by ``_release``.
+        # From here on, any failure/cancellation path must release the semaphore
+        # (or delegate its release to _release if we got an adapter).
+        adapter_to_release: DatabaseAdapter | None = None
         try:
             try:
                 return self._idle.get_nowait()
@@ -52,36 +54,60 @@ class ConnectionPool:
                 if self._closed:
                     raise RuntimeError("pool is closed")
                 if len(self._all) < self._size:
-                    adapter = await self._factory(self._dsn)
-                    self._all.append(adapter)
+                    # Shield creation so we don't leak an untracked connection on cancellation
+                    async def _make() -> DatabaseAdapter:
+                        a = await self._factory(self._dsn)
+                        self._all.append(a)
+                        return a
+
+                    adapter = await asyncio.shield(_make())
+                    adapter_to_release = adapter
                     return adapter
                 # Someone else created one — wait for an idle adapter. Track
                 # the waiter so ``close()`` can wake it instead of hanging it.
                 getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
                 self._waiters.add(getter)
             try:
-                return await getter
+                adapter = await getter
+                adapter_to_release = adapter
+                return adapter
+            except asyncio.CancelledError:
+                if not getter.done():
+                    getter.cancel()
+                elif not getter.cancelled() and getter.exception() is None:
+                    adapter_to_release = getter.result()
+                raise
             finally:
                 self._waiters.discard(getter)
         except BaseException:
-            self._sem.release()
+            if adapter_to_release is not None:
+                task = asyncio.create_task(self._release(adapter_to_release))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+            else:
+                self._sem.release()
             raise
 
     async def _release(self, adapter: DatabaseAdapter) -> None:
-        try:
-            await adapter.reset()
-        except Exception:
-            logger.exception("pool_release_reset_failed")
+        async def _do_release() -> None:
+            try:
+                await adapter.reset()
+            except Exception:
+                logger.exception("pool_release_reset_failed")
+            finally:
+                async with self._lock:
+                    if self._closed:
+                        if adapter in self._all:
+                            self._all.remove(adapter)
+                            await adapter.close()
+                        self._sem.release()
+                    else:
+                        await self._idle.put(adapter)
+                        self._sem.release()
 
-        async with self._lock:
-            if self._closed:
-                if adapter in self._all:
-                    self._all.remove(adapter)
-                    await adapter.close()
-                self._sem.release()
-                return
-            await self._idle.put(adapter)
-            self._sem.release()
+        # Shield the cleanup so that even if the outer task gets cancelled,
+        # the semaphore and adapter are safely returned/released.
+        await asyncio.shield(_do_release())
 
     @asynccontextmanager
     async def acquire(self) -> AsyncIterator[DatabaseAdapter]:

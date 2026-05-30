@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from textual.containers import Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Static
+from textual.widgets import Button, Input, ListItem, ListView, Static
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -35,16 +35,16 @@ class ConnectionScreen(ModalScreen[str | None]):
                 placeholder="Enter DSN (e.g. duckdb:///:memory:)",
                 id="conn-input",
             )
-            yield Static(
-                "\n".join(
-                    f"  [dim]{i + 1}.[/] [bold]{label}[/]  [dim]{dsn}[/]"
-                    for i, (label, dsn) in enumerate(_PRESETS)
-                ),
-                id="conn-presets",
-            )
+            with ListView(id="conn-presets"):
+                for i, (label, dsn) in enumerate(_PRESETS):
+                    yield ListItem(
+                        Static(f"[bold]{label}[/]  [dim]{dsn}[/]"),
+                        id=f"preset-{i}",
+                    )
             yield Button("Connect", id="conn-submit-btn", variant="primary")
             yield Static(
-                "\n[dim](enter to connect · escape to cancel)[/]",
+                "\n[dim](tab to select presets · click a preset to populate · "
+                "enter to connect · escape to cancel)[/]",
                 id="conn-hint",
             )
 
@@ -56,13 +56,17 @@ class ConnectionScreen(ModalScreen[str | None]):
             self.dismiss(None)
         elif event.key == "enter":
             self._submit()
-        # Preset shortcuts: digit keys 1-4 fill the input field.
-        elif event.key in {"1", "2", "3", "4"}:
-            idx = int(event.key) - 1
-            if 0 <= idx < len(_PRESETS):
-                inp = self.query_one("#conn-input", Input)
-                if not inp.value:
-                    inp.value = _PRESETS[idx][1]
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if event.item and event.item.id and event.item.id.startswith("preset-"):
+            try:
+                idx = int(event.item.id.removeprefix("preset-"))
+                dsn = _PRESETS[idx][1]
+            except (ValueError, IndexError):
+                return
+            inp = self.query_one("#conn-input", Input)
+            inp.value = dsn
+            inp.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "conn-submit-btn":

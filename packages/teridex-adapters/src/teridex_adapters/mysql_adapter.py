@@ -217,7 +217,15 @@ class MySQLAdapter(AbstractAdapter):
                         raise QueryCancelledError(
                             "query cancelled", context={"query_id": handle.query_id}
                         )
-                    rows = await cur.fetchmany(batch_size)
+                    try:
+                        rows = await cur.fetchmany(batch_size)
+                    except asyncmy_errors.Error as exc:
+                        if cancel.is_set():
+                            handle.mark_done(QueryStatus.CANCELLED)
+                            raise QueryCancelledError(
+                                "query cancelled", context={"query_id": handle.query_id}
+                            ) from exc
+                        raise QueryError(str(exc), context={"sql": handle.sql}) from exc
                     if not rows:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)

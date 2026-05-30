@@ -195,8 +195,10 @@ CommandPalette {
 }
 
 #conn-presets {
-    height: auto;
+    height: 6;
+    border: round $primary;
     margin-bottom: 1;
+    background: $surface;
 }
 
 #conn-submit-btn {

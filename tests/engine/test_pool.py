@@ -69,3 +69,28 @@ async def test_acquire_after_close_raises() -> None:
     with pytest.raises(RuntimeError, match="closed"):
         async with pool.acquire():
             pass
+
+
+@pytest.mark.asyncio
+async def test_pool_acquire_cancellation_safety() -> None:
+    """Acquisition and release must not leak slots or adapters under cancellation."""
+    pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=1)
+    try:
+        async with pool.acquire() as a1:
+            assert await a1.ping()
+
+            async def try_acquire():
+                async with pool.acquire():
+                    pass
+
+            task = asyncio.create_task(try_acquire())
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        async with asyncio.timeout(1):
+            async with pool.acquire() as a2:
+                assert await a2.ping()
+    finally:
+        await pool.close()

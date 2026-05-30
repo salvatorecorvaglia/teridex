@@ -25,6 +25,6 @@ repos:
           - pydantic>=2.9
           - structlog>=24.4
           - types-PyYAML
-        args: [--config-file=mypy.ini]
+        args: [--config-file=mypy.ini, packages, apps]
         pass_filenames: false
         files: ^(packages|apps)/.*\.py$

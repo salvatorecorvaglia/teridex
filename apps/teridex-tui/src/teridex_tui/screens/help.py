@@ -25,14 +25,27 @@ class HelpModal(ModalScreen[None]):
 
     def _render_bindings(self) -> str:
         rows: list[tuple[str, str]] = []
-        for b in self.app.BINDINGS:
-            if isinstance(b, Binding):
-                rows.append((b.key, b.description or b.action))
-            elif isinstance(b, tuple) and len(b) == 3:
-                key, action, desc = b
+        bindings = list(self.app.BINDINGS)
+        cfg = getattr(self.app, "cfg", None)
+        if cfg is not None and getattr(cfg.ui, "keymap", "default") == "vim":
+            from teridex_tui.keymaps import VIM_BINDINGS  # noqa: PLC0415
+
+            for vimb in VIM_BINDINGS:
+                if not any(
+                    (isinstance(existing, Binding) and existing.key == vimb[0])
+                    or (isinstance(existing, tuple) and existing[0] == vimb[0])
+                    for existing in bindings
+                ):
+                    bindings.append(vimb)
+
+        for item in bindings:
+            if isinstance(item, Binding):
+                rows.append((item.key, item.description or item.action))
+            elif isinstance(item, tuple) and len(item) == 3:
+                key, action, desc = item
                 rows.append((key, desc or action))
-            elif isinstance(b, tuple) and len(b) == 2:
-                key, action = b
+            elif isinstance(item, tuple) and len(item) == 2:
+                key, action = item
                 rows.append((key, action))
         if not rows:
             return "[dim]no bindings registered[/]"

@@ -52,6 +52,9 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
             self.dismiss(None)
         elif event.key == "enter":
             self._submit()
+        elif event.key in {"up", "down"}:
+            lst = self.query_one("#palette-list", ListView)
+            lst.post_message(event)
 
     def _refresh(self, q: str) -> None:
         lst = self.query_one("#palette-list", ListView)
