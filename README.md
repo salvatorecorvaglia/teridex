@@ -1,4 +1,4 @@
-# Teridex
+# Teridex 📟
 
 **A modern, terminal-native database IDE. Keyboard-first, async, pluggable.**
 
