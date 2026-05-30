@@ -220,8 +220,6 @@ Pushing a version tag (`v*`) triggers the **Release** workflow (`.github/workflo
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-See [CONTRIBUTORS.md](CONTRIBUTORS.md) for the list of people who have helped build Teridex.
-
 ## 🔐 Security
 
 If you discover a security vulnerability, please see our [Security Policy](SECURITY.md).
