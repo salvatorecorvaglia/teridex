@@ -163,7 +163,7 @@ class MySQLAdapter(AbstractAdapter):
                         f"mysql: invalid parameter name {k!r}. "
                         "Parameter names must be alphanumeric and start "
                         "with a letter or underscore.",
-                        context={"sql": sql, "param_name": str(k)}
+                        context={"sql": sql, "param_name": str(k)},
                     )
         handle = QueryHandle(
             connection_id=connection_id(self._conn),
