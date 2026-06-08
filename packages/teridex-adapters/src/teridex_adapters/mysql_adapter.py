@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncmy
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
     from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
+
+_PARAM_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 class _MySQLTransaction:
@@ -153,6 +156,15 @@ class MySQLAdapter(AbstractAdapter):
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
+        if params:
+            for k in params:
+                if not isinstance(k, str) or not _PARAM_NAME_RE.match(k):
+                    raise QueryError(
+                        f"mysql: invalid parameter name {k!r}. "
+                        "Parameter names must be alphanumeric and start "
+                        "with a letter or underscore.",
+                        context={"sql": sql, "param_name": str(k)}
+                    )
         handle = QueryHandle(
             connection_id=connection_id(self._conn),
             sql=sql,
