@@ -91,16 +91,23 @@ class ResultsTable(DataTable[str]):
             return None
         return "" if val is None else str(val)
 
-    def export_csv(self, path: Path) -> int:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(Exception):
-            path.parent.chmod(0o700)
-        # Touch or create to ensure we can chmod it early, or just chmod after open
-        with path.open("w", newline="", encoding="utf-8") as f:
+    async def export_csv(self, path: Path) -> int:
+        import asyncio  # noqa: PLC0415
+        from typing import Any  # noqa: PLC0415
+
+        columns = list(self._column_names)
+        rows = [tuple(self.get_row_at(i)) for i in range(self.row_count)]
+
+        def _write(p: Path, cols: list[str], data: list[tuple[Any, ...]]) -> None:
+            p.parent.mkdir(parents=True, exist_ok=True)
             with contextlib.suppress(Exception):
-                path.chmod(0o600)
-            w = csv.writer(f)
-            w.writerow(self._column_names)
-            for i in range(self.row_count):
-                w.writerow(self.get_row_at(i))
+                p.parent.chmod(0o700)
+            with p.open("w", newline="", encoding="utf-8") as f:
+                with contextlib.suppress(Exception):
+                    p.chmod(0o600)
+                w = csv.writer(f)
+                w.writerow(cols)
+                w.writerows(data)
+
+        await asyncio.to_thread(_write, path, columns, rows)
         return self.row_count

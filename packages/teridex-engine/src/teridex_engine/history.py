@@ -50,6 +50,7 @@ class QueryHistory:
         self._path = path or (Path.home() / ".teridex" / "history.db")
         self._max = max_entries
         self._conn: aiosqlite.Connection | None = None
+        self._inserts_since_trim = 0
 
     async def open(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,9 +67,14 @@ class QueryHistory:
             await self._conn.execute("PRAGMA busy_timeout=5000")
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()
+        await self._trim()
 
     async def close(self) -> None:
         if self._conn is not None:
+            if self._inserts_since_trim > 0:
+                with contextlib.suppress(Exception):
+                    await self._trim()
+                    await self._conn.commit()
             await self._conn.close()
             self._conn = None
 
@@ -96,7 +102,10 @@ class QueryHistory:
         )
         rowid = cur.lastrowid or 0
         await cur.close()
-        await self._trim()
+        self._inserts_since_trim += 1
+        if self._inserts_since_trim >= 50 or self._max <= 10:
+            await self._trim()
+            self._inserts_since_trim = 0
         await conn.commit()
         return rowid
 

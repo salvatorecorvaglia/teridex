@@ -65,6 +65,7 @@ class MySQLAdapter(AbstractAdapter):
         self._conn: Any = None
         self._cursors: dict[str, Any] = {}
         self._thread_id: int | None = None
+        self._active_query_id: str | None = None
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncmy.connect(
@@ -92,9 +93,12 @@ class MySQLAdapter(AbstractAdapter):
             self._conn.close()
             self._conn = None
         self._thread_id = None
+        self._active_query_id = None
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        if self._active_query_id != handle.query_id:
+            return
         cur = self._cursors.pop(handle.query_id, None)
         # Live connection is busy; open side connection & issue KILL QUERY first.
         # This unblocks the statement so we can safely close the cursor later.
@@ -135,12 +139,18 @@ class MySQLAdapter(AbstractAdapter):
             with contextlib.suppress(Exception):
                 await cur.close()
 
+    def _forget(self, handle: QueryHandle) -> None:
+        super()._forget(handle)
+        if self._active_query_id == handle.query_id:
+            self._active_query_id = None
+
     async def reset(self) -> None:
         await super().reset()
         for cur in list(self._cursors.values()):
             with contextlib.suppress(Exception):
                 await cur.close()
         self._cursors.clear()
+        self._active_query_id = None
 
     async def ping(self) -> bool:
         if self._conn is None:
@@ -171,12 +181,19 @@ class MySQLAdapter(AbstractAdapter):
             params=dict(params) if params else None,
         )
         handle.mark_running()
+        self._active_query_id = handle.query_id
         cur = self._conn.cursor()
         try:
             # asyncmy uses the ``pyformat`` paramstyle: pass the mapping
             # directly so ``%(name)s`` placeholders bind by name.
             await cur.execute(sql, dict(params) if params else None)
         except asyncmy_errors.Error as exc:
+            if self._cancel_event(handle).is_set():
+                handle.mark_done(QueryStatus.CANCELLED)
+                await cur.close()
+                raise QueryCancelledError(
+                    "query cancelled", context={"query_id": handle.query_id}
+                ) from exc
             handle.mark_done(QueryStatus.FAILED)
             await cur.close()
             raise QueryError(str(exc), context={"sql": sql}) from exc

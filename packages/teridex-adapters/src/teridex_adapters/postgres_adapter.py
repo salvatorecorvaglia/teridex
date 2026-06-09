@@ -68,6 +68,7 @@ class PostgresAdapter(AbstractAdapter):
         super().__init__()
         self._conn: asyncpg.Connection | None = None
         self._backend_pid: int | None = None
+        self._active_query_id: str | None = None
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncpg.connect(
@@ -84,6 +85,7 @@ class PostgresAdapter(AbstractAdapter):
             await self._conn.close()
             self._conn = None
         self._backend_pid = None
+        self._active_query_id = None
 
     async def ping(self) -> bool:
         if self._conn is None:
@@ -103,6 +105,7 @@ class PostgresAdapter(AbstractAdapter):
             params=dict(params) if params else None,
         )
         handle.mark_running()
+        self._active_query_id = handle.query_id
         # Actual execution is deferred to stream() so we can use a server-side
         # cursor for SELECTs and ``execute`` for DML. The SQL travels on the
         # handle itself — no per-adapter bookkeeping dict to leak.
@@ -141,8 +144,14 @@ class PostgresAdapter(AbstractAdapter):
                 if not attrs:
                     # DML / DDL (no columns returned) — execute and finalize
                     try:
-                        status = await stmt.execute(*args)
+                        await stmt.fetch(*args)
+                        status = stmt.get_statusmsg()
                     except asyncpg.PostgresError as exc:
+                        if cancel.is_set():
+                            handle.mark_done(QueryStatus.CANCELLED)
+                            raise QueryCancelledError(
+                                "query cancelled", context={"query_id": handle.query_id}
+                            ) from exc
                         handle.mark_done(QueryStatus.FAILED)
                         raise QueryError(str(exc), context={"sql": sql}) from exc
                     handle.mark_done(QueryStatus.SUCCEEDED)
@@ -172,7 +181,7 @@ class PostgresAdapter(AbstractAdapter):
 
                 try:
                     async with conn.transaction():
-                        cur = stmt.cursor(*args)
+                        cur = await stmt.cursor(*args)
                         while True:
                             if cancel.is_set():
                                 handle.mark_done(QueryStatus.CANCELLED)
@@ -190,6 +199,11 @@ class PostgresAdapter(AbstractAdapter):
                                 is_last=False,
                             )
                 except asyncpg.PostgresError as exc:
+                    if cancel.is_set():
+                        handle.mark_done(QueryStatus.CANCELLED)
+                        raise QueryCancelledError(
+                            "query cancelled", context={"query_id": handle.query_id}
+                        ) from exc
                     handle.mark_done(QueryStatus.FAILED)
                     raise QueryError(str(exc), context={"sql": sql}) from exc
             finally:
@@ -199,6 +213,8 @@ class PostgresAdapter(AbstractAdapter):
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        if self._active_query_id != handle.query_id:
+            return
         # The live connection is busy running the user's query, so we can't
         # use it to issue pg_cancel_backend — open a short-lived side
         # connection instead and target the saved backend PID.
@@ -229,6 +245,15 @@ class PostgresAdapter(AbstractAdapter):
         finally:
             with contextlib.suppress(Exception):
                 await side.close()
+
+    def _forget(self, handle: QueryHandle) -> None:
+        super()._forget(handle)
+        if self._active_query_id == handle.query_id:
+            self._active_query_id = None
+
+    async def reset(self) -> None:
+        await super().reset()
+        self._active_query_id = None
 
     async def begin(self) -> Transaction:
         if self._conn is None:

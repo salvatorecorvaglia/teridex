@@ -18,7 +18,8 @@ async def test_postgres_adapter_parameters_and_classification() -> None:
     # 1. Test DML query classification (no attributes returned by prepare)
     stmt_mock = MagicMock()
     stmt_mock.get_attributes.return_value = []
-    stmt_mock.execute = AsyncMock(return_value="UPDATE 1")
+    stmt_mock.fetch = AsyncMock(return_value=[])
+    stmt_mock.get_statusmsg = MagicMock(return_value="UPDATE 1")
     adapter._conn.prepare = AsyncMock(return_value=stmt_mock)
 
     handle = QueryHandle(
@@ -34,7 +35,8 @@ async def test_postgres_adapter_parameters_and_classification() -> None:
     assert len(batches) == 1
     assert batches[0].columns == []
     assert batches[0].rows == []
-    stmt_mock.execute.assert_called_once_with("Alice", 42)
+    stmt_mock.fetch.assert_called_once_with("Alice", 42)
+    stmt_mock.get_statusmsg.assert_called_once()
 
     # 2. Test DQL / RETURNING query classification (attributes returned by prepare)
     stmt_mock_dql = MagicMock()
@@ -45,7 +47,7 @@ async def test_postgres_adapter_parameters_and_classification() -> None:
 
     cursor_mock = MagicMock()
     cursor_mock.fetch = AsyncMock(side_effect=[[{"id": 42}], []])
-    stmt_mock_dql.cursor.return_value = cursor_mock
+    stmt_mock_dql.cursor = AsyncMock(return_value=cursor_mock)
     adapter._conn.prepare = AsyncMock(return_value=stmt_mock_dql)
 
     handle_dql = QueryHandle(

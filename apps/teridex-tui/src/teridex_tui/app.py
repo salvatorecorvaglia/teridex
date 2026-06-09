@@ -425,7 +425,7 @@ class TeridexApp(App[None]):
             return
         path = Path.home() / ".teridex" / "exports" / f"export-{int(time.time())}.csv"
         try:
-            n = results.export_csv(path)
+            n = await results.export_csv(path)
         except OSError as exc:
             self._status().message = f"[red]export failed: {exc}[/]"
             return

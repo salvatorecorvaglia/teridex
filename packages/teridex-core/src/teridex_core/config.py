@@ -74,20 +74,50 @@ def _deep_merge(base: dict[str, Any], custom: dict[str, Any]) -> dict[str, Any]:
     return res
 
 
+def _get_env_config() -> dict[str, Any]:
+    import json  # noqa: PLC0415
+    import os  # noqa: PLC0415
+
+    env_data: dict[str, Any] = {}
+    for key, val in os.environ.items():
+        if key.startswith("TERIDEX_"):
+            name = key[len("TERIDEX_") :]
+            if not name:
+                continue
+            parts = [p.lower() for p in name.split("__")]
+            curr = env_data
+            for part in parts[:-1]:
+                curr = curr.setdefault(part, {})
+            # Try parsing values that look like JSON arrays/objects
+            parsed_val: Any = val
+            val_stripped = val.strip()
+            if (val_stripped.startswith("[") and val_stripped.endswith("]")) or (
+                val_stripped.startswith("{") and val_stripped.endswith("}")
+            ):
+                import contextlib  # noqa: PLC0415
+
+                with contextlib.suppress(json.JSONDecodeError):
+                    parsed_val = json.loads(val_stripped)
+            curr[parts[-1]] = parsed_val
+    return env_data
+
+
 def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
     """Load configuration. File is optional; env/CLI overrides win."""
-    data: dict[str, Any] = {}
+    toml_data: dict[str, Any] = {}
     cfg_path = path or default_config_path()
     if cfg_path.exists():
         try:
             with cfg_path.open("rb") as fh:
-                data = tomllib.load(fh)
+                toml_data = tomllib.load(fh)
         except (OSError, tomllib.TOMLDecodeError) as exc:
             raise ConfigError(
                 f"failed to read config at {cfg_path}",
                 context={"path": str(cfg_path), "error": str(exc)},
             ) from exc
 
+    # Layer: TOML < Env Vars < CLI/Overrides
+    data = _deep_merge(toml_data, _get_env_config())
     data = _deep_merge(data, overrides)
     try:
         return TeridexConfig.model_validate(data)

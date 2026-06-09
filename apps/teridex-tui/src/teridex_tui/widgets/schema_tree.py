@@ -83,6 +83,7 @@ class SchemaTree(Tree[object]):
                             "foreign_keys": fks,
                         }
                     )
+                    introspector.update_object(schema_name, obj.name, cols, fks, indexes)
                     node.data = obj
                 except Exception as exc:
                     status = getattr(self.app, "_status", None)

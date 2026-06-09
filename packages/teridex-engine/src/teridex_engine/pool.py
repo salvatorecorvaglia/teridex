@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from teridex_core.logging import get_logger
 from teridex_core.models.connection import Dsn
@@ -34,7 +35,7 @@ class ConnectionPool:
         self._closed = False
         self._lock = asyncio.Lock()
         self._waiters: set[asyncio.Future[DatabaseAdapter]] = set()
-        self._tasks: set[asyncio.Task[None]] = set()
+        self._tasks: set[asyncio.Task[Any]] = set()
 
     async def _acquire(self) -> DatabaseAdapter:
         if self._closed:
@@ -64,6 +65,8 @@ class ConnectionPool:
                         return await self._factory(self._dsn)
 
                     task = asyncio.create_task(_make())
+                    self._tasks.add(task)
+                    task.add_done_callback(self._tasks.discard)
                     try:
                         adapter = await asyncio.shield(task)
                         self._all.append(adapter)
@@ -150,6 +153,9 @@ class ConnectionPool:
             for getter in self._waiters:
                 getter.cancel()
             self._waiters.clear()
+            for t in list(self._tasks):
+                t.cancel()
+            self._tasks.clear()
             adapters = list(self._all)
             self._all.clear()
         for adapter in adapters:

@@ -55,3 +55,25 @@ class Introspector:
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         return await self._adapter.fetch_indexes(schema, name)
+
+    def update_object(
+        self,
+        schema: str,
+        name: str,
+        columns: list[TableColumn],
+        foreign_keys: list[ForeignKey],
+        indexes: list[Index],
+    ) -> None:
+        """Update cached SchemaObject metadata with lazily loaded fields."""
+        if self._cache is None or schema not in self._cache.schemas:
+            return
+        for i, obj in enumerate(self._cache.schemas[schema]):
+            if obj.name == name:
+                self._cache.schemas[schema][i] = obj.model_copy(
+                    update={
+                        "columns": columns,
+                        "foreign_keys": foreign_keys,
+                        "indexes": indexes,
+                    }
+                )
+                break

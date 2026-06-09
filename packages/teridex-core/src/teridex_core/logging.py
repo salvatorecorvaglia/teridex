@@ -10,6 +10,7 @@ Use :func:`get_logger` everywhere. Inject per-request context with
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 from contextvars import ContextVar
@@ -27,6 +28,7 @@ _request_context: ContextVar[dict[str, Any] | None] = ContextVar(
 )
 
 _configured = False
+_log_file_stream: Any = None
 
 
 def _merge_request_context(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
@@ -46,15 +48,21 @@ def configure_logging(
 ) -> None:
     """Configure structlog + stdlib logging. Idempotent unless force=True."""
 
-    global _configured  # noqa: PLW0603 - module-level idempotency flag
+    global _configured, _log_file_stream  # noqa: PLW0603 - module-level idempotency flags
     if _configured and not force:
         return
+
+    if _log_file_stream is not None:
+        with contextlib.suppress(Exception):
+            _log_file_stream.close()
+        _log_file_stream = None
 
     stream: Any = sys.stderr
     if log_file is not None:
         try:
             log_file.parent.mkdir(parents=True, exist_ok=True)
             stream = log_file.open("a", encoding="utf-8")
+            _log_file_stream = stream
         except OSError:
             # Fallback to sys.stderr if log file cannot be opened
             stream = sys.stderr

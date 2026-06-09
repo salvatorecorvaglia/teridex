@@ -158,8 +158,16 @@ class DuckDBAdapter(AbstractAdapter):
                         raise QueryCancelledError(
                             "query cancelled", context={"query_id": handle.query_id}
                         )
-                    async with self._lock:
-                        rows = await asyncio.to_thread(conn.fetchmany, batch_size)
+                    try:
+                        async with self._lock:
+                            rows = await asyncio.to_thread(conn.fetchmany, batch_size)
+                    except duckdb.Error as exc:
+                        if cancel.is_set():
+                            handle.mark_done(QueryStatus.CANCELLED)
+                            raise QueryCancelledError(
+                                "query cancelled", context={"query_id": handle.query_id}
+                            ) from exc
+                        raise QueryError(str(exc), context={"sql": handle.sql}) from exc
                     if not rows:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)
