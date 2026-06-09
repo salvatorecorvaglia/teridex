@@ -33,9 +33,20 @@ jobs:
       - name: Test
         run: ./scripts/test.sh
 
+      # ── Build Packages ────────────────────────────────────────────────
+      - name: Build packages
+        run: uv build --all-packages --out-dir dist
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+
       # ── GitHub Release ────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          files: |
+            dist/*
           generate_release_notes: true
 
