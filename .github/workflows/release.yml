@@ -55,7 +55,11 @@ jobs:
           notes = ""
           if match:
               raw_notes = match.group(1).strip()
-              notes = re.sub(r"^\s*-\s*\d{4}-\d{2}-\d{2}\s*", "", raw_notes).strip()
+              lines = raw_notes.splitlines()
+              if lines and (re.search(r"\d{4}-\d{1,2}-\d{1,2}", lines[0]) or not lines[0].strip()):
+                  notes = "\n".join(lines[1:]).strip()
+              else:
+                  notes = raw_notes
           if not notes:
               notes = "No changelog entry found for this release."
           github_output = os.environ.get("GITHUB_OUTPUT")
@@ -72,5 +76,5 @@ jobs:
           body: ${{ steps.extract_changelog.outputs.body }}
           files: |
             dist/*
-          generate_release_notes: true
+          generate_release_notes: false
 
