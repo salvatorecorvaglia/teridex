@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/<you>/teridex.git
 cd teridex
-./scripts/dev.sh    # runs: uv sync --all-extras --all-packages --dev + pre-commit install
+./scripts/dev.sh    # runs: uv sync --all-extras --all-packages --dev
 ```
 
 `uv` is required (`brew install uv` or see <https://docs.astral.sh/uv/>).
@@ -101,7 +101,6 @@ The release workflow will automatically trigger on tag push to:
 
 - Run all quality gates (linting + mypy + pytest).
 - Generate a new GitHub release with release notes.
-- Clone the Homebrew tap at `salvatorecorvaglia/homebrew-teridex` and automatically update the `teridex.rb` formula with the new package archive URL and computed SHA-256.
 
 ## 📜 Code of Conduct
 
@@ -109,4 +108,4 @@ Please maintain a respectful and professional tone in all communications.
 
 ---
 
-Happy coding! 🌑
+Happy coding! 📟

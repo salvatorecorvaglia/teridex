@@ -28,19 +28,12 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 
 ## Installation
 
-### Homebrew (macOS / Linux)
-
-```bash
-brew tap salvatorecorvaglia/teridex
-brew install teridex
-```
-
 ### From source
 
 ```bash
 git clone https://github.com/salvatorecorvaglia/teridex.git
 cd teridex
-./scripts/dev.sh          # uv sync + pre-commit install
+./scripts/dev.sh          # uv sync
 ```
 
 ### Docker
@@ -191,7 +184,7 @@ scripts/             dev.sh, fmt.sh, lint.sh, test.sh, check.sh
 ## Development
 
 ```bash
-./scripts/dev.sh         # uv sync + pre-commit install
+./scripts/dev.sh         # uv sync
 ./scripts/fmt.sh         # ruff format + autofix
 ./scripts/lint.sh        # ruff + mypy --strict
 ./scripts/test.sh        # pytest (excludes integration by default)
@@ -212,7 +205,7 @@ Every push to `main` and every pull request runs the **CI** workflow (`.github/w
 2. Runs linting (`ruff format --check`, `ruff check`, `mypy --strict`).
 3. Runs the unit test suite with a **70 % branch-coverage gate**.
 
-Pushing a version tag (`v*`) triggers the **Release** workflow (`.github/workflows/release.yml`), which re-runs all quality gates, creates a GitHub Release with auto-generated notes, and updates the [Homebrew tap](https://github.com/salvatorecorvaglia/homebrew-teridex) formula.
+Pushing a version tag (`v*`) triggers the **Release** workflow (`.github/workflows/release.yml`), which re-runs all quality gates and creates a GitHub Release with auto-generated notes.
 
 ---
 
