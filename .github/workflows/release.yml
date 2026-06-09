@@ -42,10 +42,34 @@ jobs:
           cd dist
           sha256sum * > SHA256SUMS
 
+      - name: Extract Changelog Entry
+        id: extract_changelog
+        run: |
+          uv run python -c '
+          import os, re
+          version = "${{ github.ref_name }}".lstrip("v")
+          with open("CHANGELOG.md") as f:
+              content = f.read()
+          pattern = rf"(?m)^##\s+\[?{re.escape(version)}\]?(.*?)(?=^##\s+\[?|\Z)"
+          match = re.search(pattern, content, re.DOTALL)
+          notes = ""
+          if match:
+              raw_notes = match.group(1).strip()
+              notes = re.sub(r"^\s*-\s*\d{4}-\d{2}-\d{2}\s*", "", raw_notes).strip()
+          if not notes:
+              notes = "No changelog entry found for this release."
+          github_output = os.environ.get("GITHUB_OUTPUT")
+          if github_output:
+              with open(github_output, "a") as f:
+                  f.write("body<<EOF_CHANGELOG\n" + notes + "\nEOF_CHANGELOG\n")
+          '
+
       # ── GitHub Release ────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          name: Teridex ${{ github.ref_name }}
+          body: ${{ steps.extract_changelog.outputs.body }}
           files: |
             dist/*
           generate_release_notes: true
