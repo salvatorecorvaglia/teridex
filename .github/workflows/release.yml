@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -39,8 +40,7 @@ jobs:
 
       - name: Generate Checksums
         run: |
-          cd dist
-          sha256sum * > SHA256SUMS
+          sha256sum dist/* > SHA256SUMS
 
       - name: Extract Changelog Entry
         id: extract_changelog
@@ -76,5 +76,10 @@ jobs:
           body: ${{ steps.extract_changelog.outputs.body }}
           files: |
             dist/*
+            SHA256SUMS
           generate_release_notes: false
+
+      # ── PyPI Publish ──────────────────────────────────────────────────
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
 
