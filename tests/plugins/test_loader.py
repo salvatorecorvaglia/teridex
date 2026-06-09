@@ -45,7 +45,7 @@ async def test_loader_registers_plugin_and_command() -> None:
     loader.unload("sample")
     assert not plugin.loaded
     # let publish drain
-    for _ in range(5):
+    for _ in range(5):  # type: ignore[unreachable]
         await asyncio.sleep(0)
     await bus.close()
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlparse
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -61,11 +61,7 @@ class Dsn(BaseModel):
             database = parsed.path[1:] if parsed.path.startswith("/") else parsed.path
         params: dict[str, str] = {}
         if parsed.query:
-            for chunk in parsed.query.split("&"):
-                if not chunk:
-                    continue
-                k, _, v = chunk.partition("=")
-                params[unquote(k)] = unquote(v)
+            params = dict(parse_qsl(parsed.query))
         return cls(
             scheme=parsed.scheme.lower(),
             username=unquote(parsed.username) if parsed.username else None,

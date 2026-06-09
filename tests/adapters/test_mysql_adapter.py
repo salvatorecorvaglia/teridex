@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 import pytest
 
 pytest.importorskip("asyncmy")
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 from teridex_adapters.mysql_adapter import MySQLAdapter
 from teridex_core.models.connection import Dsn
@@ -26,7 +30,7 @@ pytestmark = [
 
 
 @pytest.fixture
-async def adapter() -> MySQLAdapter:
+async def adapter() -> AsyncIterator[MySQLAdapter]:
     a = MySQLAdapter()
     await a.connect(Dsn.parse(_DSN))
     try:

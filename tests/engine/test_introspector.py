@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from teridex_core.events import EventBus, SchemaRefreshed
-from teridex_core.models.schema import SchemaSnapshot
+from teridex_core.models.schema import ForeignKey, Index, SchemaSnapshot, TableColumn
 from teridex_engine.introspector import Introspector
 
 if TYPE_CHECKING:
@@ -25,13 +25,13 @@ class _FakeAdapter:
         self.last_lazy = lazy
         return SchemaSnapshot(connection_id=f"conn-{self.calls}")
 
-    async def fetch_columns(self, schema: str, name: str) -> list:
+    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         return []
 
-    async def fetch_foreign_keys(self, schema: str, name: str) -> list:
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         return []
 
-    async def fetch_indexes(self, schema: str, name: str) -> list:
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         return []
 
 

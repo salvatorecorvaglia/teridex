@@ -101,6 +101,8 @@ class DuckDBAdapter(AbstractAdapter):
             return await asyncio.to_thread(_run)
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
+        if self._conn is None:
+            raise AdapterError("duckdb: not connected")
         handle = QueryHandle(
             connection_id=connection_id(self._conn),
             sql=sql,

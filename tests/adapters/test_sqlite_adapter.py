@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -30,7 +30,7 @@ async def test_execute_and_stream() -> None:
         async for _ in await a.stream(h):
             pass
         h = await a.execute("SELECT id, name FROM t ORDER BY id")
-        rows: list[tuple] = []
+        rows: list[tuple[Any, ...]] = []
         cols: list[str] = []
         async for batch in await a.stream(h, batch_size=10):
             cols = [c.name for c in batch.columns] or cols

@@ -13,7 +13,7 @@ from teridex_core.events import (
     QueryFailed,
     QueryStarted,
 )
-from teridex_core.logging import _request_context  # type: ignore[attr-defined]
+from teridex_core.logging import _request_context
 from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor
 
@@ -25,8 +25,8 @@ async def test_executor_emits_lifecycle_events() -> None:
     bus = EventBus()
     starts: list[QueryStarted] = []
     completes: list[QueryCompleted] = []
-    bus.subscribe(QueryStarted, lambda e: _append(starts, e))  # type: ignore[arg-type]
-    bus.subscribe(QueryCompleted, lambda e: _append(completes, e))  # type: ignore[arg-type]
+    bus.subscribe(QueryStarted, lambda e: _append(starts, e))
+    bus.subscribe(QueryCompleted, lambda e: _append(completes, e))
 
     executor = QueryExecutor(adapter, bus)
     run = await executor.run("SELECT 1 AS a")
@@ -53,7 +53,7 @@ async def test_executor_cancellation_emits_cancelled_event() -> None:
     await adapter.connect(Dsn.parse("sqlite:///:memory:"))
     bus = EventBus()
     cancelled: list[QueryCancelled] = []
-    bus.subscribe(QueryCancelled, lambda e: _append(cancelled, e))  # type: ignore[arg-type]
+    bus.subscribe(QueryCancelled, lambda e: _append(cancelled, e))
 
     executor = QueryExecutor(adapter, bus)
     run = await executor.run("SELECT 1 AS a")
@@ -80,7 +80,7 @@ async def test_executor_publishes_failed_on_bad_sql() -> None:
     await adapter.connect(Dsn.parse("sqlite:///:memory:"))
     bus = EventBus()
     failed: list[QueryFailed] = []
-    bus.subscribe(QueryFailed, lambda e: _append(failed, e))  # type: ignore[arg-type]
+    bus.subscribe(QueryFailed, lambda e: _append(failed, e))
 
     executor = QueryExecutor(adapter, bus)
     with pytest.raises(QueryError):

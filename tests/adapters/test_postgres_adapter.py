@@ -7,10 +7,14 @@ and ``export TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex``.
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 import pytest
 
 pytest.importorskip("asyncpg")
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 from teridex_adapters.postgres_adapter import PostgresAdapter
 from teridex_core.models.connection import Dsn
@@ -30,7 +34,7 @@ pytestmark = [
 
 
 @pytest.fixture
-async def adapter() -> PostgresAdapter:
+async def adapter() -> AsyncIterator[PostgresAdapter]:
     a = PostgresAdapter()
     await a.connect(Dsn.parse(_DSN))
     try:

@@ -66,9 +66,9 @@ async def test_right_rail_panel_mounts() -> None:
         await pilot.pause()
         await app.workers.wait_for_complete()
 
-        loader: PluginLoader = app._loader  # type: ignore[attr-defined]
+        loader: PluginLoader = app._loader
         loader.load_instance(_RailPlugin())
-        await app._mount_plugin_panels()  # type: ignore[attr-defined]
+        await app._mount_plugin_panels()
         await pilot.pause()
         # Look the static widget up by id.
         widget = app.query_one("#acme-rail-text", Static)

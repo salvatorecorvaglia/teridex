@@ -7,7 +7,8 @@ from teridex_core.errors import DependencyResolutionError
 
 
 class IFoo:
-    def hello(self) -> str: ...
+    def hello(self) -> str:
+        raise NotImplementedError
 
 
 class Foo(IFoo):

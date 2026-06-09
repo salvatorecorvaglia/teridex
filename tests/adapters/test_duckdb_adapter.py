@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -17,7 +18,7 @@ async def test_duckdb_select() -> None:
     await a.connect(Dsn.parse("duckdb:///:memory:"))
     try:
         h = await a.execute("SELECT 42 AS answer, 'hi' AS greeting")
-        rows: list[tuple] = []
+        rows: list[tuple[Any, ...]] = []
         cols: list[str] = []
         async for batch in await a.stream(h):
             cols = [c.name for c in batch.columns] or cols
@@ -54,9 +55,9 @@ async def test_duckdb_cancel_interrupts_running_query() -> None:
         await a.close()
 
 
-async def _drain(a: DuckDBAdapter, sql: str) -> list[tuple]:  # type: ignore[type-arg]
+async def _drain(a: DuckDBAdapter, sql: str) -> list[tuple[Any, ...]]:
     h = await a.execute(sql)
-    out: list[tuple] = []  # type: ignore[type-arg]
+    out: list[tuple[Any, ...]] = []
     async for batch in await a.stream(h):
         out.extend(r for r in batch.rows if r)
     return out

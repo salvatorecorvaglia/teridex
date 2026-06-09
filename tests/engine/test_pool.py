@@ -79,7 +79,7 @@ async def test_pool_acquire_cancellation_safety() -> None:
         async with pool.acquire() as a1:
             assert await a1.ping()
 
-            async def try_acquire():
+            async def try_acquire() -> None:
                 async with pool.acquire():
                     pass
 
