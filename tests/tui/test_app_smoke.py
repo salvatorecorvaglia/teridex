@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 textual = pytest.importorskip("textual")
 
+from textual.widgets import ListView  # noqa: E402
+
 from teridex_core.config import TeridexConfig  # noqa: E402
 from teridex_core.models.connection import Dsn  # noqa: E402
+from teridex_core.protocols.plugin import PluginManifest  # noqa: E402
+from teridex_plugins.api import Command  # noqa: E402
 from teridex_tui.app import TeridexApp  # noqa: E402
+from teridex_tui.screens.command_palette import CommandPaletteScreen  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -81,3 +88,51 @@ async def test_teardown_closes_connection() -> None:
         assert adapter.connected  # type: ignore[attr-defined]
     # on_unmount must have torn the connection down.
     assert adapter.connected is False  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_command_palette_invokes_with_correct_plugin_context() -> None:
+    app = TeridexApp(config=TeridexConfig())
+    resolved_context = None
+
+    class CustomCommandPlugin:
+        manifest = PluginManifest(id="custom_cmd_plugin", name="CustomCmd", version="1.0.0")
+
+        def on_load(self, ctx: Any) -> None:
+            async def _handler(c: Any) -> None:
+                nonlocal resolved_context
+                resolved_context = c
+
+            ctx.register_command(Command(id="custom.cmd", title="Run Custom", handler=_handler))
+
+        def on_unload(self, ctx: Any) -> None:
+            pass
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._loader.load_instance(CustomCommandPlugin())
+
+        # Trigger command palette
+        await app.action_command_palette()
+        await pilot.pause()
+
+        # Find the command screen and pick our command
+        screen = app.screen
+        assert isinstance(screen, CommandPaletteScreen)
+
+        lst = screen.query_one("#palette-list", ListView)
+        for i, child in enumerate(lst.children):
+            cmd = getattr(child, "cmd", None)
+            if cmd is not None and cmd.id == "custom.cmd":
+                lst.index = i
+                break
+        else:
+            pytest.fail("Custom command option not found in command palette")
+
+        # Press enter to pick the highlighted command
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # Check if resolved context matches the plugin context
+        assert resolved_context is not None
+        assert resolved_context.plugin_id == "custom_cmd_plugin"

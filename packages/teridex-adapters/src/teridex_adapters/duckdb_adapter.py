@@ -124,7 +124,8 @@ class DuckDBAdapter(AbstractAdapter):
         conn = self._conn
 
         async def _gen() -> AsyncIterator[ResultBatch]:
-            description = await asyncio.to_thread(lambda: conn.description)
+            async with self._lock:
+                description = await asyncio.to_thread(lambda: conn.description)
             columns = (
                 [
                     Column(
@@ -155,7 +156,8 @@ class DuckDBAdapter(AbstractAdapter):
                         raise QueryCancelledError(
                             "query cancelled", context={"query_id": handle.query_id}
                         )
-                    rows = await asyncio.to_thread(conn.fetchmany, batch_size)
+                    async with self._lock:
+                        rows = await asyncio.to_thread(conn.fetchmany, batch_size)
                     if not rows:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)

@@ -25,12 +25,13 @@ class Lifetime(StrEnum):
 
 
 class _Registration:
-    __slots__ = ("factory", "instance", "lifetime")
+    __slots__ = ("factory", "instance", "lifetime", "lock")
 
     def __init__(self, factory: _Factory, lifetime: Lifetime) -> None:
         self.factory = factory
         self.lifetime = lifetime
         self.instance: Any = None
+        self.lock = RLock()
 
 
 class Container:
@@ -84,10 +85,11 @@ class Container:
                 context={"interface": interface.__name__},
             )
         if reg.lifetime is Lifetime.SINGLETON:
-            with self._lock:
-                if reg.instance is None:
-                    reg.instance = reg.factory(self)
-                return cast("T", reg.instance)
+            if reg.instance is None:
+                with reg.lock:
+                    if reg.instance is None:
+                        reg.instance = reg.factory(self)
+            return cast("T", reg.instance)
         return cast("T", reg.factory(self))
 
     def try_resolve(self, interface: type[T]) -> T | None:

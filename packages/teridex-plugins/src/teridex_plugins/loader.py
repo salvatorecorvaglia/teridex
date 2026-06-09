@@ -193,5 +193,7 @@ class PluginLoader:
                     on_unload(ctx)
                 except Exception:
                     logger.exception("plugin_on_unload_failed", plugin_id=plugin_id)
+        if ctx is not None:
+            ctx.close()
         self._registry.remove_plugin(plugin_id)
         self._bus.publish(PluginUnloaded(plugin_id=plugin_id))

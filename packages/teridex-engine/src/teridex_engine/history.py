@@ -61,6 +61,9 @@ class QueryHistory:
         with contextlib.suppress(Exception):
             self._path.chmod(0o600)
         self._conn = await aiosqlite.connect(self._path)
+        with contextlib.suppress(aiosqlite.Error):
+            await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA busy_timeout=5000")
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()
 

@@ -42,3 +42,12 @@ def test_distinct_ids_register_cleanly() -> None:
     reg.add_panel("plugin-a", _panel("p-one"))
     assert {c.id for c in reg.all_commands()} == {"one", "two"}
     assert {p.id for p in reg.all_panels()} == {"p-one"}
+
+
+def test_get_plugin_for_command() -> None:
+    reg = PluginRegistry()
+    reg.add_command("plugin-a", _command("one"))
+    reg.add_command("plugin-b", _command("two"))
+    assert reg.get_plugin_for_command("one") == "plugin-a"
+    assert reg.get_plugin_for_command("two") == "plugin-b"
+    assert reg.get_plugin_for_command("nonexistent") is None

@@ -479,11 +479,15 @@ class TeridexApp(App[None]):
         def _on_pick(result: Command | None) -> None:
             if result is None:
                 return
-            ctx = PluginContext(
-                plugin_id="builtin",
-                event_bus=self.state.bus,
-                registry=self.state.plugins,
-            )
+            plugin_id = self.state.plugins.get_plugin_for_command(result.id) or "builtin"
+            if plugin_id == "builtin":
+                ctx = PluginContext(
+                    plugin_id="builtin",
+                    event_bus=self.state.bus,
+                    registry=self.state.plugins,
+                )
+            else:
+                ctx = self._loader.context_for(plugin_id)
             task = asyncio.ensure_future(result.handler(ctx))
             self._palette_task = task
 

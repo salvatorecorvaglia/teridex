@@ -62,6 +62,13 @@ class PluginRegistry:
     def all_commands(self) -> list[Command]:
         return [cmd for cmds in self._commands_by_plugin.values() for cmd in cmds]
 
+    def get_plugin_for_command(self, command_id: str) -> str | None:
+        """Find the plugin ID that registered a command by its ID."""
+        for plugin_id, commands in self._commands_by_plugin.items():
+            if any(cmd.id == command_id for cmd in commands):
+                return plugin_id
+        return None
+
     def all_panels(self) -> list[Panel]:
         return [p for panels in self._panels_by_plugin.values() for p in panels]
 

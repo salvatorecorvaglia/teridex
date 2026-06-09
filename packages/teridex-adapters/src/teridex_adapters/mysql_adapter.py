@@ -96,44 +96,44 @@ class MySQLAdapter(AbstractAdapter):
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
         cur = self._cursors.pop(handle.query_id, None)
+        # Live connection is busy; open side connection & issue KILL QUERY first.
+        # This unblocks the statement so we can safely close the cursor later.
+        if self._thread_id is not None and self._dsn is not None:
+            dsn = self._dsn
+            try:
+                side = await asyncio.wait_for(
+                    asyncmy.connect(
+                        user=dsn.username or "root",
+                        password=dsn.password or "",
+                        host=dsn.host or "localhost",
+                        port=dsn.port or 3306,
+                        database=dsn.database,
+                        autocommit=True,
+                    ),
+                    timeout=5.0,
+                )
+                try:
+                    scur = side.cursor()
+                    try:
+                        with contextlib.suppress(Exception):
+                            await scur.execute(f"KILL QUERY {int(self._thread_id)}")
+                    finally:
+                        with contextlib.suppress(Exception):
+                            await scur.close()
+                finally:
+                    with contextlib.suppress(Exception):
+                        side.close()
+            except Exception as exc:
+                logger.warning(
+                    "mysql_cancel_side_connect_failed",
+                    query_id=handle.query_id,
+                    error=str(exc),
+                )
+
+        # Now we can safely close the popped cursor
         if cur is not None:
             with contextlib.suppress(Exception):
                 await cur.close()
-        # The live connection is busy with the running statement; open a
-        # side connection and issue KILL QUERY against the saved thread id.
-        if self._thread_id is None or self._dsn is None:
-            return
-        dsn = self._dsn
-        try:
-            side = await asyncio.wait_for(
-                asyncmy.connect(
-                    user=dsn.username or "root",
-                    password=dsn.password or "",
-                    host=dsn.host or "localhost",
-                    port=dsn.port or 3306,
-                    database=dsn.database,
-                    autocommit=True,
-                ),
-                timeout=5.0,
-            )
-        except Exception as exc:
-            logger.warning(
-                "mysql_cancel_side_connect_failed",
-                query_id=handle.query_id,
-                error=str(exc),
-            )
-            return
-        try:
-            cur = side.cursor()
-            try:
-                with contextlib.suppress(Exception):
-                    await cur.execute(f"KILL QUERY {int(self._thread_id)}")
-            finally:
-                with contextlib.suppress(Exception):
-                    await cur.close()
-        finally:
-            with contextlib.suppress(Exception):
-                side.close()
 
     async def reset(self) -> None:
         await super().reset()

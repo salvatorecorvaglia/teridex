@@ -55,7 +55,18 @@ class ConnectionScreen(ModalScreen[str | None]):
         if event.key == "escape":
             self.dismiss(None)
         elif event.key == "enter":
+            lst = self.query_one("#conn-presets", ListView)
+            if lst.has_focus:
+                return
             self._submit()
+        elif event.key == "down":
+            inp = self.query_one("#conn-input", Input)
+            if inp.has_focus:
+                self.query_one("#conn-presets", ListView).focus()
+        elif event.key == "up":
+            lst = self.query_one("#conn-presets", ListView)
+            if lst.has_focus and lst.index == 0:
+                self.query_one("#conn-input", Input).focus()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.item and event.item.id and event.item.id.startswith("preset-"):

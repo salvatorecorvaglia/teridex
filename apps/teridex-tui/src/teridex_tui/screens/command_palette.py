@@ -27,6 +27,12 @@ class _Entry:
         return f"[b]{self.cmd.title}[/]{binding}\n[dim]{self.cmd.description or self.cmd.id}[/]"
 
 
+class CommandListItem(ListItem):
+    def __init__(self, cmd: Command) -> None:
+        super().__init__(Static(_Entry(cmd).label))
+        self.cmd = cmd
+
+
 class CommandPaletteScreen(ModalScreen[Command | None]):
     DEFAULT_CSS = ""
 
@@ -74,7 +80,7 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
             )
             ranked = [id_to_cmd[key] for (_title, _score, key) in matches]
         for cmd in ranked:
-            lst.append(ListItem(Static(_Entry(cmd).label), id=f"cmd-{cmd.id}"))
+            lst.append(CommandListItem(cmd))
         self.query_one("#palette-title", Static).update(
             f"[b]Command palette[/b]  [dim]{len(ranked)}/{len(self._all)}[/]"
         )
@@ -82,9 +88,7 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
     def _submit(self) -> None:
         lst = self.query_one("#palette-list", ListView)
         item = lst.highlighted_child
-        if item is None or item.id is None:
+        if not isinstance(item, CommandListItem):
             self.dismiss(None)
             return
-        cmd_id = item.id.removeprefix("cmd-")
-        cmd = next((c for c in self._all if c.id == cmd_id), None)
-        self.dismiss(cmd)
+        self.dismiss(item.cmd)

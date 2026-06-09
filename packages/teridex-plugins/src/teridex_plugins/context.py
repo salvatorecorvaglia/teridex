@@ -37,9 +37,17 @@ class PluginContext:
         self._registry = registry
         self._services = services or {}
         self.logger = logger.bind(plugin_id=plugin_id)
+        self._subscriptions: list[tuple[type[Any], Callable[[Any], Awaitable[None]]]] = []
 
     def subscribe(self, event_type: type[E], handler: Callable[[E], Awaitable[None]]) -> None:
         self._bus.subscribe(event_type, handler)
+        self._subscriptions.append((event_type, handler))
+
+    def close(self) -> None:
+        """Release any resources held by this context (e.g. event subscriptions)."""
+        for event_type, handler in self._subscriptions:
+            self._bus.unsubscribe(event_type, handler)
+        self._subscriptions.clear()
 
     def publish(self, event: Event) -> None:
         self._bus.publish(event)

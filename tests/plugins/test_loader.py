@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from teridex_core.events import EventBus
+from teridex_core.events import ConnectionOpened, EventBus
 from teridex_core.protocols.plugin import PluginManifest
 from teridex_plugins.api import Command, hook, hook_event, is_hook
 from teridex_plugins.loader import PluginLoader
@@ -184,5 +184,44 @@ async def test_loader_recovery_from_collision_or_error(monkeypatch: pytest.Monke
     assert "success_plugin" in {m.id for m in registry.manifests()}
     # The fail plugin should not be registered
     assert "fail_plugin" not in {m.id for m in registry.manifests()}
+
+    await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_loader_unsubscribes_on_unload() -> None:
+    bus = EventBus()
+    registry = PluginRegistry()
+    loader = PluginLoader(registry, bus)
+
+    called = 0
+
+    class SubscriptionPlugin:
+        manifest = PluginManifest(id="sub_plugin", name="Sub", version="1.0.0")
+
+        def on_load(self, ctx: PluginContext) -> None:
+            async def _handler(ev: ConnectionOpened) -> None:
+                nonlocal called
+                called += 1
+
+            ctx.subscribe(ConnectionOpened, _handler)
+
+        def on_unload(self, ctx: PluginContext) -> None:
+            pass
+
+    plugin = SubscriptionPlugin()
+    loader.load_instance(plugin)
+
+    bus.publish(ConnectionOpened(connection_id="1", dsn_scheme="sqlite"))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert called == 1
+
+    loader.unload("sub_plugin")
+
+    bus.publish(ConnectionOpened(connection_id="2", dsn_scheme="sqlite"))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert called == 1
 
     await bus.close()

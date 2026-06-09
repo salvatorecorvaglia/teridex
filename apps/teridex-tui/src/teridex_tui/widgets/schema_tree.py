@@ -63,11 +63,16 @@ class SchemaTree(Tree[object]):
             if introspector is not None:
                 schema_name = obj.schema_name or ""
                 try:
-                    cols = await introspector.fetch_columns(schema_name, obj.name)
+                    import asyncio  # noqa: PLC0415
+
                     if obj.kind == "table":
-                        fks = await introspector.fetch_foreign_keys(schema_name, obj.name)
-                        indexes = await introspector.fetch_indexes(schema_name, obj.name)
+                        cols, fks, indexes = await asyncio.gather(
+                            introspector.fetch_columns(schema_name, obj.name),
+                            introspector.fetch_foreign_keys(schema_name, obj.name),
+                            introspector.fetch_indexes(schema_name, obj.name),
+                        )
                     else:
+                        cols = await introspector.fetch_columns(schema_name, obj.name)
                         fks = []
                         indexes = []
 

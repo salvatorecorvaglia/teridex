@@ -120,13 +120,28 @@ class PostgresAdapter(AbstractAdapter):
         cancel = self._cancel_event(handle)
         conn = self._conn
 
+        # Convert dict parameters to positional list for asyncpg
+        args = []
+        if handle.params:
+            try:
+                sorted_keys = sorted(handle.params.keys(), key=int)
+                args = [handle.params[k] for k in sorted_keys]
+            except ValueError:
+                args = list(handle.params.values())
+
         async def _gen() -> AsyncIterator[ResultBatch]:
             try:
-                stripped = sql.lstrip().lower()
-                if not stripped.startswith(("select", "with", "show", "explain")):
-                    # DML / DDL — execute and finalize.
+                try:
+                    stmt = await conn.prepare(sql)
+                except asyncpg.PostgresError as exc:
+                    handle.mark_done(QueryStatus.FAILED)
+                    raise QueryError(str(exc), context={"sql": sql}) from exc
+
+                attrs = stmt.get_attributes()
+                if not attrs:
+                    # DML / DDL (no columns returned) — execute and finalize
                     try:
-                        status = await conn.execute(sql)
+                        status = await stmt.execute(*args)
                     except asyncpg.PostgresError as exc:
                         handle.mark_done(QueryStatus.FAILED)
                         raise QueryError(str(exc), context={"sql": sql}) from exc
@@ -138,46 +153,26 @@ class PostgresAdapter(AbstractAdapter):
                     yield ResultBatch(columns=[], rows=[], is_last=True)
                     return
 
+                # DQL / RETURNING — stream using cursor
+                columns = [
+                    Column(
+                        name=a.name,
+                        type=infer_column_type(a.type.name),
+                        type_native=a.type.name,
+                    )
+                    for a in attrs
+                ]
+                self._set_metadata(
+                    handle,
+                    QueryMetadata(
+                        column_names=[c.name for c in columns],
+                        column_types=[c.type_native or "" for c in columns],
+                    ),
+                )
+
                 try:
                     async with conn.transaction():
-                        cur = await conn.cursor(sql)
-                        first = await cur.fetch(1)
-                        if not first:
-                            # empty result set — derive columns from a prepared stmt
-                            stmt = await conn.prepare(sql)
-                            attrs = stmt.get_attributes()
-                            columns = [
-                                Column(
-                                    name=a.name,
-                                    type=infer_column_type(a.type.name),
-                                    type_native=a.type.name,
-                                )
-                                for a in attrs
-                            ]
-                            self._set_metadata(
-                                handle,
-                                QueryMetadata(
-                                    column_names=[c.name for c in columns],
-                                    column_types=[c.type_native or "" for c in columns],
-                                ),
-                            )
-                            handle.mark_done(QueryStatus.SUCCEEDED)
-                            yield ResultBatch(columns=columns, rows=[], is_last=True)
-                            return
-                        record0 = first[0]
-                        columns = [
-                            Column(name=k, type=infer_column_type(None), type_native=None)
-                            for k in record0.keys()  # noqa: SIM118
-                        ]
-                        self._set_metadata(
-                            handle,
-                            QueryMetadata(column_names=[c.name for c in columns], column_types=[]),
-                        )
-                        yield ResultBatch(
-                            columns=columns,
-                            rows=[tuple(r.values()) for r in first],
-                            is_last=False,
-                        )
+                        cur = stmt.cursor(*args)
                         while True:
                             if cancel.is_set():
                                 handle.mark_done(QueryStatus.CANCELLED)

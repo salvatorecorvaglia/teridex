@@ -43,9 +43,13 @@ class ConnectionPool:
         # From here on, any failure/cancellation path must release the semaphore
         # (or delegate its release to _release if we got an adapter).
         adapter_to_release: DatabaseAdapter | None = None
+        sem_needs_release = True
         try:
             try:
-                return self._idle.get_nowait()
+                adapter = self._idle.get_nowait()
+                adapter_to_release = adapter
+                sem_needs_release = False
+                return adapter
             except asyncio.QueueEmpty:
                 pass
             # Decide under the lock so ``close()`` cannot race the waiter set:
@@ -54,15 +58,34 @@ class ConnectionPool:
                 if self._closed:
                     raise RuntimeError("pool is closed")
                 if len(self._all) < self._size:
-                    # Shield creation so we don't leak an untracked connection on cancellation
+                    # Start connection task in the background. If cancelled,
+                    # schedule background cleanup to register/release the adapter.
                     async def _make() -> DatabaseAdapter:
-                        a = await self._factory(self._dsn)
-                        self._all.append(a)
-                        return a
+                        return await self._factory(self._dsn)
 
-                    adapter = await asyncio.shield(_make())
-                    adapter_to_release = adapter
-                    return adapter
+                    task = asyncio.create_task(_make())
+                    try:
+                        adapter = await asyncio.shield(task)
+                        self._all.append(adapter)
+                        adapter_to_release = adapter
+                        sem_needs_release = False
+                        return adapter
+                    except asyncio.CancelledError:
+                        sem_needs_release = False
+
+                        async def _cleanup() -> None:
+                            try:
+                                a = await task
+                                async with self._lock:
+                                    self._all.append(a)
+                                await self._release(a)
+                            except Exception:
+                                self._sem.release()
+
+                        cleanup_task = asyncio.create_task(_cleanup())
+                        self._tasks.add(cleanup_task)
+                        cleanup_task.add_done_callback(self._tasks.discard)
+                        raise
                 # Someone else created one — wait for an idle adapter. Track
                 # the waiter so ``close()`` can wake it instead of hanging it.
                 getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
@@ -70,21 +93,23 @@ class ConnectionPool:
             try:
                 adapter = await getter
                 adapter_to_release = adapter
+                sem_needs_release = False
                 return adapter
             except asyncio.CancelledError:
                 if not getter.done():
                     getter.cancel()
                 elif not getter.cancelled() and getter.exception() is None:
                     adapter_to_release = getter.result()
+                    sem_needs_release = False
                 raise
             finally:
                 self._waiters.discard(getter)
         except BaseException:
             if adapter_to_release is not None:
-                task = asyncio.create_task(self._release(adapter_to_release))
-                self._tasks.add(task)
-                task.add_done_callback(self._tasks.discard)
-            else:
+                rel_task = asyncio.create_task(self._release(adapter_to_release))
+                self._tasks.add(rel_task)
+                rel_task.add_done_callback(self._tasks.discard)
+            elif sem_needs_release:
                 self._sem.release()
             raise
 

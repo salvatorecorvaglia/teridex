@@ -187,6 +187,21 @@ class EventBus:
         sub.task = asyncio.create_task(self._drain(sub), name=f"eventbus:{event_type.__name__}")
         self._subs.append(sub)
 
+    def unsubscribe(
+        self, event_type: type[Event], handler: Callable[[Any], Awaitable[None]]
+    ) -> bool:
+        """Unsubscribe a handler from receiving events of event_type.
+
+        Returns True if the handler was found and removed, False otherwise.
+        """
+        for i, sub in enumerate(self._subs):
+            if sub.event_type == event_type and sub.handler == handler:
+                if sub.task is not None:
+                    sub.task.cancel()
+                self._subs.pop(i)
+                return True
+        return False
+
     async def _drain(self, sub: _Subscription) -> None:
         while True:
             event = await sub.queue.get()
