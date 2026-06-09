@@ -153,6 +153,12 @@ To guarantee terminal responsiveness, protect database servers from connection e
 - **Row Stream Batching**: Rows are fetched asynchronously and rendered into the `DataTable` in chunks of `1000` (`ui.row_batch_size`) to maintain smooth UI frame rates and zero typing lag.
 - **TUI Memory Guard**: To prevent terminal rendering freezes, the results grid is capped at displaying `10,000` rows (`ui.max_display_rows`) by default.
 - **Query History**: The local query history store retains a maximum of `1000` entries (`engine.max_history_entries`) to prevent infinite growth.
+- **Adapter Thread Safety**: Database adapters utilizing blocking local connection wrappers
+  (such as DuckDB) protect connection handles using synchronized mutual exclusion locks
+  (`self._lock`) to prevent race conditions during concurrent metadata loading or ping execution.
+- **Event Bus Subscription Lifecycles**: Dynamic plugin contexts track event subscriptions locally.
+  When a plugin is dynamically unloaded, the host automatically calls `unsubscribe()` on all
+  registered event handlers, preventing memory leaks and orphaned background tasks.
 
 ---
 

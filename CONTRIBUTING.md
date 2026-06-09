@@ -55,6 +55,16 @@ The project enforces a **minimum 70 % branch coverage** gate (`fail_under = 70` 
 - **Ruff** for format + lint (line length: 100). Use `./scripts/fmt.sh` before committing.
 - **Async-first**: no blocking I/O in adapters or the TUI event loop.
 - **No silent excepts**: every except logs or re-raises.
+- **Plugin Event Subscriptions**: Always register handlers via `PluginContext.subscribe` (which
+  tracks them locally) instead of calling the event bus directly. This ensures dynamic plugin
+  unloading does not leak subscriptions.
+- **Adapter Locking Guidelines**: When implementing or editing adapters with blocking interfaces
+  (such as DuckDB), ensure all operations that touch the connection handles are synchronized
+  under the adapter's `self._lock` and offloaded using `asyncio.to_thread`.
+- **Database Statement Classification**: Always inspect prepared statement attributes (such as
+  `stmt.get_attributes()` in `asyncpg`) to differentiate query execution types (DQL/DML)
+  instead of parsing raw string prefixes. This ensures robust handling of query comment headers
+  and returning statements.
 - **Small modules**: prefer composition over inheritance.
 - **EditorConfig**: The project ships an `.editorconfig` (UTF-8, LF, 4-space indent, 2-space for YAML/TOML/JSON). Please ensure your editor respects it.
 
