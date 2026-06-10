@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,6 +13,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: release
     steps:
       # ── checkout & toolchain ──────────────────────────────────────────
       - uses: actions/checkout@v5
@@ -46,7 +48,7 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           uv run python -c '
-          import os, re
+          import os, re, uuid
           version = os.environ["GITHUB_REF_NAME"].lstrip("v")
           with open("CHANGELOG.md") as f:
               content = f.read()
@@ -64,8 +66,9 @@ jobs:
               notes = "No changelog entry found for this release."
           github_output = os.environ.get("GITHUB_OUTPUT")
           if github_output:
+              delimiter = f"EOF_{uuid.uuid4().hex}"
               with open(github_output, "a") as f:
-                  f.write("body<<EOF_CHANGELOG\n" + notes + "\nEOF_CHANGELOG\n")
+                  f.write(f"body<<{delimiter}\n{notes}\n{delimiter}\n")
           '
 
       # ── GitHub Release ────────────────────────────────────────────────
@@ -82,4 +85,3 @@ jobs:
       # ── PyPI Publish ──────────────────────────────────────────────────
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-
