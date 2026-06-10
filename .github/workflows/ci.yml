@@ -22,9 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.13
+          python-version: "3.13"
 
       - name: Sync workspace
         run: uv sync --all-extras --all-packages --dev --frozen
