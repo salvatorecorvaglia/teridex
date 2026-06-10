@@ -33,7 +33,7 @@ console = Console()
 
 app = typer.Typer(
     name="teridex",
-    help="Teridex — terminal-native database IDE.",
+    help="A terminal-native database IDE. Keyboard-first, async, pluggable.",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )

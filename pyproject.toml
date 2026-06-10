@@ -1,7 +1,7 @@
 [project]
 name = "teridex-workspace"
 version = "0.1.0"
-description = "Teridex — terminal-native database IDE (workspace root)"
+description = "A terminal-native database IDE. Keyboard-first, async, pluggable."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
