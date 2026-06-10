@@ -9,7 +9,7 @@ description = "A terminal-native database IDE. Keyboard-first, async, pluggable.
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
-authors = [{ name = "Teridex contributors" }]
+authors = [{ name = "Salvatore Corvaglia" }]
 dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",

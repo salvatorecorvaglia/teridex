@@ -40,7 +40,7 @@ jobs:
 
       - name: Generate Checksums
         run: |
-          sha256sum dist/* > SHA256SUMS
+          sha256sum dist/*.tar.gz dist/*.whl > SHA256SUMS
 
       - name: Extract Changelog Entry
         id: extract_changelog
@@ -78,7 +78,8 @@ jobs:
           name: Teridex ${{ github.ref_name }}
           body: ${{ steps.extract_changelog.outputs.body }}
           files: |
-            dist/*
+            dist/*.tar.gz
+            dist/*.whl
             SHA256SUMS
           generate_release_notes: false
 
