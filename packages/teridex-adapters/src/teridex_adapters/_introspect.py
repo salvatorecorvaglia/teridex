@@ -54,6 +54,7 @@ class SchemaIntrospector(ABC):
 
     def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
         from typing import Literal, cast  # noqa: PLC0415
+
         return View(
             name=name,
             schema_name=schema,

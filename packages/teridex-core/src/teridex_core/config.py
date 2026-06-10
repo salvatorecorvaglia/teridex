@@ -93,8 +93,6 @@ def _get_env_config() -> dict[str, Any]:
                     curr = curr[part]
                 else:
                     curr = curr.setdefault(part, {})
-            if not isinstance(curr, dict):
-                continue
             # Try parsing values that look like JSON arrays/objects
             parsed_val: Any = val
             val_stripped = val.strip()

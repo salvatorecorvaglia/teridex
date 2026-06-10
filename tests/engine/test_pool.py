@@ -98,7 +98,7 @@ async def test_pool_acquire_cancellation_safety() -> None:
 
 @pytest.mark.asyncio
 async def test_pool_close_cancellation_safety_does_not_leak_adapter() -> None:
-    """Closing the pool cancels pending connection tasks but lets cleanup tasks finish to avoid leaks."""
+    """Closing the pool cancels connection tasks but lets cleanup finish to avoid leaks."""
     connections_created = []
 
     async def tracking_factory(dsn: Dsn) -> DatabaseAdapter:

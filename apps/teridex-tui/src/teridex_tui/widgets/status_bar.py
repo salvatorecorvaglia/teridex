@@ -60,6 +60,7 @@ class StatusBar(Static):
             status = f"[yellow]display truncated[/]  ·  {status}"
 
         import re  # noqa: PLC0415
+
         raw_shortcuts = re.sub(r"\[.*?\]", "", shortcuts)
         raw_status = re.sub(r"\[.*?\]", "", status)
         width = self.size.width or 80
