@@ -26,7 +26,7 @@ jobs:
 
       # ── test gate ─────────────────────────────────────────────────────
       - name: Sync workspace
-        run: uv sync --all-extras --all-packages --dev --frozen
+        run: uv sync --all-extras --dev --frozen
 
       - name: Lint
         run: ./scripts/lint.sh
@@ -36,7 +36,7 @@ jobs:
 
       # ── Build Packages ────────────────────────────────────────────────
       - name: Build packages
-        run: uv build --all-packages --out-dir dist
+        run: uv build --out-dir dist
 
       - name: Generate Checksums
         run: |

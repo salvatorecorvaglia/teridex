@@ -6,17 +6,6 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 
-[manifest]
-members = [
-    "teridex-adapters",
-    "teridex-cli",
-    "teridex-core",
-    "teridex-engine",
-    "teridex-plugins",
-    "teridex-tui",
-    "teridex-workspace",
-]
-
 [[package]]
 name = "aiosqlite"
 version = "0.22.1"
@@ -1015,12 +1004,20 @@ wheels = [
 ]
 
 [[package]]
-name = "teridex-adapters"
+name = "teridex"
 version = "0.1.0"
-source = { editable = "packages/teridex-adapters" }
+source = { editable = "." }
 dependencies = [
+    { name = "aiosqlite" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "rapidfuzz" },
+    { name = "rich" },
     { name = "sqlalchemy" },
-    { name = "teridex-core" },
+    { name = "structlog" },
+    { name = "textual" },
+    { name = "typer" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -1045,123 +1042,6 @@ sqlite = [
     { name = "aiosqlite" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite", marker = "extra == 'all'", specifier = ">=0.20" },
-    { name = "aiosqlite", marker = "extra == 'sqlite'", specifier = ">=0.20" },
-    { name = "asyncmy2", marker = "extra == 'all'", specifier = ">=0.2.20" },
-    { name = "asyncmy2", marker = "extra == 'mysql'", specifier = ">=0.2.20" },
-    { name = "asyncpg", marker = "extra == 'all'", specifier = ">=0.29" },
-    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29" },
-    { name = "cryptography", marker = "extra == 'all'", specifier = ">=42.0" },
-    { name = "cryptography", marker = "extra == 'mysql'", specifier = ">=42.0" },
-    { name = "duckdb", marker = "extra == 'all'", specifier = ">=1.1" },
-    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.1" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "teridex-core", editable = "packages/teridex-core" },
-]
-provides-extras = ["duckdb", "sqlite", "postgres", "mysql", "all"]
-
-[[package]]
-name = "teridex-cli"
-version = "0.1.0"
-source = { editable = "apps/teridex-cli" }
-dependencies = [
-    { name = "rich" },
-    { name = "teridex-adapters", extra = ["all"] },
-    { name = "teridex-core" },
-    { name = "teridex-engine" },
-    { name = "teridex-plugins" },
-    { name = "teridex-tui" },
-    { name = "typer" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "rich", specifier = ">=13.7" },
-    { name = "teridex-adapters", extras = ["all"], editable = "packages/teridex-adapters" },
-    { name = "teridex-core", editable = "packages/teridex-core" },
-    { name = "teridex-engine", editable = "packages/teridex-engine" },
-    { name = "teridex-plugins", editable = "packages/teridex-plugins" },
-    { name = "teridex-tui", editable = "apps/teridex-tui" },
-    { name = "typer", specifier = ">=0.12" },
-]
-
-[[package]]
-name = "teridex-core"
-version = "0.1.0"
-source = { editable = "packages/teridex-core" }
-dependencies = [
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "structlog" },
-    { name = "typing-extensions" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pydantic-settings", specifier = ">=2.6" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "typing-extensions", specifier = ">=4.12" },
-]
-
-[[package]]
-name = "teridex-engine"
-version = "0.1.0"
-source = { editable = "packages/teridex-engine" }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "teridex-core" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.20" },
-    { name = "teridex-core", editable = "packages/teridex-core" },
-]
-
-[[package]]
-name = "teridex-plugins"
-version = "0.1.0"
-source = { editable = "packages/teridex-plugins" }
-dependencies = [
-    { name = "teridex-core" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "teridex-core", editable = "packages/teridex-core" }]
-
-[[package]]
-name = "teridex-tui"
-version = "0.1.0"
-source = { editable = "apps/teridex-tui" }
-dependencies = [
-    { name = "rapidfuzz" },
-    { name = "rich" },
-    { name = "teridex-adapters", extra = ["all"] },
-    { name = "teridex-core" },
-    { name = "teridex-engine" },
-    { name = "teridex-plugins" },
-    { name = "textual" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "rapidfuzz", specifier = ">=3.10" },
-    { name = "rich", specifier = ">=13.7" },
-    { name = "teridex-adapters", extras = ["all"], editable = "packages/teridex-adapters" },
-    { name = "teridex-core", editable = "packages/teridex-core" },
-    { name = "teridex-engine", editable = "packages/teridex-engine" },
-    { name = "teridex-plugins", editable = "packages/teridex-plugins" },
-    { name = "textual", specifier = ">=0.83" },
-]
-
-[[package]]
-name = "teridex-workspace"
-version = "0.1.0"
-source = { virtual = "." }
-
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
@@ -1174,6 +1054,29 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20" },
+    { name = "aiosqlite", marker = "extra == 'all'", specifier = ">=0.20" },
+    { name = "aiosqlite", marker = "extra == 'sqlite'", specifier = ">=0.20" },
+    { name = "asyncmy2", marker = "extra == 'all'", specifier = ">=0.2.20" },
+    { name = "asyncmy2", marker = "extra == 'mysql'", specifier = ">=0.2.20" },
+    { name = "asyncpg", marker = "extra == 'all'", specifier = ">=0.29" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29" },
+    { name = "cryptography", marker = "extra == 'all'", specifier = ">=42.0" },
+    { name = "cryptography", marker = "extra == 'mysql'", specifier = ">=42.0" },
+    { name = "duckdb", marker = "extra == 'all'", specifier = ">=1.1" },
+    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.1" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "rapidfuzz", specifier = ">=3.10" },
+    { name = "rich", specifier = ">=13.7" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "textual", specifier = ">=0.83" },
+    { name = "typer", specifier = ">=0.12" },
+    { name = "typing-extensions", specifier = ">=4.12" },
+]
+provides-extras = ["duckdb", "sqlite", "postgres", "mysql", "all"]
 
 [package.metadata.requires-dev]
 dev = [

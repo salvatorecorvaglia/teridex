@@ -10,4 +10,4 @@ echo "==> ruff check"
 uv run ruff check .
 
 echo "==> mypy --strict"
-uv run mypy --config-file=mypy.ini packages apps
+uv run mypy --config-file=mypy.ini src

@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/<you>/teridex.git
 cd teridex
-./scripts/dev.sh    # runs: uv sync --all-extras --all-packages --dev
+./scripts/dev.sh    # runs: uv sync --all-extras --dev
 ```
 
 `uv` is required (`brew install uv` or see <https://docs.astral.sh/uv/>).
@@ -97,8 +97,8 @@ teridex-core          ← pure domain (zero internal deps)
 Releases are automated via GitHub Actions (`.github/workflows/release.yml`) when a version tag is pushed. To prepare and cut a release:
 
 1. Update `CHANGELOG.md` (graduate the `[Unreleased]` stanza to the new version).
-2. Bump `version = "x.y.z"` in every `pyproject.toml` (workspace root + 6 member packages) and `__version__` in `packages/teridex-core/src/teridex_core/__init__.py`.
-3. Run `uv sync --all-extras --all-packages --dev` to refresh `uv.lock`.
+2. Bump `version = "x.y.z"` in the root `pyproject.toml` and `__version__` in `src/teridex_core/__init__.py`.
+3. Run `uv sync --all-extras --dev` to refresh `uv.lock`.
 4. Run `./scripts/check.sh` and ensure it exits 0.
 5. Commit your changes to `main` and push them.
 6. Create and push a version tag (e.g. `vx.y.z`):

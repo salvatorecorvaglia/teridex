@@ -26,7 +26,7 @@ jobs:
           python-version: "3.13"
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-packages --dev --frozen
+        run: uv sync --all-extras --dev --frozen
 
       - name: Lint (ruff format + check + mypy)
         run: ./scripts/lint.sh
@@ -50,7 +50,7 @@ jobs:
           python-version: "3.13"
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-packages --dev --frozen
+        run: uv sync --all-extras --dev --frozen
 
       - name: Test (pytest + coverage gate)
         run: ./scripts/test.sh

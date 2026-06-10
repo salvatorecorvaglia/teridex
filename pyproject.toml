@@ -1,14 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "teridex-workspace"
+name = "teridex"
 version = "0.1.0"
 description = "A terminal-native database IDE. Keyboard-first, async, pluggable."
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [{ name = "Teridex contributors" }]
+dependencies = [
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+    "typing-extensions>=4.12",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.20",
+    "textual>=0.83",
+    "rich>=13.7",
+    "rapidfuzz>=3.10",
+    "typer>=0.12",
+]
 
-[tool.uv.workspace]
-members = ["apps/*", "packages/*"]
+[project.optional-dependencies]
+duckdb = ["duckdb>=1.1"]
+sqlite = ["aiosqlite>=0.20"]
+postgres = ["asyncpg>=0.29"]
+mysql = ["asyncmy2>=0.2.20", "cryptography>=42.0"]
+all = [
+    "duckdb>=1.1",
+    "aiosqlite>=0.20",
+    "asyncpg>=0.29",
+    "asyncmy2>=0.2.20",
+    "cryptography>=42.0",
+]
+
+[project.scripts]
+teridex = "teridex_cli.main:main"
 
 [dependency-groups]
 dev = [
@@ -21,13 +50,21 @@ dev = [
     "testcontainers>=4.8",
 ]
 
-[tool.uv.sources]
-teridex-core = { workspace = true }
-teridex-adapters = { workspace = true }
-teridex-engine = { workspace = true }
-teridex-plugins = { workspace = true }
-teridex-cli = { workspace = true }
-teridex-tui = { workspace = true }
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/teridex_core",
+    "src/teridex_adapters",
+    "src/teridex_engine",
+    "src/teridex_plugins",
+    "src/teridex_cli",
+    "src/teridex_tui",
+]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"src/teridex_tui/teridex.tcss" = "share/teridex/teridex.tcss"
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/teridex_tui/teridex.tcss" = "teridex_tui/teridex.tcss"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -49,7 +86,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-source = ["packages", "apps"]
+source = ["src"]
 omit = ["**/tests/**", "**/__main__.py"]
 
 [tool.coverage.report]
