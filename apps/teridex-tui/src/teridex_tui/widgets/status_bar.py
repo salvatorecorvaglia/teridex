@@ -59,4 +59,12 @@ class StatusBar(Static):
         if self.truncated:
             status = f"[yellow]display truncated[/]  ·  {status}"
 
+        import re  # noqa: PLC0415
+        raw_shortcuts = re.sub(r"\[.*?\]", "", shortcuts)
+        raw_status = re.sub(r"\[.*?\]", "", status)
+        width = self.size.width or 80
+        available = width - 2  # account for padding
+        padding_len = available - len(raw_shortcuts) - len(raw_status)
+        if padding_len > 0:
+            return f"{shortcuts}{' ' * padding_len}{status}"
         return f"{shortcuts}  {status}"

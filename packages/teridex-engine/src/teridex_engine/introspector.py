@@ -67,13 +67,20 @@ class Introspector:
         """Update cached SchemaObject metadata with lazily loaded fields."""
         if self._cache is None or schema not in self._cache.schemas:
             return
-        for i, obj in enumerate(self._cache.schemas[schema]):
+        new_objects = list(self._cache.schemas[schema])
+        updated = False
+        for i, obj in enumerate(new_objects):
             if obj.name == name:
-                self._cache.schemas[schema][i] = obj.model_copy(
+                new_objects[i] = obj.model_copy(
                     update={
                         "columns": columns,
                         "foreign_keys": foreign_keys,
                         "indexes": indexes,
                     }
                 )
+                updated = True
                 break
+        if updated:
+            new_schemas = dict(self._cache.schemas)
+            new_schemas[schema] = new_objects
+            self._cache = self._cache.model_copy(update={"schemas": new_schemas})

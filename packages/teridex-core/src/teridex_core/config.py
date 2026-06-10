@@ -87,7 +87,14 @@ def _get_env_config() -> dict[str, Any]:
             parts = [p.lower() for p in name.split("__")]
             curr = env_data
             for part in parts[:-1]:
-                curr = curr.setdefault(part, {})
+                if part in curr:
+                    if not isinstance(curr[part], dict):
+                        curr[part] = {}
+                    curr = curr[part]
+                else:
+                    curr = curr.setdefault(part, {})
+            if not isinstance(curr, dict):
+                continue
             # Try parsing values that look like JSON arrays/objects
             parsed_val: Any = val
             val_stripped = val.strip()

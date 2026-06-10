@@ -311,10 +311,26 @@ class _PostgresIntrospector(SchemaIntrospector):
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         rows = await self._conn.fetch(
             """
-            SELECT column_name, data_type, is_nullable, column_default, ordinal_position
-            FROM information_schema.columns
-            WHERE table_schema=$1 AND table_name=$2
-            ORDER BY ordinal_position
+            SELECT 
+                c.column_name, 
+                c.data_type, 
+                c.is_nullable, 
+                c.column_default, 
+                c.ordinal_position,
+                EXISTS (
+                    SELECT 1 
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu 
+                      ON tc.constraint_name = kcu.constraint_name
+                     AND tc.table_schema = kcu.table_schema
+                    WHERE tc.constraint_type = 'PRIMARY KEY'
+                      AND tc.table_schema = c.table_schema
+                      AND tc.table_name = c.table_name
+                      AND kcu.column_name = c.column_name
+                ) AS is_primary
+            FROM information_schema.columns c
+            WHERE c.table_schema=$1 AND c.table_name=$2
+            ORDER BY c.ordinal_position
             """,
             schema,
             name,
@@ -327,6 +343,7 @@ class _PostgresIntrospector(SchemaIntrospector):
                 nullable=c["is_nullable"] == "YES",
                 default=c["column_default"],
                 ordinal=c["ordinal_position"] or 0,
+                is_primary_key=bool(c["is_primary"]),
             )
             for c in rows
         ]

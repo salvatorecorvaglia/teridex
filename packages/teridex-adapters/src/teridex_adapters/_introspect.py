@@ -53,7 +53,13 @@ class SchemaIntrospector(ABC):
         return []
 
     def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
-        return View(name=name, schema_name=schema, columns=columns)
+        from typing import Literal, cast  # noqa: PLC0415
+        return View(
+            name=name,
+            schema_name=schema,
+            columns=columns,
+            kind=cast('Literal["view", "materialized_view"]', kind),
+        )
 
     async def build(self, *, lazy: bool = False) -> SchemaSnapshot:
         schemas: dict[str, list[SchemaObject]] = {}

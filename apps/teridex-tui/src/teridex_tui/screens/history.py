@@ -59,6 +59,9 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         elif event.key == "enter":
             self._submit()
 
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self._submit()
+
     def _submit(self) -> None:
         lst = self.query_one("#history-list", ListView)
         item = lst.highlighted_child

@@ -35,7 +35,8 @@ class ConnectionPool:
         self._closed = False
         self._lock = asyncio.Lock()
         self._waiters: set[asyncio.Future[DatabaseAdapter]] = set()
-        self._tasks: set[asyncio.Task[Any]] = set()
+        self._connection_tasks: set[asyncio.Task[Any]] = set()
+        self._cleanup_tasks: set[asyncio.Task[Any]] = set()
 
     async def _acquire(self) -> DatabaseAdapter:
         if self._closed:
@@ -65,8 +66,8 @@ class ConnectionPool:
                         return await self._factory(self._dsn)
 
                     task = asyncio.create_task(_make())
-                    self._tasks.add(task)
-                    task.add_done_callback(self._tasks.discard)
+                    self._connection_tasks.add(task)
+                    task.add_done_callback(self._connection_tasks.discard)
                     try:
                         adapter = await asyncio.shield(task)
                         self._all.append(adapter)
@@ -86,8 +87,8 @@ class ConnectionPool:
                                 self._sem.release()
 
                         cleanup_task = asyncio.create_task(_cleanup())
-                        self._tasks.add(cleanup_task)
-                        cleanup_task.add_done_callback(self._tasks.discard)
+                        self._cleanup_tasks.add(cleanup_task)
+                        cleanup_task.add_done_callback(self._cleanup_tasks.discard)
                         raise
                 # Someone else created one — wait for an idle adapter. Track
                 # the waiter so ``close()`` can wake it instead of hanging it.
@@ -110,8 +111,8 @@ class ConnectionPool:
         except BaseException:
             if adapter_to_release is not None:
                 rel_task = asyncio.create_task(self._release(adapter_to_release))
-                self._tasks.add(rel_task)
-                rel_task.add_done_callback(self._tasks.discard)
+                self._cleanup_tasks.add(rel_task)
+                rel_task.add_done_callback(self._cleanup_tasks.discard)
             elif sem_needs_release:
                 self._sem.release()
             raise
@@ -153,9 +154,11 @@ class ConnectionPool:
             for getter in self._waiters:
                 getter.cancel()
             self._waiters.clear()
-            for t in list(self._tasks):
+            for t in list(self._connection_tasks):
                 t.cancel()
-            self._tasks.clear()
+            self._connection_tasks.clear()
+            # We do NOT cancel self._cleanup_tasks, let them run to completion
+            # so they can release/close any completed connection.
             adapters = list(self._all)
             self._all.clear()
         for adapter in adapters:

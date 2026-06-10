@@ -94,3 +94,42 @@ async def test_pool_acquire_cancellation_safety() -> None:
                 assert await a2.ping()
     finally:
         await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_pool_close_cancellation_safety_does_not_leak_adapter() -> None:
+    """Closing the pool cancels pending connection tasks but lets cleanup tasks finish to avoid leaks."""
+    connections_created = []
+
+    async def tracking_factory(dsn: Dsn) -> DatabaseAdapter:
+        a = SQLiteAdapter()
+        await a.connect(dsn)
+        connections_created.append(a)
+        # Yield to allow outer acquire to yield before returning
+        await asyncio.sleep(0.01)
+        return a
+
+    pool = ConnectionPool(Dsn.parse(_MEM), tracking_factory, size=1)
+
+    async def try_acquire() -> None:
+        async with pool.acquire():
+            await asyncio.sleep(0.1)
+
+    task = asyncio.create_task(try_acquire())
+    # Wait for connection to be created
+    await asyncio.sleep(0.03)
+
+    # Cancel the acquire task. Since connection is completed but try_acquire is sleeping,
+    # this cancels try_acquire and triggers the cleanup/release task.
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    # Close the pool.
+    await pool.close()
+
+    await asyncio.sleep(0.05)
+
+    assert len(connections_created) > 0
+    for a in connections_created:
+        assert a.connected is False

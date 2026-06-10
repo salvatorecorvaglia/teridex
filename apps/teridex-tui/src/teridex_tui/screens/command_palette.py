@@ -62,6 +62,9 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
             lst = self.query_one("#palette-list", ListView)
             lst.post_message(event)
 
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self._submit()
+
     def _refresh(self, q: str) -> None:
         lst = self.query_one("#palette-list", ListView)
         lst.clear()

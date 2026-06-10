@@ -259,9 +259,26 @@ class _DuckDBIntrospector(SchemaIntrospector):
 
         def _fetch() -> list[TableColumn]:
             cols = conn.execute(
-                "SELECT column_name, data_type, is_nullable, column_default, ordinal_position "
-                "FROM information_schema.columns "
-                "WHERE table_schema=? AND table_name=? ORDER BY ordinal_position",
+                "SELECT "
+                "    c.column_name, "
+                "    c.data_type, "
+                "    c.is_nullable, "
+                "    c.column_default, "
+                "    c.ordinal_position, "
+                "    EXISTS ( "
+                "        SELECT 1 "
+                "        FROM information_schema.table_constraints tc "
+                "        JOIN information_schema.key_column_usage kcu "
+                "          ON tc.constraint_name = kcu.constraint_name "
+                "         AND tc.table_schema = kcu.table_schema "
+                "        WHERE tc.constraint_type = 'PRIMARY KEY' "
+                "          AND tc.table_schema = c.table_schema "
+                "          AND tc.table_name = c.table_name "
+                "          AND kcu.column_name = c.column_name "
+                "    ) AS is_primary "
+                "FROM information_schema.columns c "
+                "WHERE c.table_schema=? AND c.table_name=? "
+                "ORDER BY c.ordinal_position",
                 [schema, name],
             ).fetchall()
             return [
@@ -272,6 +289,7 @@ class _DuckDBIntrospector(SchemaIntrospector):
                     nullable=c[2] == "YES",
                     default=c[3],
                     ordinal=c[4] or 0,
+                    is_primary_key=bool(c[5]),
                 )
                 for c in cols
             ]

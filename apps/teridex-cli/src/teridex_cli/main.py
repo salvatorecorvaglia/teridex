@@ -44,10 +44,11 @@ app.add_typer(plugins_app, name="plugins")
 @app.callback()
 def _root(
     log_level: Annotated[
-        str, typer.Option("--log-level", help="Log level.", envvar="TERIDEX_LOG_LEVEL")
-    ] = "WARNING",
+        str | None, typer.Option("--log-level", help="Log level.", envvar="TERIDEX_LOG_LEVEL")
+    ] = None,
 ) -> None:
-    configure_logging(level=log_level)
+    level = log_level or "WARNING"
+    configure_logging(level=level)
 
 
 @app.command()
@@ -153,6 +154,7 @@ def run_query(
 
 @app.command()
 def tui(
+    ctx: typer.Context,
     dsn: Annotated[
         str,
         typer.Option("--dsn", envvar="TERIDEX_DSN", help="Initial DSN to connect to."),
@@ -166,8 +168,13 @@ def tui(
 
     from teridex_tui.app import TeridexApp  # noqa: PLC0415
 
+    cli_log_level = ctx.parent.params.get("log_level") if ctx.parent else None
+    overrides = {}
+    if cli_log_level is not None:
+        overrides["logging"] = {"level": cli_log_level}
+
     try:
-        cfg = load_config(Path(config_path) if config_path else None)
+        cfg = load_config(Path(config_path) if config_path else None, **overrides)
         initial_dsn = Dsn.parse(dsn) if dsn else None
     except Exception as exc:
         console.print(f"[bold red]ERROR[/] {exc}")
