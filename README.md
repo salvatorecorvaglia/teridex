@@ -6,212 +6,207 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 
 ---
 
-## Features
+## ✨ Key Features
 
-- **Fast** — Textual + Rich, virtualized result tables, streamed row batches.
-- **Keyboard-first** — full command palette, optional Vim keybindings.
-- **Multi-database** — DuckDB, SQLite, PostgreSQL, MySQL out of the box.
-- **Pluggable** — Python entry-point plugins contribute commands, panels, and event hooks.
-- **Modular** — clean-architecture layering, strict typing (`mypy --strict`), SOLID.
-- **Connection pool** — bounded, lazy pool for concurrent query execution.
-- **Query history** — persistent local history store with recall from the TUI.
-- **Export** — copy individual cells or export full result sets to CSV.
-
----
-
-## Requirements
-
-- Python **≥ 3.13**
-- [`uv`](https://docs.astral.sh/uv/) package manager
+*   **⚡ Asynchronous Execution**: Multi-threaded, fully cancellable database queries. Long-running queries won't block the TUI layout or cursor.
+*   **⌨️ Keyboard-First Design**: Optimized for hands-on-keyboard speed. Support for both standard and Vim-style keybindings.
+*   **🔌 Pluggable Architecture**: Easily write plugins to add custom panels, new commands to the palette, or listen to event hooks.
+*   **🗃️ Built-in Database Drivers**: First-class support for **DuckDB**, **SQLite**, **PostgreSQL**, and **MySQL**.
+*   **📝 Rich Workspace Layout**:
+    *   **Live Schema Tree**: Real-time introspection of schemas, tables, columns, indexes, and foreign keys.
+    *   **Multi-Tab SQL Editor**: Edit multiple queries side-by-side with SQL syntax highlighting.
+    *   **Interactive Results Table**: Search, filter, and scroll through large result sets cleanly using pagination/batch loading.
+    *   **Command Palette**: Quick actions, screen switching, and plugin commands.
+*   **⚙️ Configuration Layer**: Customize the look and feel (including Monokai and Nord themes) and define saved connections.
 
 ---
 
-## Installation
+## 📐 Package Architecture & Layering
 
-### From source
+Teridex follows a clean, layered architecture with strict dependency boundaries:
+
+```mermaid
+graph TD
+    core["teridex-core (Pure Domain)"]
+    adapters["teridex-adapters (DB Drivers)"]
+    plugins["teridex-plugins (Plugin API)"]
+    engine["teridex-engine (Orchestration)"]
+    tui["teridex-tui (Textual TUI)"]
+    cli["teridex-cli (Typer CLI)"]
+
+    adapters --> core
+    plugins --> core
+    engine --> adapters
+    engine --> plugins
+    tui --> engine
+    cli --> engine
+```
+
+> [!IMPORTANT]
+> **Dependency Isolation**: Inner packages must never depend on outer packages. Specifically, `teridex_core` has no dependencies on any other internal package. These boundaries are strictly verified via `mypy --strict`.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+*   **Python >= 3.13**
+*   The [**`uv`**](https://docs.astral.sh/uv/) package manager (recommended) or standard `pip`.
+
+### Installation
+
+Install Teridex using `uv` or standard Python package managers:
+
+```bash
+# Install core package
+pip install teridex
+
+# Install with support for all database drivers (Postgres, MySQL, SQLite, DuckDB)
+pip install "teridex[all]"
+
+# Install with specific drivers
+pip install "teridex[postgres]"
+pip install "teridex[duckdb]"
+```
+
+Alternatively, clone the repository for local development:
 
 ```bash
 git clone https://github.com/salvatorecorvaglia/teridex.git
 cd teridex
-./scripts/dev.sh          # uv sync
+./scripts/dev.sh
 ```
 
-### Docker
+### Running the TUI
+
+Start the workspace by pointing it to a database DSN (Data Source Name):
 
 ```bash
-# Build the image
-docker build -f docker/Dockerfile -t teridex .
+# Open with a temporary in-memory DuckDB
+teridex tui --dsn duckdb:///:memory:
 
-# Run a one-shot query
-docker run --rm teridex run --dsn duckdb:///:memory: "SELECT 42"
+# Connect to a local SQLite database file
+teridex tui --dsn sqlite:///path/to/database.db
+
+# Connect to a PostgreSQL instance
+teridex tui --dsn postgresql://user:password@localhost:5432/mydatabase
 ```
 
----
+### One-Shot CLI Execution
 
-## Quick start
+Run query statements directly from the command line and view results rendered as a styled table:
 
 ```bash
-
-# Launch the TUI
-uv run teridex tui --dsn duckdb:///:memory:
-
-# One-shot query, rendered as a Rich table
-uv run teridex run --dsn sqlite:///demo.db "SELECT sqlite_version()"
-
-# Verify a connection is reachable
-uv run teridex connect --dsn postgres://user:pass@localhost:5432/mydb
-
-# Print version and discovered adapter drivers
-uv run teridex version
-
-# Discover plugins on the current Python path
-uv run teridex plugins list
-```
-
-`--dsn` can also be set via the `TERIDEX_DSN` environment variable.
-
----
-
-## Supported databases
-
-| Engine     | URL scheme                     | Driver      |
-| ---------- | ------------------------------ | ----------- |
-| DuckDB     | `duckdb://`                    | `duckdb`    |
-| SQLite     | `sqlite://`                    | `aiosqlite` |
-| PostgreSQL | `postgres://`, `postgresql://` | `asyncpg`   |
-| MySQL      | `mysql://`                     | `asyncmy`   |
-
----
-
-## Keybindings (default keymap)
-
-| Key          | Action                      |
-| ------------ | --------------------------- |
-| `ctrl+enter` | Run query                   |
-| `ctrl+j`     | Run query (alternate)       |
-| `ctrl+c`     | Cancel running query        |
-| `ctrl+p`     | Command palette (fuzzy)     |
-| `ctrl+r`     | Refresh schema tree         |
-| `ctrl+h`     | Query history (last 50)     |
-| `ctrl+t`     | New query tab               |
-| `ctrl+w`     | Close current tab           |
-| `ctrl+y`     | Copy cell to clipboard      |
-| `ctrl+e`     | Export results to CSV       |
-| `?`          | Help modal (lists bindings) |
-| `ctrl+q`     | Quit                        |
-
-### Vim keymap
-
-Set `ui.keymap = "vim"` in your config to add these extra bindings on top of the defaults:
-
-| Key   | Action           |
-| ----- | ---------------- |
-| `:`   | Command palette  |
-| `g g` | Top of editor    |
-| `G`   | Bottom of editor |
-
----
-
-## Themes
-
-Two themes ship by default: **monokai** (warm) and **nord** (cool). Set the active theme with `ui.theme` in your config.
-
----
-
-## Configuration
-
-Teridex reads (in order) defaults → `~/.config/teridex/config.toml` → environment (`TERIDEX_*`, double-underscore nested, e.g. `TERIDEX_UI__THEME=nord`) → CLI flags.
-
-A working sample lives at [`config.example.toml`](config.example.toml).
-
-### Settings reference
-
-| Setting Key                      | Type              | Default Value | Description / Validations                                                    |
-| :------------------------------- | :---------------- | :------------ | :--------------------------------------------------------------------------- |
-| `ui.theme`                       | `string`          | `"monokai"`   | Theme name. Built-ins: `"monokai"` (warm) \| `"nord"` (cool).                |
-| `ui.keymap`                      | `string`          | `"default"`   | Keymap bindings mode. `"default"` or `"vim"`.                                |
-| `ui.show_status_bar`             | `boolean`         | `true`        | Toggle visibility of the bottom status bar.                                  |
-| `ui.row_batch_size`              | `integer`         | `1000`        | Number of rows fetched per batch from adapters. Range: `10` to `100,000`.    |
-| `ui.max_display_rows`            | `integer`         | `10,000`      | Max rows held in results grid. Capped for memory safety (`0` for unlimited). |
-| `engine.default_timeout_seconds` | `float`           | `60.0`        | Default timeout for query execution in seconds. Must be `> 0`.               |
-| `engine.max_history_entries`     | `integer`         | `1000`        | Bounded size of local query-history database. Must be `>= 10`.               |
-| `engine.pool_size`               | `integer`         | `5`           | Size of concurrent database connection pool. Range: `1` to `64`.             |
-| `logging.level`                  | `string`          | `"INFO"`      | Logging filter level: `"DEBUG"`, `"INFO"`, `"WARNING"`, `"ERROR"`.           |
-| `logging.json_lines`             | `boolean \| null` | `null`        | Emit logs as single JSON lines. `null` auto-detects based on TTY.            |
-| `plugins.enabled`                | `list[str]`       | `[]`          | List of plugins allowed to load. Empty loads all discovered.                 |
-| `plugins.disabled`               | `list[str]`       | `[]`          | List of plugins to explicitly block.                                         |
-| `connections`                    | `object`          | `{}`          | Saved connection DSNs mapped by connection name.                             |
-
----
-
-## 🛡️ Resource & Safety Limits
-
-To guarantee terminal responsiveness, protect database servers from connection exhaustion, and prevent memory issues, Teridex enforces several safety boundaries:
-
-- **Query Timeouts**: Runaway queries are automatically cancelled after a soft limit of `60.0` seconds (`engine.default_timeout_seconds`), protecting the database and client from resource starvation.
-- **Connection Pools**: Database connections are strictly managed using a bounded, lazy pool capped at `5` connections (`engine.pool_size`) by default. This protects backend servers from database connection exhaustion.
-- **Row Stream Batching**: Rows are fetched asynchronously and rendered into the `DataTable` in chunks of `1000` (`ui.row_batch_size`) to maintain smooth UI frame rates and zero typing lag.
-- **TUI Memory Guard**: To prevent terminal rendering freezes, the results grid is capped at displaying `10,000` rows (`ui.max_display_rows`) by default.
-- **Query History**: The local query history store retains a maximum of `1000` entries (`engine.max_history_entries`) to prevent infinite growth.
-- **Adapter Thread Safety**: Database adapters utilizing blocking local connection wrappers
-  (such as DuckDB) protect connection handles using synchronized mutual exclusion locks
-  (`self._lock`) to prevent race conditions during concurrent metadata loading or ping execution.
-- **Event Bus Subscription Lifecycles**: Dynamic plugin contexts track event subscriptions locally.
-  When a plugin is dynamically unloaded, the host automatically calls `unsubscribe()` on all
-  registered event handlers, preventing memory leaks and orphaned background tasks.
-
----
-
-## Project layout
-
-```
-apps/
-  teridex-cli/       Typer-based CLI (tui, run, connect, version, plugins)
-  teridex-tui/       Textual TUI app, widgets, screens, themes, keymaps
-
-packages/
-  teridex-core/      Pure domain: Pydantic models, errors, DI container,
-                     event bus, config, structured logging, protocols
-  teridex-adapters/  Concrete DB drivers behind a unified DatabaseAdapter
-                     protocol (one file per database)
-  teridex-engine/    Orchestration: QueryExecutor, ConnectionPool,
-                     Introspector, QueryHistory
-  teridex-plugins/   Public plugin API (Command, Panel, hook), PluginContext,
-                     entry-point loader
-
-tests/               Unit + integration suites (adapters, core, engine,
-                     cli, tui, plugins)
-docker/              Dockerfile + dev compose (Postgres + MySQL)
-scripts/             dev.sh, fmt.sh, lint.sh, test.sh, check.sh
+teridex run --dsn duckdb:///:memory: "SELECT 'Hello, Teridex!' AS message"
 ```
 
 ---
 
-## Development
+## ⚙️ Configuration
 
+Configure Teridex via the config file located at `~/.config/teridex/config.toml`. 
+
+Refer to the [config.example.toml](file:///Users/salvatorecorvaglia/github/teridex/config.example.toml) file for available options:
+
+```toml
+[ui]
+theme = "monokai"       # "monokai" (warm) or "nord" (cool)
+keymap = "default"      # "default" or "vim"
+show_status_bar = true
+row_batch_size = 1000   # Rows per batch to fetch from adapters
+
+[engine]
+default_timeout_seconds = 60.0
+max_history_entries = 1000
+pool_size = 5
+
+[logging]
+level = "INFO"
+
+[plugins]
+enabled = []            # Specify IDs of plugins to load (empty loader registers all)
+disabled = []           # Specify IDs of plugins to exclude
+```
+
+### Environment Overrides
+You can override configuration keys using environment variables using the structure: `TERIDEX_<SECTION>__<FIELD>`.
+For example:
 ```bash
-./scripts/dev.sh         # uv sync
-./scripts/fmt.sh         # ruff format + autofix
-./scripts/lint.sh        # ruff + mypy --strict
-./scripts/test.sh        # pytest (excludes integration by default)
-./scripts/check.sh       # lint + test in one shot (extra args → pytest)
-
-# Run integration tests against local Postgres/MySQL
-docker compose -f docker/docker-compose.yml up -d
-TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex \
-TERIDEX_MYSQL_DSN=mysql://teridex:teridex@localhost:3306/teridex \
-TERIDEX_TEST_MARKERS=integration ./scripts/test.sh
+TERIDEX_UI__THEME=nord teridex tui
 ```
 
-### CI / CD
+---
 
-Every push to `main` and every pull request runs the **CI** workflow (`.github/workflows/ci.yml`), which:
+## 🔌 Extensibility: Writing Plugins
 
-1. Syncs the full workspace with `uv sync --frozen`.
-2. Runs linting (`ruff format --check`, `ruff check`, `mypy --strict`).
-3. Runs the unit test suite with a **70 % branch-coverage gate**.
+Plugins are discovered using Python entry points registered under the `teridex.plugins` group in your package's metadata. 
 
-Pushing a version tag (`v*`) triggers the **Release** workflow (`.github/workflows/release.yml`), which re-runs all quality gates and creates a GitHub Release with auto-generated notes.
+A plugin needs to implement the [Plugin](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_core/protocols/plugin.py#L22-L29) protocol.
+
+### 1. Define the Manifest and Hooks
+
+Create a class with a `manifest` property, `on_load`, and `on_unload` methods:
+
+```python
+from teridex_plugins import PluginContext, Command, hook
+from teridex_core.protocols.plugin import PluginManifest
+
+class MyPlugin:
+    manifest = PluginManifest(
+        id="custom-notifier",
+        name="Custom Notifier",
+        version="0.1.0",
+        description="Warns users when executing risky SQL queries.",
+        requires_teridex=">=0.1.0"
+    )
+
+    def on_load(self, ctx: PluginContext) -> None:
+        # Register command palette action
+        ctx.register_command(
+            Command(
+                id="notify-hello",
+                title="Hello Notifier",
+                handler=self.hello_handler,
+                default_binding="ctrl+h"
+            )
+        )
+        ctx.logger.info("Custom Notifier plugin successfully loaded!")
+
+    def on_unload(self, ctx: PluginContext) -> None:
+        ctx.logger.info("Custom Notifier plugin unloaded.")
+
+    async def hello_handler(self, ctx: PluginContext) -> None:
+        ctx.publish(SomeNotificationEvent("Hello from plugin!"))
+
+    @hook("query.before_execute")
+    async def warn_on_drop(self, ctx: PluginContext, sql: str) -> None:
+        if "drop table" in sql.lower():
+            ctx.logger.warning("Risky query detected!", sql=sql)
+```
+
+Refer to [api.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_plugins/api.py) and [context.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_plugins/context.py) for the complete plugin-facing API surface.
+
+---
+
+## 🛠️ Extensibility: Custom Database Adapters
+
+Add adapters by subclassing [AbstractAdapter](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_adapters/base.py#L45-L161):
+
+1. Subclass `AbstractAdapter` and set the driver names and URL schemas.
+2. Implement `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
+3. Register your driver class in [registry.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_adapters/registry.py).
+
+---
+
+## 🛠️ Local Development & Testing
+
+We provide helper scripts inside the `scripts/` directory to run checks, tests, and formatting easily:
+
+*   **Run All Quality Gates**: `./scripts/check.sh` (Runs linting, typing, formatting, and unit tests).
+*   **Format Code**: `./scripts/fmt.sh` (Using Ruff).
+*   **Lint & Type Checking**: `./scripts/lint.sh` (Ruff and Mypy strict).
+*   **Unit Tests**: `./scripts/test.sh` (Pytest).
 
 ---
 
