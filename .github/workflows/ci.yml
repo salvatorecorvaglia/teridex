@@ -23,6 +23,7 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+          cache-suffix: "lint"
           python-version: "3.13"
 
       - name: Sync workspace
@@ -47,6 +48,7 @@ jobs:
         uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
+          cache-suffix: "test"
           python-version: "3.13"
 
       - name: Sync workspace
