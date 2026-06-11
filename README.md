@@ -107,7 +107,7 @@ teridex run --dsn duckdb:///:memory: "SELECT 'Hello, Teridex!' AS message"
 
 Configure Teridex via the config file located at `~/.config/teridex/config.toml`. 
 
-Refer to the [config.example.toml](file:///Users/salvatorecorvaglia/github/teridex/config.example.toml) file for available options:
+Refer to the [config.example.toml](config.example.toml) file for available options:
 
 ```toml
 [ui]
@@ -142,7 +142,7 @@ TERIDEX_UI__THEME=nord teridex tui
 
 Plugins are discovered using Python entry points registered under the `teridex.plugins` group in your package's metadata. 
 
-A plugin needs to implement the [Plugin](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_core/protocols/plugin.py#L22-L29) protocol.
+A plugin needs to implement the [Plugin](src/teridex_core/protocols/plugin.py#L22-L29) protocol.
 
 ### 1. Define the Manifest and Hooks
 
@@ -185,17 +185,17 @@ class MyPlugin:
             ctx.logger.warning("Risky query detected!", sql=sql)
 ```
 
-Refer to [api.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_plugins/api.py) and [context.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_plugins/context.py) for the complete plugin-facing API surface.
+Refer to [api.py](src/teridex_plugins/api.py) and [context.py](src/teridex_plugins/context.py) for the complete plugin-facing API surface.
 
 ---
 
 ## 🛠️ Extensibility: Custom Database Adapters
 
-Add adapters by subclassing [AbstractAdapter](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_adapters/base.py#L45-L161):
+Add adapters by subclassing [AbstractAdapter](src/teridex_adapters/base.py#L45-L161):
 
 1. Subclass `AbstractAdapter` and set the driver names and URL schemas.
 2. Implement `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
-3. Register your driver class in [registry.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_adapters/registry.py).
+3. Register your driver class in [registry.py](src/teridex_adapters/registry.py).
 
 ---
 
