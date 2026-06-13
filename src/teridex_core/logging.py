@@ -89,7 +89,7 @@ def configure_logging(
             logging.getLevelNamesMapping().get(level.upper(), logging.INFO)
         ),
         logger_factory=structlog.PrintLoggerFactory(file=stream),
-        cache_logger_on_first_use=False,
+        cache_logger_on_first_use=True,
     )
 
     logging.basicConfig(

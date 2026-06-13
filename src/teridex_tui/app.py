@@ -387,7 +387,7 @@ class TeridexApp(App[None]):
                 try:
                     async for batch in self._current_run.rows:
                         results.loading = False
-                        results.feed(batch)
+                        await results.feed(batch)
                 except QueryCancelledError:
                     cancelled = True
                     self._status().message = "[yellow]cancelled[/]"

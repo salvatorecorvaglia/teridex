@@ -82,7 +82,7 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
                 limit=None,
             )
             ranked = [id_to_cmd[key] for (_title, _score, key) in matches]
-        for cmd in ranked:
+        for cmd in ranked[:15]:
             lst.append(CommandListItem(cmd))
         self.query_one("#palette-title", Static).update(
             f"[b]Command palette[/b]  [dim]{len(ranked)}/{len(self._all)}[/]"

@@ -40,7 +40,7 @@ class ResultsTable(DataTable[str]):
         self._truncated = False
         self.border_subtitle = None
 
-    def feed(self, batch: ResultBatch) -> None:
+    async def feed(self, batch: ResultBatch) -> None:
         if not self._initialized and batch.columns:
             self._column_names = [c.name for c in batch.columns]
             for i, col in enumerate(batch.columns):
@@ -57,8 +57,15 @@ class ResultsTable(DataTable[str]):
             if len(rows) > remaining:
                 rows = rows[:remaining]
                 self._truncated = True
-        self.add_rows(tuple("" if v is None else str(v) for v in row) for row in rows)
-        self._row_count += len(rows)
+
+        import asyncio  # noqa: PLC0415
+
+        chunk_size = 200
+        for i in range(0, len(rows), chunk_size):
+            chunk = rows[i : i + chunk_size]
+            self.add_rows(tuple("" if v is None else str(v) for v in row) for row in chunk)
+            self._row_count += len(chunk)
+            await asyncio.sleep(0)
 
     def mark_done(self, *, cancelled: bool = False) -> None:
         """Summarize the run on the table border.
@@ -96,7 +103,11 @@ class ResultsTable(DataTable[str]):
         from typing import Any  # noqa: PLC0415
 
         columns = list(self._column_names)
-        rows = [tuple(self.get_row_at(i)) for i in range(self.row_count)]
+        rows: list[tuple[Any, ...]] = []
+        for i in range(self.row_count):
+            rows.append(tuple(self.get_row_at(i)))
+            if i > 0 and i % 100 == 0:
+                await asyncio.sleep(0)
 
         def _write(p: Path, cols: list[str], data: list[tuple[Any, ...]]) -> None:
             p.parent.mkdir(parents=True, exist_ok=True)

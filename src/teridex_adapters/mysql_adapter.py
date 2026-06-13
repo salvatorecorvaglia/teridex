@@ -66,6 +66,7 @@ class MySQLAdapter(AbstractAdapter):
         self._cursors: dict[str, Any] = {}
         self._thread_id: int | None = None
         self._active_query_id: str | None = None
+        self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncmy.connect(
@@ -275,22 +276,26 @@ class MySQLAdapter(AbstractAdapter):
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
-        return await _MySQLIntrospector(self, self._conn).build(lazy=lazy)
+        async with self._lock:
+            return await _MySQLIntrospector(self, self._conn).build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
-        return await _MySQLIntrospector(self, self._conn).fetch_columns(schema, name)
+        async with self._lock:
+            return await _MySQLIntrospector(self, self._conn).fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
-        return await _MySQLIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+        async with self._lock:
+            return await _MySQLIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         if self._conn is None:
             raise AdapterError("mysql: not connected")
-        return await _MySQLIntrospector(self, self._conn).fetch_indexes(schema, name)
+        async with self._lock:
+            return await _MySQLIntrospector(self, self._conn).fetch_indexes(schema, name)
 
 
 class _MySQLIntrospector(SchemaIntrospector):

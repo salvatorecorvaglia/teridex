@@ -69,6 +69,7 @@ class PostgresAdapter(AbstractAdapter):
         self._conn: asyncpg.Connection | None = None
         self._backend_pid: int | None = None
         self._active_query_id: str | None = None
+        self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
         self._conn = await asyncpg.connect(
@@ -263,22 +264,26 @@ class PostgresAdapter(AbstractAdapter):
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        return await _PostgresIntrospector(self, self._conn).build(lazy=lazy)
+        async with self._lock:
+            return await _PostgresIntrospector(self, self._conn).build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        return await _PostgresIntrospector(self, self._conn).fetch_columns(schema, name)
+        async with self._lock:
+            return await _PostgresIntrospector(self, self._conn).fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        return await _PostgresIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+        async with self._lock:
+            return await _PostgresIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         if self._conn is None:
             raise AdapterError("postgres: not connected")
-        return await _PostgresIntrospector(self, self._conn).fetch_indexes(schema, name)
+        async with self._lock:
+            return await _PostgresIntrospector(self, self._conn).fetch_indexes(schema, name)
 
 
 class _PostgresIntrospector(SchemaIntrospector):
