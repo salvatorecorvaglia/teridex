@@ -7,9 +7,12 @@ name = "teridex"
 version = "0.2.0"
 description = "A terminal-native database IDE. Keyboard-first, async, pluggable."
 readme = "README.md"
-requires-python = ">=3.13"
 license = { text = "MIT" }
-authors = [{ name = "Salvatore Corvaglia" }]
+requires-python = ">=3.13"
+authors = [
+    {name = "Salvatore Corvaglia"},
+]
+
 dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
@@ -38,6 +41,10 @@ all = [
 
 [project.scripts]
 teridex = "teridex_cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/salvatorecorvaglia/teridex"
+Documentation = "https://github.com/salvatorecorvaglia/teridex#readme"
 
 [dependency-groups]
 dev = [
