@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "teridex"
-version = "0.2.0"
+version = "0.2.1"
 description = "A terminal-native database IDE. Keyboard-first, async, pluggable."
 readme = "README.md"
 license = { text = "MIT" }
