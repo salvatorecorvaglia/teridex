@@ -30,13 +30,13 @@ dependencies = [
 duckdb = ["duckdb>=1.1"]
 sqlite = ["aiosqlite>=0.20"]
 postgres = ["asyncpg>=0.29"]
-mysql = ["asyncmy2>=0.2.20", "cryptography>=42.0"]
+mysql = ["asyncmy2>=0.2.20", "cryptography>=48.0.1"]
 all = [
     "duckdb>=1.1",
     "aiosqlite>=0.20",
     "asyncpg>=0.29",
     "asyncmy2>=0.2.20",
-    "cryptography>=42.0",
+    "cryptography>=48.0.1",
 ]
 
 [project.scripts]
