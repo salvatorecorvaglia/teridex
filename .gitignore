@@ -1,4 +1,4 @@
-# ── OS / System ──────────────────────────────────────────────────────
+# OS / System
 .DS_Store
 .DS_Store?
 ._*
@@ -8,7 +8,7 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# ── IDEs and Editors ────────────────────────────────────────────────
+# IDEs and Editors
 .vscode/
 .idea/
 *.swp
@@ -18,14 +18,14 @@ desktop.ini
 *.sublime-project
 *.sublime-workspace
 
-# ── Python bytecode / runtime ───────────────────────────────────────
+# Python bytecode / runtime
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 
-# ── Distribution / Packaging ───────────────────────────────────────
+# Distribution / Packaging
 build/
 develop-eggs/
 dist/
@@ -44,14 +44,14 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# ── Virtual Environments and uv ────────────────────────────────────
+# Virtual Environments and uv
 .venv/
 venv/
 env/
 .uv-cache/
 pip-wheel-metadata/
 
-# ── Linting / Type-checking / Testing ──────────────────────────────
+# Linting / Type-checking / Testing
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
@@ -62,17 +62,17 @@ pip-wheel-metadata/
 dmypy.json
 .pre-commit-cache/
 
-# ── Coverage ────────────────────────────────────────────────────────
+# Coverage
 .coverage
 .coverage.*
 htmlcov/
 coverage.xml
 *.cover
 
-# ── Jupyter / Notebooks ────────────────────────────────────────────
+# Jupyter / Notebooks
 .ipynb_checkpoints/
 
-# ── Environment / Secrets ──────────────────────────────────────────
+# Environment / Secrets
 .env
 .env.*
 !.env.example
@@ -80,10 +80,10 @@ coverage.xml
 config.toml
 !config.example.toml
 
-# ── Docker (local overrides) ───────────────────────────────────────
+# Docker (local overrides)
 docker-compose.override.yml
 
-# ── Teridex (project-specific) ─────────────────────────────────────
+# Teridex (project-specific)
 *.db
 *.sqlite
 *.sqlite3
@@ -93,7 +93,7 @@ teridex.log
 .teridex/
 scratch/
 
-# ── AI Tools ────────────────────────────────────────────────────────
+# AI Tools
 .openai/
 .chatgpt/
 gpt-config.json
@@ -105,6 +105,6 @@ claude-settings.json
 .prompts/
 .prompt-cache/
 .ai/
-.antigravitycli/
 .gemini/
+.antigravitycli/
 CLAUDE.md
