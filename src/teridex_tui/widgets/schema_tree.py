@@ -90,6 +90,7 @@ class SchemaTree(Tree[object]):
                     if status is not None:
                         with contextlib.suppress(Exception):
                             status().message = f"[red]Failed to introspect {obj.name}: {exc}[/]"
+                    return
 
         self._fill_object_node(node, obj)
         self._populated.add(id(node))

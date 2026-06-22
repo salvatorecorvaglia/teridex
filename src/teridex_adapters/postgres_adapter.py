@@ -72,13 +72,7 @@ class PostgresAdapter(AbstractAdapter):
         self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
-        self._conn = await asyncpg.connect(
-            user=dsn.username,
-            password=dsn.password,
-            host=dsn.host or "localhost",
-            port=dsn.port or 5432,
-            database=dsn.database,
-        )
+        self._conn = await asyncpg.connect(dsn.render(mask_password=False))
         self._backend_pid = await self._conn.fetchval("SELECT pg_backend_pid()")
 
     async def _do_close(self) -> None:
@@ -124,14 +118,25 @@ class PostgresAdapter(AbstractAdapter):
         cancel = self._cancel_event(handle)
         conn = self._conn
 
-        # Convert dict parameters to positional list for asyncpg
+        # Convert dict parameters to positional list for asyncpg.
+        # Postgres uses $1, $2... placeholders, so keys must be stringified positive integers.
+        # We construct a list where args[i] corresponds to $(i+1).
         args = []
         if handle.params:
             try:
-                sorted_keys = sorted(handle.params.keys(), key=int)
-                args = [handle.params[k] for k in sorted_keys]
-            except ValueError:
-                args = list(handle.params.values())
+                keys = [int(k) for k in handle.params]
+                if any(k <= 0 for k in keys):
+                    raise ValueError("Placeholder indices must be positive integers >= 1")
+                max_key = max(keys) if keys else 0
+                args = [None] * max_key
+                for k, v in handle.params.items():
+                    args[int(k) - 1] = v
+            except ValueError as exc:
+                raise QueryError(
+                    "postgres: invalid parameters. Parameters must be a dictionary "
+                    "with stringified integer keys corresponding to $1, $2, etc.",
+                    context={"sql": sql, "params": handle.params},
+                ) from exc
 
         async def _gen() -> AsyncIterator[ResultBatch]:
             try:
@@ -224,13 +229,7 @@ class PostgresAdapter(AbstractAdapter):
         dsn = self._dsn
         try:
             side = await asyncio.wait_for(
-                asyncpg.connect(
-                    user=dsn.username,
-                    password=dsn.password,
-                    host=dsn.host or "localhost",
-                    port=dsn.port or 5432,
-                    database=dsn.database,
-                ),
+                asyncpg.connect(dsn.render(mask_password=False)),
                 timeout=5.0,
             )
         except (asyncpg.PostgresError, OSError, TimeoutError) as exc:

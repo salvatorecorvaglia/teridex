@@ -69,14 +69,26 @@ class MySQLAdapter(AbstractAdapter):
         self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
-        self._conn = await asyncmy.connect(
-            user=dsn.username or "root",
-            password=dsn.password or "",
-            host=dsn.host or "localhost",
-            port=dsn.port or 3306,
-            database=dsn.database,
-            autocommit=True,
-        )
+        conn_kwargs: dict[str, Any] = {
+            "user": dsn.username or "root",
+            "password": dsn.password or "",
+            "host": dsn.host or "localhost",
+            "port": dsn.port or 3306,
+            "database": dsn.database,
+            "autocommit": True,
+        }
+        for k, v in dsn.params.items():
+            if k == "port":
+                continue
+            if v.lower() == "true":
+                conn_kwargs[k] = True
+            elif v.lower() == "false":
+                conn_kwargs[k] = False
+            elif v.isdigit():
+                conn_kwargs[k] = int(v)
+            else:
+                conn_kwargs[k] = v
+        self._conn = await asyncmy.connect(**conn_kwargs)
         cur = self._conn.cursor()
         try:
             await cur.execute("SELECT CONNECTION_ID()")
@@ -106,15 +118,27 @@ class MySQLAdapter(AbstractAdapter):
         if self._thread_id is not None and self._dsn is not None:
             dsn = self._dsn
             try:
+                side_kwargs: dict[str, Any] = {
+                    "user": dsn.username or "root",
+                    "password": dsn.password or "",
+                    "host": dsn.host or "localhost",
+                    "port": dsn.port or 3306,
+                    "database": dsn.database,
+                    "autocommit": True,
+                }
+                for k, v in dsn.params.items():
+                    if k == "port":
+                        continue
+                    if v.lower() == "true":
+                        side_kwargs[k] = True
+                    elif v.lower() == "false":
+                        side_kwargs[k] = False
+                    elif v.isdigit():
+                        side_kwargs[k] = int(v)
+                    else:
+                        side_kwargs[k] = v
                 side = await asyncio.wait_for(
-                    asyncmy.connect(
-                        user=dsn.username or "root",
-                        password=dsn.password or "",
-                        host=dsn.host or "localhost",
-                        port=dsn.port or 3306,
-                        database=dsn.database,
-                        autocommit=True,
-                    ),
+                    asyncmy.connect(**side_kwargs),
                     timeout=5.0,
                 )
                 try:

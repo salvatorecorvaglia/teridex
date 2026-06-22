@@ -118,7 +118,7 @@ class TeridexApp(App[None]):
         self._status().mode = "VIM" if self.cfg.ui.keymap == "vim" else "NORMAL"
         # Wire ActionBar limit from config
         with contextlib.suppress(Exception):
-            self._action_bar().limit = self.cfg.ui.max_display_rows or 500
+            self._action_bar().limit = self.cfg.ui.max_display_rows
         if self._initial_dsn is not None:
             self.run_worker(self._connect(self._initial_dsn))
         else:

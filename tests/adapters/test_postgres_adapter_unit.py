@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("asyncpg")
 
 from teridex_adapters.postgres_adapter import PostgresAdapter
+from teridex_core.errors import QueryError
 from teridex_core.models.query import QueryHandle
 
 
@@ -64,3 +65,53 @@ async def test_postgres_adapter_parameters_and_classification() -> None:
     assert batches_dql[0].columns[0].name == "id"
     assert batches_dql[0].rows == [(42,)]
     stmt_mock_dql.cursor.assert_called_once_with("Bob")
+
+
+@pytest.mark.asyncio
+async def test_postgres_adapter_invalid_parameters() -> None:
+    adapter = PostgresAdapter()
+    adapter._conn = MagicMock()
+
+    # Test named parameter key (ValueError from int() parsing) raises QueryError
+    handle = QueryHandle(
+        connection_id="test",
+        sql="SELECT * FROM t WHERE name = $1",
+        params={"name": "Alice"},
+    )
+    with pytest.raises(QueryError) as exc_info:
+        await adapter.stream(handle)
+    assert "postgres: invalid parameters" in str(exc_info.value)
+
+    # Test non-positive integer raises QueryError
+    handle_neg = QueryHandle(
+        connection_id="test",
+        sql="SELECT * FROM t WHERE name = $1",
+        params={"-1": "Alice"},
+    )
+    with pytest.raises(QueryError) as exc_info:
+        await adapter.stream(handle_neg)
+    assert "postgres: invalid parameters" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_postgres_adapter_parameter_gaps() -> None:
+    adapter = PostgresAdapter()
+    adapter._conn = MagicMock()
+
+    stmt_mock = MagicMock()
+    stmt_mock.get_attributes.return_value = []
+    stmt_mock.fetch = AsyncMock(return_value=[])
+    stmt_mock.get_statusmsg = MagicMock(return_value="SELECT 1")
+    adapter._conn.prepare = AsyncMock(return_value=stmt_mock)
+
+    # Test gaps in parameters (e.g. only $2 is specified)
+    handle = QueryHandle(
+        connection_id="test",
+        sql="SELECT * FROM t WHERE name = $2",
+        params={"2": "Alice"},
+    )
+    batches = []
+    async for batch in await adapter.stream(handle):
+        batches.append(batch)
+
+    stmt_mock.fetch.assert_called_once_with(None, "Alice")

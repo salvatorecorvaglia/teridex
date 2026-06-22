@@ -56,3 +56,38 @@ async def test_recent_skips_rows_with_corrupt_timestamp(tmp_path: Path) -> None:
         assert await h.recent(limit=10) == []
     finally:
         await h.close()
+
+
+@pytest.mark.asyncio
+async def test_history_trim_commits_on_open(tmp_path: Path) -> None:
+    db_path = tmp_path / "trim_test.db"
+
+    # 1. Open with large retention limit and write 5 entries
+    h = QueryHistory(db_path, max_entries=10)
+    await h.open()
+    try:
+        for i in range(5):
+            await h.add(
+                HistoryEntry(
+                    query_id=f"q{i}",
+                    connection_label="sqlite:///:memory:",
+                    sql=f"SELECT {i}",
+                    status="succeeded",
+                )
+            )
+    finally:
+        await h.close()
+
+    # 2. Re-open with smaller retention limit (3) to trigger trim, then close immediately
+    h2 = QueryHistory(db_path, max_entries=3)
+    await h2.open()
+    await h2.close()  # _inserts_since_trim is 0, so close() won't trim/commit again
+
+    # 3. Verify trim was committed
+    h3 = QueryHistory(db_path, max_entries=10)
+    await h3.open()
+    try:
+        recent = await h3.recent(limit=10)
+        assert len(recent) == 3
+    finally:
+        await h3.close()

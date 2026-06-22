@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-22
+
+### Added
+
+- Support for passing custom database connection parameters/options from DSN query strings (e.g., config, timeout, cache) to DuckDB, MySQL, and SQLite adapters.
+- TUI Help Modal notes clarifying the Vim keybindings applicability (applies to global panel navigation, query editor remains in standard insert mode).
+
+### Changed
+
+- PostgreSQL adapter now utilizes standard DSN string rendering and validates parameters strictly, raising a structured `QueryError` on invalid parameter keys or gaps.
+- Dockerfile updated to copy the unified `src/` directory and `README.md` file rather than legacy monorepo package folders.
+- TUI Action Bar default transaction mode renamed from "Auto" to "Auto-Commit".
+- TUI Action Bar limit displays "Limit Unlimited" when limit is configured to 0.
+- Cleaned up unused `Theme.as_variables()` helper in the base TUI theme.
+
+### Fixed
+
+- Retention trim operations in `QueryHistory` are now committed immediately during engine database open.
+- Schema tree introspection failures do not mark nodes as populated, allowing users to collapse/expand to retry introspecting failed objects.
+
 ## [0.2.1] - 2026-06-20
 
 ### Changed

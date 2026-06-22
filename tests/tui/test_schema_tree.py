@@ -97,3 +97,58 @@ async def test_re_expansion_does_not_duplicate() -> None:
         # Expect exactly one "columns" subnode after re-expansion.
         column_headers = [c for c in users_node.children if str(c.label) == "columns"]
         assert len(column_headers) == 1
+
+
+@pytest.mark.asyncio
+async def test_introspection_retry_on_failure() -> None:
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        tree = app.query_one(SchemaTree)
+
+        # Prepare a table object that does not have columns initially loaded
+        table_lazy = Table(name="lazy_table", schema_name="main", columns=[])
+        snap = SchemaSnapshot(connection_id="x", database="demo", schemas={"main": [table_lazy]})
+        tree.populate(snap)
+        await pilot.pause()
+
+        # Mock introspector to raise exception first time
+        introspector = app.state.introspector
+        assert introspector is not None
+
+        call_count = 0
+
+        async def mock_fetch(schema: str, name: str) -> list[TableColumn]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("Temporary DB Error")
+            return [
+                TableColumn(name="id", type_native="INTEGER", type=ColumnType.INTEGER, ordinal=0)
+            ]
+
+        introspector.fetch_columns = mock_fetch
+
+        # Find the lazy_table node
+        lazy_node = next(
+            n for n in tree.root.children[0].children[0].children if str(n.label) == "lazy_table"
+        )
+
+        # 1. Expand first time - fails and catches error
+        lazy_node.expand()
+        await pilot.pause()
+
+        # Node must not be in _populated
+        assert id(lazy_node) not in tree._populated
+        assert len(lazy_node.children) == 0
+
+        # 2. Collapse and expand again - succeeds
+        lazy_node.collapse()
+        lazy_node.expand()
+        await pilot.pause()
+
+        # Node must be in _populated and columns subnode created
+        assert id(lazy_node) in tree._populated
+        assert len(lazy_node.children) > 0
+        assert any(str(c.label) == "columns" for c in lazy_node.children)

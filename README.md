@@ -27,12 +27,12 @@ Teridex follows a clean, layered architecture with strict dependency boundaries:
 
 ```mermaid
 graph TD
-    core["teridex-core (Pure Domain)"]
-    adapters["teridex-adapters (DB Drivers)"]
-    plugins["teridex-plugins (Plugin API)"]
-    engine["teridex-engine (Orchestration)"]
-    tui["teridex-tui (Textual TUI)"]
-    cli["teridex-cli (Typer CLI)"]
+    core["teridex_core (Pure Domain)"]
+    adapters["teridex_adapters (DB Drivers)"]
+    plugins["teridex_plugins (Plugin API)"]
+    engine["teridex_engine (Orchestration)"]
+    tui["teridex_tui (Textual TUI)"]
+    cli["teridex_cli (Typer CLI)"]
 
     adapters --> core
     plugins --> core

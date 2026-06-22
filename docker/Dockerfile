@@ -16,9 +16,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
  && ln -s /root/.local/bin/uv /usr/local/bin/uv
 
 WORKDIR /src
-COPY pyproject.toml uv.lock* ./
-COPY packages ./packages
-COPY apps ./apps
+COPY pyproject.toml uv.lock* README.md ./
+COPY src ./src
 
 # Fail loud if uv.lock is stale rather than silently regenerating it — the
 # lock file is committed and the image must build from exactly those pins.

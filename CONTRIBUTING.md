@@ -50,12 +50,12 @@ Teridex follows a clean, layered architecture with strict dependency boundaries:
 
 ```mermaid
 graph TD
-    core["teridex-core (Pure Domain)"]
-    adapters["teridex-adapters (DB Drivers)"]
-    plugins["teridex-plugins (Plugin API)"]
-    engine["teridex-engine (Orchestration)"]
-    tui["teridex-tui (Textual TUI)"]
-    cli["teridex-cli (Typer CLI)"]
+    core["teridex_core (Pure Domain)"]
+    adapters["teridex_adapters (DB Drivers)"]
+    plugins["teridex_plugins (Plugin API)"]
+    engine["teridex_engine (Orchestration)"]
+    tui["teridex_tui (Textual TUI)"]
+    cli["teridex_cli (Typer CLI)"]
 
     adapters --> core
     plugins --> core
@@ -66,7 +66,7 @@ graph TD
 ```
 
 > [!IMPORTANT]
-> **Layering Rule**: Inner packages must never depend on outer packages. Specifically, `teridex_core` must depend on zero internal packages. Outer packages (like `teridex-tui` and `teridex-cli`) may depend on inner packages, but never vice versa. This boundary is strictly enforced by `mypy --strict`.
+> **Layering Rule**: Inner packages must never depend on outer packages. Specifically, `teridex_core` must depend on zero internal packages. Outer packages (like `teridex_tui` and `teridex_cli`) may depend on inner packages, but never vice versa. This boundary is strictly enforced by `mypy --strict`.
 
 ---
 
@@ -108,10 +108,10 @@ To maintain predictability, performance, and robustness, all code submissions mu
 
 If you are implementing support for a new database, follow these steps:
 
-1.  Create a subclass of `AbstractAdapter` in `packages/teridex-adapters/src/teridex_adapters/<name>_adapter.py`.
+1.  Create a subclass of `AbstractAdapter` in `src/teridex_adapters/<name>_adapter.py`.
 2.  Define the class variables `name: ClassVar[str]` and `schemes: ClassVar[tuple[str, ...]]`.
 3.  Implement the required methods: `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
-4.  Register your new adapter class in `teridex_adapters/registry.py::_build_default`.
+4.  Register your new adapter class in `src/teridex_adapters/registry.py::_build_default`.
 5.  Add a parametrized conformance test under `tests/adapters/` using the shared scenarios in `tests/adapters/_conformance.py`.
 
 ---

@@ -8,9 +8,9 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
-from textual.widgets import ListView  # noqa: E402
+from textual.widgets import ListView, Static  # noqa: E402
 
-from teridex_core.config import TeridexConfig  # noqa: E402
+from teridex_core.config import TeridexConfig, UIConfig  # noqa: E402
 from teridex_core.models.connection import Dsn  # noqa: E402
 from teridex_core.protocols.plugin import PluginManifest  # noqa: E402
 from teridex_plugins.api import Command  # noqa: E402
@@ -136,3 +136,13 @@ async def test_command_palette_invokes_with_correct_plugin_context() -> None:
         # Check if resolved context matches the plugin context
         assert resolved_context is not None
         assert resolved_context.plugin_id == "custom_cmd_plugin"
+
+
+@pytest.mark.asyncio
+async def test_action_bar_unlimited_limit_label() -> None:
+    config = TeridexConfig(ui=UIConfig(max_display_rows=0))
+    app = TeridexApp(config=config)
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        limit_label = app.query_one("#limit-label", Static)
+        assert "Limit Unlimited" in str(limit_label.render())

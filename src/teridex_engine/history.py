@@ -68,6 +68,7 @@ class QueryHistory:
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()
         await self._trim()
+        await self._conn.commit()
 
     async def close(self) -> None:
         if self._conn is not None:

@@ -16,15 +16,3 @@ class Theme:
     success: str
     warning: str
     error: str
-
-    def as_variables(self) -> dict[str, str]:
-        return {
-            "background": self.background,
-            "foreground": self.foreground,
-            "surface": self.surface,
-            "primary": self.primary,
-            "accent": self.accent,
-            "success": self.success,
-            "warning": self.warning,
-            "error": self.error,
-        }

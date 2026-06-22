@@ -19,7 +19,7 @@ class ActionBar(Static):
     DEFAULT_CSS = ""
 
     limit: reactive[int] = reactive(500)
-    tx_mode: reactive[str] = reactive("Auto")
+    tx_mode: reactive[str] = reactive("Auto-Commit")
     connection_status: reactive[str] = reactive("Disconnected.")
 
     def __init__(self) -> None:
@@ -32,7 +32,8 @@ class ActionBar(Static):
 
     def watch_limit(self, value: int) -> None:
         with contextlib.suppress(Exception):
-            self.query_one("#limit-label", Static).update(f"Limit {value}")
+            limit_str = "Unlimited" if value == 0 else str(value)
+            self.query_one("#limit-label", Static).update(f"Limit {limit_str}")
 
     def watch_tx_mode(self, value: str) -> None:
         with contextlib.suppress(Exception):

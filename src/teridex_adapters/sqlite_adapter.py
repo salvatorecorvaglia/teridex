@@ -66,7 +66,17 @@ class SQLiteAdapter(AbstractAdapter):
 
     async def _do_connect(self, dsn: Dsn) -> None:
         path = dsn.database or ":memory:"
-        self._conn = await aiosqlite.connect(path, isolation_level=None)
+        conn_kwargs: dict[str, Any] = {"isolation_level": None}
+        for k, v in dsn.params.items():
+            if v.lower() == "true":
+                conn_kwargs[k] = True
+            elif v.lower() == "false":
+                conn_kwargs[k] = False
+            elif v.isdigit():
+                conn_kwargs[k] = int(v)
+            else:
+                conn_kwargs[k] = v
+        self._conn = await aiosqlite.connect(path, **conn_kwargs)
         # WAL mode is fine on file dbs, no-op on memory.
         if path != ":memory:":
             with contextlib.suppress(aiosqlite.Error):

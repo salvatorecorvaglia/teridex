@@ -20,6 +20,14 @@ class HelpModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="HelpModal"):
             yield Static("[b]Teridex — Keybindings[/]\n", id="help-title")
+            cfg = getattr(self.app, "cfg", None)
+            if cfg is not None and getattr(cfg.ui, "keymap", "default") == "vim":
+                yield Static(
+                    "[yellow]Note: Vim mode applies to global/panel navigation controls "
+                    "(e.g., j/k in list views, G/gg in panels). The query editor itself "
+                    "remains in standard insert mode.[/]\n",
+                    id="help-vim-note",
+                )
             yield Static(self._render_bindings(), id="help-bindings")
             yield Static("\n[dim](press escape to close)[/]", id="help-hint")
 

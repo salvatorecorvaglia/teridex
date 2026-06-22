@@ -68,7 +68,15 @@ class DuckDBAdapter(AbstractAdapter):
     async def _do_connect(self, dsn: Dsn) -> None:
         path = dsn.database or ":memory:"
         # duckdb.connect is sync; wrap.
-        self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=False)
+        config: dict[str, str | bool | int | float | list[str]] | None = None
+        if dsn.params:
+            config = dict(dsn.params)
+        if config is not None:
+            self._conn = await asyncio.to_thread(
+                duckdb.connect, path, read_only=False, config=config
+            )
+        else:
+            self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=False)
 
     async def _do_close(self) -> None:
         if self._conn is not None:
