@@ -197,3 +197,11 @@ class PluginLoader:
             ctx.close()
         self._registry.remove_plugin(plugin_id)
         self._bus.publish(PluginUnloaded(plugin_id=plugin_id))
+
+    def unload_all(self) -> None:
+        """Unload all currently loaded plugins."""
+        import contextlib  # noqa: PLC0415
+
+        for plugin_id in list(self._instances.keys()):
+            with contextlib.suppress(Exception):
+                self.unload(plugin_id)

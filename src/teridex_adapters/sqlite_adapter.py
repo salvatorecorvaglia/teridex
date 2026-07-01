@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiosqlite
@@ -274,17 +275,29 @@ class _SQLiteIntrospector(SchemaIntrospector):
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         async with self._conn.execute(f"PRAGMA foreign_key_list({_quote_ident(name)})") as fcur:
             rows = await fcur.fetchall()
-        return [
-            ForeignKey(
-                name=f"fk_{name}_{fk_id}",
-                columns=[fcol],
-                referenced_table=ref_table,
-                referenced_columns=[tcol],
-                on_delete=on_delete,
-                on_update=on_update,
+        grouped = defaultdict(list)
+        for fk_id, seq, ref_table, fcol, tcol, on_update, on_delete, _match in rows:
+            grouped[fk_id].append((seq, ref_table, fcol, tcol, on_update, on_delete))
+
+        fks = []
+        for fk_id, parts in sorted(grouped.items()):
+            parts.sort(key=lambda x: x[0])
+            ref_table = parts[0][1]
+            on_update = parts[0][4]
+            on_delete = parts[0][5]
+            cols = [p[2] for p in parts]
+            ref_cols = [p[3] for p in parts]
+            fks.append(
+                ForeignKey(
+                    name=f"fk_{name}_{fk_id}",
+                    columns=cols,
+                    referenced_table=ref_table,
+                    referenced_columns=ref_cols,
+                    on_delete=on_delete,
+                    on_update=on_update,
+                )
             )
-            for fk_id, _seq, ref_table, fcol, tcol, on_update, on_delete, _match in rows
-        ]
+        return fks
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         async with self._conn.execute(f"PRAGMA index_list({_quote_ident(name)})") as icur:

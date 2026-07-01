@@ -215,10 +215,16 @@ class DuckDBAdapter(AbstractAdapter):
         return await introspector.fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        return []
+        if self._conn is None:
+            raise AdapterError("duckdb: not connected")
+        introspector = _DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        return await introspector.fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        return []
+        if self._conn is None:
+            raise AdapterError("duckdb: not connected")
+        introspector = _DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        return await introspector.fetch_indexes(schema, name)
 
 
 class _DuckDBIntrospector(SchemaIntrospector):
@@ -301,6 +307,56 @@ class _DuckDBIntrospector(SchemaIntrospector):
                 )
                 for c in cols
             ]
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)
+
+    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
+        conn = self._conn
+
+        def _fetch() -> list[ForeignKey]:
+            rows = conn.execute(
+                "SELECT constraint_name, constraint_column_names, "
+                "referenced_table, referenced_column_names "
+                "FROM duckdb_constraints() "
+                "WHERE schema_name = ? AND table_name = ? AND constraint_type = 'FOREIGN KEY'",
+                [schema, name],
+            ).fetchall()
+            return [
+                ForeignKey(
+                    name=row[0] or f"fk_{name}_{i}",
+                    columns=list(row[1]),
+                    referenced_table=row[2],
+                    referenced_columns=list(row[3]),
+                )
+                for i, row in enumerate(rows)
+            ]
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)
+
+    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        conn = self._conn
+
+        def _fetch() -> list[Index]:
+            rows = conn.execute(
+                "SELECT index_name, expressions, is_unique, is_primary "
+                "FROM duckdb_indexes() "
+                "WHERE schema_name = ? AND table_name = ?",
+                [schema, name],
+            ).fetchall()
+            indexes = []
+            for idx_name, exprs, is_uniq, is_pri in rows:
+                cols = [c.strip() for c in exprs.strip("[]").split(",") if c.strip()]
+                indexes.append(
+                    Index(
+                        name=idx_name,
+                        columns=cols,
+                        unique=bool(is_uniq),
+                        primary=bool(is_pri),
+                    )
+                )
+            return indexes
 
         async with self._lock:
             return await asyncio.to_thread(_fetch)

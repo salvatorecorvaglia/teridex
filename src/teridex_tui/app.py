@@ -129,6 +129,10 @@ class TeridexApp(App[None]):
             self._palette_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._palette_task
+        loader = getattr(self, "_loader", None)
+        if loader is not None:
+            with contextlib.suppress(Exception):
+                loader.unload_all()
         if self.state.history is not None:
             await self.state.history.close()
         if self.state.pool is not None:

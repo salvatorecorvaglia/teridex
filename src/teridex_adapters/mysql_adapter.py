@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncmy
@@ -71,7 +72,7 @@ class MySQLAdapter(AbstractAdapter):
     async def _do_connect(self, dsn: Dsn) -> None:
         conn_kwargs: dict[str, Any] = {
             "user": dsn.username or "root",
-            "password": dsn.password or "",
+            "password": dsn.password.get_secret_value() if dsn.password else "",
             "host": dsn.host or "localhost",
             "port": dsn.port or 3306,
             "database": dsn.database,
@@ -120,7 +121,7 @@ class MySQLAdapter(AbstractAdapter):
             try:
                 side_kwargs: dict[str, Any] = {
                     "user": dsn.username or "root",
-                    "password": dsn.password or "",
+                    "password": dsn.password.get_secret_value() if dsn.password else "",
                     "host": dsn.host or "localhost",
                     "port": dsn.port or 3306,
                     "database": dsn.database,
@@ -373,20 +374,31 @@ class _MySQLIntrospector(SchemaIntrospector):
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         rows = await self._fetch(
             "SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME,"
-            " REFERENCED_COLUMN_NAME FROM information_schema.key_column_usage"
+            " REFERENCED_COLUMN_NAME, ORDINAL_POSITION FROM information_schema.key_column_usage"
             " WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s"
-            " AND REFERENCED_TABLE_NAME IS NOT NULL",
+            " AND REFERENCED_TABLE_NAME IS NOT NULL"
+            " ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION",
             (schema, name),
         )
-        return [
-            ForeignKey(
-                name=cn,
-                columns=[col],
-                referenced_table=ref_t,
-                referenced_columns=[ref_c],
+        grouped = defaultdict(list)
+        for cn, col, ref_t, ref_c, ord_pos in rows:
+            grouped[cn].append((ord_pos, col, ref_t, ref_c))
+
+        fks = []
+        for cn, parts in sorted(grouped.items()):
+            parts.sort(key=lambda x: x[0])
+            ref_t = parts[0][2]
+            cols = [p[1] for p in parts]
+            ref_cols = [p[3] for p in parts]
+            fks.append(
+                ForeignKey(
+                    name=cn,
+                    columns=cols,
+                    referenced_table=ref_t,
+                    referenced_columns=ref_cols,
+                )
             )
-            for cn, col, ref_t, ref_c in rows
-        ]
+        return fks
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         rows = await self._fetch(

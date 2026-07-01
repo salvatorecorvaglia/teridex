@@ -7,7 +7,7 @@ from typing import Literal
 from urllib.parse import parse_qsl, quote, unquote, urlparse
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from teridex_core.errors import ConfigError
 
@@ -27,7 +27,7 @@ class Dsn(BaseModel):
 
     scheme: str
     username: str | None = None
-    password: str | None = None
+    password: SecretStr | None = None
     host: str | None = None
     port: int | None = None
     database: str | None = None
@@ -65,7 +65,7 @@ class Dsn(BaseModel):
         return cls(
             scheme=parsed.scheme.lower(),
             username=unquote(parsed.username) if parsed.username else None,
-            password=unquote(parsed.password) if parsed.password else None,
+            password=SecretStr(unquote(parsed.password)) if parsed.password else None,
             host=parsed.hostname,
             port=parsed.port,
             database=database,
@@ -77,7 +77,9 @@ class Dsn(BaseModel):
         if self.username:
             userinfo = quote(self.username, safe="")
             if self.password:
-                userinfo += ":" + ("***" if mask_password else quote(self.password, safe=""))
+                userinfo += ":" + (
+                    "***" if mask_password else quote(self.password.get_secret_value(), safe="")
+                )
             userinfo += "@"
         host = self.host or ""
         port = f":{self.port}" if self.port else ""

@@ -82,11 +82,13 @@ class QueryExecutor:
         started = time.perf_counter()
         try:
             handle = await self._adapter.execute(sql, params)
-        except QueryError as exc:
+        except Exception as exc:
             self._bus.publish(
                 QueryFailed(
                     query_id="-",
-                    error_code=getattr(exc, "code", "teridex.query"),
+                    error_code=getattr(exc, "code", "teridex.query.unexpected")
+                    if isinstance(exc, QueryError)
+                    else "teridex.query.unexpected",
                     message=str(exc),
                 )
             )
@@ -139,11 +141,13 @@ class QueryExecutor:
             except QueryCancelledError:
                 self._bus.publish(QueryCancelled(query_id=handle.query_id))
                 raise
-            except QueryError as exc:
+            except Exception as exc:
                 self._bus.publish(
                     QueryFailed(
                         query_id=handle.query_id,
-                        error_code=getattr(exc, "code", "teridex.query"),
+                        error_code=getattr(exc, "code", "teridex.query.unexpected")
+                        if isinstance(exc, QueryError)
+                        else "teridex.query.unexpected",
                         message=str(exc),
                     )
                 )

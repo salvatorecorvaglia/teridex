@@ -18,7 +18,8 @@ def test_dsn_parse_postgres() -> None:
     d = Dsn.parse("postgres://user:pw@localhost:5432/mydb?sslmode=require")
     assert d.scheme == "postgres"
     assert d.username == "user"
-    assert d.password == "pw"
+    assert d.password is not None
+    assert d.password.get_secret_value() == "pw"
     assert d.host == "localhost"
     assert d.port == 5432
     assert d.database == "mydb"
