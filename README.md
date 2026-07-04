@@ -207,6 +207,8 @@ We provide helper scripts inside the `scripts/` directory to run checks, tests, 
 *   **Format Code**: `./scripts/fmt.sh` (Using Ruff).
 *   **Lint & Type Checking**: `./scripts/lint.sh` (Ruff and Mypy strict).
 *   **Unit Tests**: `./scripts/test.sh` (Pytest).
+*   **Integration Tests**: `TERIDEX_TEST_MARKERS=integration ./scripts/test.sh` (using `testcontainers` if Docker is running).
+
 
 ---
 

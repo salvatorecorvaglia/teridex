@@ -35,8 +35,9 @@ We provide utility scripts inside the `scripts/` directory to run formatting, ty
 | **Format & Autofix** | `./scripts/fmt.sh` | Formats Python code and autofixes auto-resolvable lint issues. |
 | **Lint & Type Check** | `./scripts/lint.sh` | Performs formatting checks, Ruff lint checks, and strict Mypy checks. |
 | **Unit Tests** | `./scripts/test.sh` | Runs the offline test suite and outputs terminal coverage. |
-| **Start Docker DBs** | `docker compose -f docker/docker-compose.yml up -d` | Spins up PostgreSQL and MySQL instances for integration tests. |
-| **Integration Tests** | `TERIDEX_PG_DSN=... TERIDEX_MYSQL_DSN=... TERIDEX_TEST_MARKERS=integration ./scripts/test.sh` | Executes integration test suite against the Docker DB instances. |
+| **Start Docker DBs** | `docker compose -f docker/docker-compose.yml up -d` | Spins up local PostgreSQL and MySQL instances. |
+| **Integration Tests** | `TERIDEX_TEST_MARKERS=integration ./scripts/test.sh` | Executes integration tests. Automatically spins up containerized DBs via `testcontainers` if Docker is running, or uses manual instances if `TERIDEX_PG_DSN` / `TERIDEX_MYSQL_DSN` are set. |
+
 
 > [!TIP]
 > The `./scripts/check.sh` script forwards additional arguments directly to `pytest`.

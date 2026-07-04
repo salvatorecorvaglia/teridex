@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-04
+
+### Added
+
+- Support for introspecting foreign keys and indexes in the DuckDB adapter.
+- Dynamic categorization of keybindings in the TUI Help Modal, separating global panel navigation from Vim navigation bindings depending on the active keymap mode.
+- Implementation of a global `PluginLoader.unload_all()` helper to safely and cleanly unload all active plugins.
+- Containerized integration tests using `testcontainers` for PostgreSQL and MySQL adapters, running automatically if a local Docker daemon is active.
+
+### Changed
+
+- Dsn connection model password field is now typed as `SecretStr` (using Pydantic's `SecretStr`) to prevent credentials from being accidentally serialized, printed, or logged in plaintext.
+- Schema introspection for MySQL and SQLite adapters improved to correctly support and group multi-column (composite) foreign keys.
+
+### Fixed
+
+- Query execution failure handling now catches all base exceptions (rather than just adapter-specific `QueryError`s) and wraps them as structured query failures with a proper `teridex.query.unexpected` error code.
+
+
 ## [0.3.0] - 2026-06-22
 
 ### Added
