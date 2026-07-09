@@ -9,11 +9,11 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 ## ✨ Key Features
 
 *   **⚡ Asynchronous Execution**: Multi-threaded, fully cancellable database queries. Long-running queries won't block the TUI layout or cursor.
-*   **⌨️ Keyboard-First Design**: Optimized for hands-on-keyboard speed. Support for both standard and Vim-style keybindings.
+*   **⌨️ Keyboard-First Design**: Optimized for hands-on-keyboard speed. Support for both standard and Vim-style keybindings (press `?` in the TUI to toggle the active keybindings list).
 *   **🔌 Pluggable Architecture**: Easily write plugins to add custom panels, new commands to the palette, or listen to event hooks.
 *   **🗃️ Built-in Database Drivers**: First-class support for **DuckDB**, **SQLite**, **PostgreSQL**, and **MySQL**.
 *   **📝 Rich Workspace Layout**:
-    *   **Live Schema Tree**: Real-time introspection of schemas, tables, columns, indexes, and foreign keys.
+    *   **Live Schema Tree**: Real-time introspection of schemas, tables, columns, indexes, and foreign keys (with full index and foreign key support implemented for DuckDB, PostgreSQL, MySQL, and SQLite).
     *   **Multi-Tab SQL Editor**: Edit multiple queries side-by-side with SQL syntax highlighting.
     *   **Interactive Results Table**: Search, filter, and scroll through large result sets cleanly using pagination/batch loading.
     *   **Command Palette**: Quick actions, screen switching, and plugin commands.
@@ -115,6 +115,7 @@ theme = "monokai"       # "monokai" (warm) or "nord" (cool)
 keymap = "default"      # "default" or "vim"
 show_status_bar = true
 row_batch_size = 1000   # Rows per batch to fetch from adapters
+max_display_rows = 10000 # Max rows held in results grid (0 for unlimited)
 
 [engine]
 default_timeout_seconds = 60.0
@@ -127,6 +128,11 @@ level = "INFO"
 [plugins]
 enabled = []            # Specify IDs of plugins to load (empty loader registers all)
 disabled = []           # Specify IDs of plugins to exclude
+
+[connections]
+# Save connection profiles to reference by name
+# local-duckdb = "duckdb:///:memory:"
+# local-pg     = "postgres://user:pass@localhost:5432/dbname"
 ```
 
 ### Environment Overrides

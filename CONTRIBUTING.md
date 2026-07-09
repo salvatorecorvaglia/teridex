@@ -43,6 +43,9 @@ We provide utility scripts inside the `scripts/` directory to run formatting, ty
 > The `./scripts/check.sh` script forwards additional arguments directly to `pytest`.
 > For example: `./scripts/check.sh -k schema_tree -v` will run the full lint and type stacks, and then execute only the tests matching `schema_tree` in verbose mode.
 
+> [!NOTE]
+> When `keymap = "vim"` is active in the configuration, the TUI Help Modal dynamically groups and categorizes standard global bindings vs. Vim navigation bindings. Refer to `tests/tui/test_help_modal.py` to see how dynamic categorization is verified.
+
 ---
 
 ## 📐 Package Architecture & Layering
@@ -76,6 +79,7 @@ graph TD
 The test suite mirrors our layered package structure:
 
 *   **TUI & UI Component Tests** (`tests/tui/`): Covers screen and widget behavior, rendering states, help modals, schema tree displays, and vim keymap behavior (e.g., `test_app_smoke.py`, `test_schema_tree.py`, `test_results_pane.py`).
+*   **CLI Command Surface Tests** (`tests/cli/`): Asserts command-line argument/option behavior, DSN constraints, config overrides, and clean error exit handling (e.g., `test_main.py`).
 *   **Adapter Conformance Tests** (`tests/adapters/`): Verifies database driver implementations. All adapters must pass the shared conformance scenarios located in `tests/adapters/_conformance.py`.
 *   **Engine Execution & Pool Orchestration** (`tests/engine/`): Tests transaction boundaries, `QueryExecutor` flow, `ConnectionPool` concurrency, and `QueryHistory` persistence.
 *   **Core Logic & Infrastructure** (`tests/core/`): Tests dependency injection (`test_di.py`), JSON/structured logging formatters, custom configuration layers (`test_config.py`), and the event bus (`test_events.py`).
