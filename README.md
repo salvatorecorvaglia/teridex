@@ -15,7 +15,7 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 *   **📝 Rich Workspace Layout**:
     *   **Live Schema Tree**: Real-time introspection of schemas, tables, columns, indexes, and foreign keys (with full index and foreign key support implemented for DuckDB, PostgreSQL, MySQL, and SQLite).
     *   **Multi-Tab SQL Editor**: Edit multiple queries side-by-side with SQL syntax highlighting.
-    *   **Interactive Results Table**: Search, filter, and scroll through large result sets cleanly using pagination/batch loading.
+    *   **Interactive Results Table**: Search, filter, and scroll through large result sets cleanly using pagination/batch loading. Features a dynamic row display limit configuration dialog (set row limit on the fly via the command palette).
     *   **Command Palette**: Quick actions, screen switching, and plugin commands.
 *   **⚙️ Configuration Layer**: Customize the look and feel (including Monokai and Nord themes) and define saved connections.
 
@@ -202,6 +202,9 @@ Add adapters by subclassing [AbstractAdapter](src/teridex_adapters/base.py#L45-L
 1. Subclass `AbstractAdapter` and set the driver names and URL schemas.
 2. Implement `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
 3. Register your driver class in [registry.py](src/teridex_adapters/registry.py).
+
+> [!TIP]
+> All database adapters automatically support asynchronous context manager usage (`async with adapter: ...`) via `AbstractAdapter` to guarantee clean connection teardown.
 
 ---
 

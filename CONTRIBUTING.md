@@ -97,7 +97,7 @@ The test suite mirrors our layered package structure:
 
 To maintain predictability, performance, and robustness, all code submissions must adhere to the following standards:
 
-1.  **Strict Static Typing**: Mypy strict mode is enabled across the codebase. All public and private functions must have complete type signatures.
+1.  **Strict Static Typing**: Mypy strict mode is enabled across the codebase (configured via `mypy.ini`). All public and private functions must have complete type signatures (with relaxed constraints for test functions in `tests/`).
 2.  **Formatting and Styling**: Standardized via **Ruff** (line length: 100). Run `./scripts/fmt.sh` before staging commits.
 3.  **Async-First Event Loop**: Never execute blocking I/O operations directly within the TUI event loop or database adapters.
 4.  **No Silent Exceptions**: Do not suppress exceptions silently. Every catch block must log, wrap, or re-raise appropriately.
@@ -106,6 +106,7 @@ To maintain predictability, performance, and robustness, all code submissions mu
 7.  **Database Statement Classification**: Inspect prepared statement attributes (e.g., `stmt.get_attributes()` in `asyncpg`) to differentiate query execution types (DQL/DML) instead of parsing raw string prefixes. This ensures robust handling of comments and `RETURNING` clauses.
 8.  **Small, Composed Modules**: Prefer composition over inheritance. Keep modules small and highly focused.
 9.  **EditorConfig**: We ship an `.editorconfig` specifying UTF-8, LF, and 4-space indentation (2-space for configuration formats like YAML, TOML, and JSON). Ensure your editor configuration honors these guidelines.
+10. **Async Context Manager**: `AbstractAdapter` implements async context manager support (`__aenter__` and `__aexit__`) which automatically invokes `close()`. Use `async with adapter:` blocks where applicable to ensure cleanup when executing commands or in tests.
 
 ---
 

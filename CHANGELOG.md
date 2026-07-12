@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-12
+
+### Added
+
+- Context manager support (`__aenter__`/`__aexit__`) for database adapters to automatically handle connections.
+- TUI Row Limit configuration screen (`RowLimitModal`) allowing dynamic customization of the display limit.
+- New test suite for the row limit modal in `tests/tui/test_row_limit.py`.
+- Project configuration file `mypy.ini` with strict check overrides for specific packages.
+
+### Changed
+
+- Refactored `TeridexConfig` configuration parsing model from Pydantic's `BaseSettings` to `BaseModel` and `ConfigDict`.
+- Cached results table rows internally in `self._rows` to improve CSV export behavior and speed.
+- `StatusBar` uses `Text.from_markup().plain` to calculate the visual footer width accurately.
+- `Dsn` userinfo rendering handles standalone username or password fields correctly without assuming both exist.
+- Invalid panel placements in custom plugins now fall back safely to `"bottom"`.
+
+### Fixed
+
+- Avoided closing standard error stream on log reconfiguration during tests to prevent ValueError warnings from cached loggers.
+- Safely clean up and cancel active query tasks in `on_unmount()` when shutting down the Textual app.
+- Connection close handling in `MySQLAdapter` uses asynchronous `ensure_closed()` calls.
+- Ensured CLI connection tests properly close the connection when a test ping fails.
+
 ## [0.4.0] - 2026-07-04
 
 ### Added
