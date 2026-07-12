@@ -10,7 +10,6 @@ Use :func:`get_logger` everywhere. Inject per-request context with
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import sys
 from contextvars import ContextVar
@@ -52,8 +51,8 @@ def configure_logging(
     if _configured and not force:
         return
 
-    # Do not close the previous log stream in tests to prevent cached loggers from raising ValueError
-    # when writing to a closed file descriptor.
+    # Do not close the previous log stream in tests to prevent cached loggers
+    # from raising ValueError when writing to a closed file descriptor.
     _log_file_stream = None
 
     stream: Any = sys.stderr

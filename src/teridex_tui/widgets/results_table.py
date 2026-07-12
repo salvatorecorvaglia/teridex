@@ -104,7 +104,6 @@ class ResultsTable(DataTable[str]):
 
     async def export_csv(self, path: Path) -> int:
         import asyncio  # noqa: PLC0415
-        from typing import Any  # noqa: PLC0415
 
         columns = list(self._column_names)
         data = list(self._rows)

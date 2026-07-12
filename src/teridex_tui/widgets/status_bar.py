@@ -5,11 +5,9 @@ Layout:  ^q Quit  f1 Help  ^↵ Run Query  ^r Refresh  ...  Database Connected.
 
 from __future__ import annotations
 
-import re
-
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import Static
-from rich.text import Text
 
 # Keybinding labels displayed in the footer (key_label, description).
 # Keep these concise — screen width is limited.
