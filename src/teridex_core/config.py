@@ -6,8 +6,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from teridex_core.errors import ConfigError
 
@@ -40,15 +39,13 @@ class PluginsConfig(BaseModel):
     disabled: list[str] = Field(default_factory=list)
 
 
-class TeridexConfig(BaseSettings):
+class TeridexConfig(BaseModel):
     """Top-level Teridex settings.
 
     Env vars: ``TERIDEX_<section>__<field>``, e.g. ``TERIDEX_UI__THEME=nord``.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="TERIDEX_",
-        env_nested_delimiter="__",
+    model_config = ConfigDict(
         extra="ignore",
         frozen=False,
     )

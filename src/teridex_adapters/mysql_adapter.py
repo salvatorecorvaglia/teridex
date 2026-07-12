@@ -104,7 +104,7 @@ class MySQLAdapter(AbstractAdapter):
                 await c.close()
         self._cursors.clear()
         if self._conn is not None:
-            self._conn.close()
+            await self._conn.ensure_closed()
             self._conn = None
         self._thread_id = None
         self._active_query_id = None
@@ -152,7 +152,7 @@ class MySQLAdapter(AbstractAdapter):
                             await scur.close()
                 finally:
                     with contextlib.suppress(Exception):
-                        side.close()
+                        await side.ensure_closed()
             except Exception as exc:
                 logger.warning(
                     "mysql_cancel_side_connect_failed",

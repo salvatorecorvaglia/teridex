@@ -74,8 +74,9 @@ class Dsn(BaseModel):
 
     def render(self, *, mask_password: bool = True) -> str:
         userinfo = ""
-        if self.username:
-            userinfo = quote(self.username, safe="")
+        if self.username or self.password:
+            if self.username:
+                userinfo = quote(self.username, safe="")
             if self.password:
                 userinfo += ":" + (
                     "***" if mask_password else quote(self.password.get_secret_value(), safe="")

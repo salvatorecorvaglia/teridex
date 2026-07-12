@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from textual.widgets import DataTable
 from textual.widgets.data_table import CellDoesNotExist
@@ -29,6 +29,7 @@ class ResultsTable(DataTable[str]):
         self.max_rows = 0  # 0 = unlimited; set from cfg.ui.max_display_rows
         self._initialized = False
         self._column_names: list[str] = []
+        self._rows: list[tuple[Any, ...]] = []
         self._row_count = 0
         self._truncated = False
 
@@ -36,6 +37,7 @@ class ResultsTable(DataTable[str]):
         self.clear(columns=True)
         self._initialized = False
         self._column_names = []
+        self._rows = []
         self._row_count = 0
         self._truncated = False
         self.border_subtitle = None
@@ -57,6 +59,8 @@ class ResultsTable(DataTable[str]):
             if len(rows) > remaining:
                 rows = rows[:remaining]
                 self._truncated = True
+
+        self._rows.extend(rows)
 
         import asyncio  # noqa: PLC0415
 
@@ -103,13 +107,9 @@ class ResultsTable(DataTable[str]):
         from typing import Any  # noqa: PLC0415
 
         columns = list(self._column_names)
-        rows: list[tuple[Any, ...]] = []
-        for i in range(self.row_count):
-            rows.append(tuple(self.get_row_at(i)))
-            if i > 0 and i % 100 == 0:
-                await asyncio.sleep(0)
+        data = list(self._rows)
 
-        def _write(p: Path, cols: list[str], data: list[tuple[Any, ...]]) -> None:
+        def _write(p: Path, cols: list[str], data_rows: list[tuple[Any, ...]]) -> None:
             p.parent.mkdir(parents=True, exist_ok=True)
             with contextlib.suppress(Exception):
                 p.parent.chmod(0o700)
@@ -118,7 +118,7 @@ class ResultsTable(DataTable[str]):
                     p.chmod(0o600)
                 w = csv.writer(f)
                 w.writerow(cols)
-                w.writerows(data)
+                w.writerows(data_rows)
 
-        await asyncio.to_thread(_write, path, columns, rows)
-        return self.row_count
+        await asyncio.to_thread(_write, path, columns, data)
+        return len(data)

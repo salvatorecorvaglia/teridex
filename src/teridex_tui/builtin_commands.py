@@ -95,6 +95,13 @@ BUILTIN_COMMANDS: list[Command] = [
         category="App",
     ),
     Command(
+        id="builtin.set_row_limit",
+        title="Set row display limit",
+        description="Change the maximum row display limit dynamically.",
+        handler=_wrap("set_row_limit"),
+        category="Results",
+    ),
+    Command(
         id="builtin.quit",
         title="Quit Teridex",
         default_binding="ctrl+q",

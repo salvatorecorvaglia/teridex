@@ -57,6 +57,9 @@ class HistoryModal(ModalScreen["HistoryEntry | None"]):
         if event.key == "escape":
             self.dismiss(None)
         elif event.key == "enter":
+            lst = self.query_one("#history-list", ListView)
+            if lst.has_focus:
+                return
             self._submit()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:

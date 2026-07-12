@@ -172,7 +172,8 @@ CommandPalette {
 /* ── Help, History & Connection modals ── */
 #HelpModal,
 #HistoryModal,
-#ConnectionModal {
+#ConnectionModal,
+#RowLimitModal {
     align: center middle;
     background: $surface;
     border: thick $accent;
@@ -202,6 +203,20 @@ CommandPalette {
 }
 
 #conn-submit-btn {
+    dock: bottom;
+    min-width: 14;
+    background: $primary;
+    color: $background;
+    text-style: bold;
+}
+
+#limit-input {
+    height: 3;
+    border: round $primary;
+    margin-bottom: 1;
+}
+
+#limit-submit-btn {
     dock: bottom;
     min-width: 14;
     background: $primary;

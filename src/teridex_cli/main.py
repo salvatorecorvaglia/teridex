@@ -78,8 +78,10 @@ def connect(
             parsed = Dsn.parse(dsn)
             adapter = create_adapter_for_dsn(parsed)
             await adapter.connect(parsed)
-            ok = await adapter.ping()
-            await adapter.close()
+            try:
+                ok = await adapter.ping()
+            finally:
+                await adapter.close()
         except Exception as exc:
             console.print(f"[bold red]ERROR[/] {exc}")
             return 1

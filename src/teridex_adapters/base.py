@@ -94,6 +94,12 @@ class AbstractAdapter(ABC):
             self._metadata.clear()
             logger.info("adapter_closed", adapter=self.name)
 
+    async def __aenter__(self) -> AbstractAdapter:
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        await self.close()
+
     @abstractmethod
     async def _do_connect(self, dsn: Dsn) -> None: ...
 

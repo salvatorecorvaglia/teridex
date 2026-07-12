@@ -43,6 +43,7 @@ from teridex_tui.screens.connection import ConnectionScreen
 from teridex_tui.screens.help import HelpModal
 from teridex_tui.screens.history import HistoryModal
 from teridex_tui.screens.main import MainScreen
+from teridex_tui.screens.row_limit import RowLimitModal
 from teridex_tui.state import AppState
 from teridex_tui.themes import THEMES
 from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, StatusBar
@@ -125,6 +126,9 @@ class TeridexApp(App[None]):
             self._show_connection_dialog()
 
     async def on_unmount(self) -> None:
+        if self._current_run is not None:
+            with contextlib.suppress(Exception):
+                await self.action_cancel_query()
         if self._palette_task is not None and not self._palette_task.done():
             self._palette_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -222,7 +226,8 @@ class TeridexApp(App[None]):
             except Exception:
                 logger.exception("plugin_panel_factory_failed", plugin_id=plugin_id)
                 continue
-            rails[panel.placement].append(widget)
+            placement = panel.placement if panel.placement in rails else "bottom"
+            rails[placement].append(widget)
 
         if rails["left"]:
             sidebar = self.query_one("#sidebar")
@@ -434,6 +439,21 @@ class TeridexApp(App[None]):
             self._status().message = f"[red]export failed: {exc}[/]"
             return
         self._status().message = f"exported {n} row{'s' if n != 1 else ''} → {path}"
+
+    async def action_set_row_limit(self) -> None:
+        current_limit = self.cfg.ui.max_display_rows
+
+        def _on_limit(new_limit: int | None) -> None:
+            if new_limit is None:
+                return
+            self.cfg.ui.max_display_rows = new_limit
+            with contextlib.suppress(Exception):
+                self._results().max_rows = new_limit
+            with contextlib.suppress(Exception):
+                self._action_bar().limit = new_limit
+            self._status().message = f"Row limit set to {new_limit}"
+
+        await self.push_screen(RowLimitModal(current_limit), _on_limit)
 
     async def action_cancel_query(self) -> None:
         # Snapshot both references before awaiting: action_run_query's finally

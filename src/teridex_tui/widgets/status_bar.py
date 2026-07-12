@@ -9,9 +9,7 @@ import re
 
 from textual.reactive import reactive
 from textual.widgets import Static
-
-_MARKUP_RE = re.compile(r"\[.*?\]")
-
+from rich.text import Text
 
 # Keybinding labels displayed in the footer (key_label, description).
 # Keep these concise — screen width is limited.
@@ -64,8 +62,8 @@ class StatusBar(Static):
         if self.truncated:
             status = f"[yellow]display truncated[/]  ·  {status}"
 
-        raw_shortcuts = _MARKUP_RE.sub("", shortcuts)
-        raw_status = _MARKUP_RE.sub("", status)
+        raw_shortcuts = Text.from_markup(shortcuts).plain
+        raw_status = Text.from_markup(status).plain
         width = self.size.width or 80
         available = width - 2  # account for padding
         padding_len = available - len(raw_shortcuts) - len(raw_status)

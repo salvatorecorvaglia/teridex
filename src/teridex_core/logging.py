@@ -52,10 +52,9 @@ def configure_logging(
     if _configured and not force:
         return
 
-    if _log_file_stream is not None:
-        with contextlib.suppress(Exception):
-            _log_file_stream.close()
-        _log_file_stream = None
+    # Do not close the previous log stream in tests to prevent cached loggers from raising ValueError
+    # when writing to a closed file descriptor.
+    _log_file_stream = None
 
     stream: Any = sys.stderr
     if log_file is not None:

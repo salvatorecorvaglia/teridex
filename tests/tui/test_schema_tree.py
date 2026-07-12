@@ -128,7 +128,7 @@ async def test_introspection_retry_on_failure() -> None:
                 TableColumn(name="id", type_native="INTEGER", type=ColumnType.INTEGER, ordinal=0)
             ]
 
-        introspector.fetch_columns = mock_fetch
+        introspector.fetch_columns = mock_fetch  # type: ignore[method-assign]
 
         # Find the lazy_table node
         lazy_node = next(

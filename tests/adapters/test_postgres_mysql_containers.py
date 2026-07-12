@@ -30,8 +30,9 @@ async def test_postgres_container_introspection() -> None:
         adapter = PostgresAdapter()
         await adapter.connect(Dsn.parse(dsn_str))
         try:
+            assert adapter._conn is not None
             # Create a table and add a composite foreign key
-            async with adapter.begin():
+            async with await adapter.begin():
                 await adapter._conn.execute(
                     "CREATE TABLE parent (id1 INT, id2 INT, PRIMARY KEY (id1, id2))"
                 )
