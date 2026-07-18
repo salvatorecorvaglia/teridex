@@ -23,7 +23,7 @@ async def test_connect_populates_pool() -> None:
         await app.workers.wait_for_complete()
         assert isinstance(app.state.pool, ConnectionPool)
         assert app.state.adapter is not None
-        
+
         # Verify in-memory database connection sharing:
         # Introspector adapter and pool adapter are the exact same instance.
         async with app.state.pool.acquire() as pooled_adapter:

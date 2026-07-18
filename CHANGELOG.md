@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Introduced `AdapterConnectionError` exception to handle and propagate connection failures uniformly across all database adapters.
+- Implemented connection sharing for in-memory databases (SQLite and DuckDB), ensuring the schema introspector and query execution pool reuse the same database instance.
+
+### Changed
+
+- Removed the unused `Result` wrapper class (`Ok`/`Err` types) from the core codebase.
+- Optimized the schema tree population in the TUI (`SchemaTree`) by utilizing `node.children` directly rather than tracking populated nodes in a separate set.
+- Refactored connection selection in the `ConnectionScreen` modal to automatically submit the form when a DSN is selected.
+- Updated container integration tests to dynamically parse and strip driver schemes (e.g., `+psycopg`, `+pymysql`) from connection URLs.
+- Configured CI workflows to conditionally restrict integration tests to `ubuntu-latest` environments.
+
+### Fixed
+
+- Added escaping using `rich.markup.escape` to connection, validation, and query error strings in the TUI to prevent Rich markup injection or rendering issues.
+- Optimized query execution result feeding by immediately halting table updates once the results table indicates truncation (e.g., limit is reached).
+- Added automatic permission hardening (applying `0o600` permissions) to the Teridex configuration file if it is detected to have group/world-writable permissions.
+- Ensured a `QueryCompleted` event is correctly emitted on `GeneratorExit` within the query executor, ensuring proper cleanup and statistics tracking when a query is cancelled.
+- Fixed release checksum (`SHA256SUMS`) generation by running the checksum command directly inside the package distribution directory.
+- Cleaned up obsolete PyPI publish attestation options in the release workflow.
+
 ## [0.5.0] - 2026-07-12
 
 ### Added

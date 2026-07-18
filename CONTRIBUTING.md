@@ -107,6 +107,7 @@ To maintain predictability, performance, and robustness, all code submissions mu
 8.  **Small, Composed Modules**: Prefer composition over inheritance. Keep modules small and highly focused.
 9.  **EditorConfig**: We ship an `.editorconfig` specifying UTF-8, LF, and 4-space indentation (2-space for configuration formats like YAML, TOML, and JSON). Ensure your editor configuration honors these guidelines.
 10. **Async Context Manager**: `AbstractAdapter` implements async context manager support (`__aenter__` and `__aexit__`) which automatically invokes `close()`. Use `async with adapter:` blocks where applicable to ensure cleanup when executing commands or in tests.
+11. **Uniform Connection Error Handling**: Wrap all driver-specific connection failures in `AdapterConnectionError` (imported from `teridex_core.errors`) inside the adapter's `_do_connect` method. Do not propagate bare driver-specific exceptions or use standard Python `ConnectionError` (which is a subclass of `OSError` and can shadow system errors).
 
 ---
 
@@ -116,7 +117,7 @@ If you are implementing support for a new database, follow these steps:
 
 1.  Create a subclass of `AbstractAdapter` in `src/teridex_adapters/<name>_adapter.py`.
 2.  Define the class variables `name: ClassVar[str]` and `schemes: ClassVar[tuple[str, ...]]`.
-3.  Implement the required methods: `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
+3.  Implement the required methods: `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`. Ensure that connection failures are caught and raised as `AdapterConnectionError`.
 4.  Register your new adapter class in `src/teridex_adapters/registry.py::_build_default`.
 5.  Add a parametrized conformance test under `tests/adapters/` using the shared scenarios in `tests/adapters/_conformance.py`.
 

@@ -11,7 +11,7 @@ Teridex is a TUI database client built on a clean async core and a plugin-first 
 *   **⚡ Asynchronous Execution**: Multi-threaded, fully cancellable database queries. Long-running queries won't block the TUI layout or cursor.
 *   **⌨️ Keyboard-First Design**: Optimized for hands-on-keyboard speed. Support for both standard and Vim-style keybindings (press `?` in the TUI to toggle the active keybindings list).
 *   **🔌 Pluggable Architecture**: Easily write plugins to add custom panels, new commands to the palette, or listen to event hooks.
-*   **🗃️ Built-in Database Drivers**: First-class support for **DuckDB**, **SQLite**, **PostgreSQL**, and **MySQL**.
+*   **🗃️ Built-in Database Drivers**: First-class support for **DuckDB**, **SQLite**, **PostgreSQL**, and **MySQL**. Includes built-in connection sharing for in-memory databases (SQLite and DuckDB) so the schema browser and query executor run off the same instance.
 *   **📝 Rich Workspace Layout**:
     *   **Live Schema Tree**: Real-time introspection of schemas, tables, columns, indexes, and foreign keys (with full index and foreign key support implemented for DuckDB, PostgreSQL, MySQL, and SQLite).
     *   **Multi-Tab SQL Editor**: Edit multiple queries side-by-side with SQL syntax highlighting.
@@ -200,7 +200,7 @@ Refer to [api.py](src/teridex_plugins/api.py) and [context.py](src/teridex_plugi
 Add adapters by subclassing [AbstractAdapter](src/teridex_adapters/base.py#L45-L161):
 
 1. Subclass `AbstractAdapter` and set the driver names and URL schemas.
-2. Implement `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`.
+2. Implement `_do_connect`, `_do_close`, `ping`, `execute`, `stream`, `begin`, and `introspect`. Differentiate connection failures by wrapping/raising them as `AdapterConnectionError` (imported from `teridex_core.errors`).
 3. Register your driver class in [registry.py](src/teridex_adapters/registry.py).
 
 > [!TIP]
