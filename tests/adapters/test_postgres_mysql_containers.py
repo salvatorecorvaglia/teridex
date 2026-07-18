@@ -25,7 +25,7 @@ async def test_postgres_container_introspection() -> None:
     with PostgresContainer("postgres:16-alpine") as pg:
         dsn_str = pg.get_connection_url()
         if "+psycopg" in dsn_str:
-            dsn_str = dsn_str.split("+", 1)[0] + dsn_str.split(":", 1)[1]
+            dsn_str = dsn_str.replace("+psycopg", "")
 
         adapter = PostgresAdapter()
         await adapter.connect(Dsn.parse(dsn_str))
