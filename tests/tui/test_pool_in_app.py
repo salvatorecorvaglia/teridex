@@ -22,8 +22,12 @@ async def test_connect_populates_pool() -> None:
         await pilot.pause()
         await app.workers.wait_for_complete()
         assert isinstance(app.state.pool, ConnectionPool)
-        # Introspector adapter is dedicated (not from the pool).
         assert app.state.adapter is not None
+        
+        # Verify in-memory database connection sharing:
+        # Introspector adapter and pool adapter are the exact same instance.
+        async with app.state.pool.acquire() as pooled_adapter:
+            assert app.state.adapter is pooled_adapter
 
 
 @pytest.mark.asyncio

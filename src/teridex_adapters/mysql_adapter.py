@@ -14,7 +14,12 @@ from asyncmy import errors as asyncmy_errors
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
+from teridex_core.errors import (
+    AdapterConnectionError,
+    AdapterError,
+    QueryCancelledError,
+    QueryError,
+)
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
@@ -89,14 +94,20 @@ class MySQLAdapter(AbstractAdapter):
                 conn_kwargs[k] = int(v)
             else:
                 conn_kwargs[k] = v
-        self._conn = await asyncmy.connect(**conn_kwargs)
-        cur = self._conn.cursor()
         try:
-            await cur.execute("SELECT CONNECTION_ID()")
-            row = await cur.fetchone()
-            self._thread_id = int(row[0]) if row else None
-        finally:
-            await cur.close()
+            self._conn = await asyncmy.connect(**conn_kwargs)
+            cur = self._conn.cursor()
+            try:
+                await cur.execute("SELECT CONNECTION_ID()")
+                row = await cur.fetchone()
+                self._thread_id = int(row[0]) if row else None
+            finally:
+                await cur.close()
+        except Exception as exc:
+            raise AdapterConnectionError(
+                f"mysql: connection failed: {exc}",
+                context={"dsn": dsn.render(mask_password=True)},
+            ) from exc
 
     async def _do_close(self) -> None:
         for c in list(self._cursors.values()):

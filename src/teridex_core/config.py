@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
@@ -109,6 +110,9 @@ def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
     toml_data: dict[str, Any] = {}
     cfg_path = path or default_config_path()
     if cfg_path.exists():
+        with contextlib.suppress(Exception):
+            if cfg_path.stat().st_mode & 0o077:
+                cfg_path.chmod(0o600)
         try:
             with cfg_path.open("rb") as fh:
                 toml_data = tomllib.load(fh)

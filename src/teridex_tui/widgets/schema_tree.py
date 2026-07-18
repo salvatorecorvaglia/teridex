@@ -28,12 +28,9 @@ class SchemaTree(Tree[object]):
         super().__init__("Schema", id="schema-tree", data=None)
         self.show_root = True
         self.show_guides = True
-        # Track object-node ids we've already filled so re-expansion is cheap.
-        self._populated: set[int] = set()
 
     def populate(self, snapshot: SchemaSnapshot) -> None:
         self.clear()
-        self._populated.clear()
         self.root.set_label(snapshot.database or "(database)")
         for schema_name, objects in sorted(snapshot.schemas.items()):
             schema_node = self.root.add(schema_name, data=None, expand=True)
@@ -51,7 +48,7 @@ class SchemaTree(Tree[object]):
         obj = node.data
         if not isinstance(obj, SchemaObject):
             return
-        if id(node) in self._populated:
+        if node.children:
             return
 
         # Fetch columns/indexes/foreign keys lazily if not already present.
@@ -93,7 +90,6 @@ class SchemaTree(Tree[object]):
                     return
 
         self._fill_object_node(node, obj)
-        self._populated.add(id(node))
 
     def _fill_object_node(self, node: TreeNode[object], obj: SchemaObject) -> None:
         # Columns block

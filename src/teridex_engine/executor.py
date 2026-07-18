@@ -138,6 +138,15 @@ class QueryExecutor:
                         duration_ms=(time.perf_counter() - started) * 1000.0,
                     )
                 )
+            except GeneratorExit:
+                self._bus.publish(
+                    QueryCompleted(
+                        query_id=handle.query_id,
+                        rows=run.rows_emitted,
+                        duration_ms=(time.perf_counter() - started) * 1000.0,
+                    )
+                )
+                raise
             except QueryCancelledError:
                 self._bus.publish(QueryCancelled(query_id=handle.query_id))
                 raise

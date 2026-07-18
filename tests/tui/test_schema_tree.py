@@ -139,8 +139,6 @@ async def test_introspection_retry_on_failure() -> None:
         lazy_node.expand()
         await pilot.pause()
 
-        # Node must not be in _populated
-        assert id(lazy_node) not in tree._populated
         assert len(lazy_node.children) == 0
 
         # 2. Collapse and expand again - succeeds
@@ -148,7 +146,5 @@ async def test_introspection_retry_on_failure() -> None:
         lazy_node.expand()
         await pilot.pause()
 
-        # Node must be in _populated and columns subnode created
-        assert id(lazy_node) in tree._populated
         assert len(lazy_node.children) > 0
         assert any(str(c.label) == "columns" for c in lazy_node.children)

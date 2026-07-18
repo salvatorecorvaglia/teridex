@@ -11,7 +11,12 @@ import aiosqlite
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
+from teridex_core.errors import (
+    AdapterConnectionError,
+    AdapterError,
+    QueryCancelledError,
+    QueryError,
+)
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
@@ -77,12 +82,18 @@ class SQLiteAdapter(AbstractAdapter):
                 conn_kwargs[k] = int(v)
             else:
                 conn_kwargs[k] = v
-        self._conn = await aiosqlite.connect(path, **conn_kwargs)
-        # WAL mode is fine on file dbs, no-op on memory.
-        if path != ":memory:":
-            with contextlib.suppress(aiosqlite.Error):
-                await self._conn.execute("PRAGMA journal_mode=WAL")
-        await self._conn.execute("PRAGMA foreign_keys=ON")
+        try:
+            self._conn = await aiosqlite.connect(path, **conn_kwargs)
+            # WAL mode is fine on file dbs, no-op on memory.
+            if path != ":memory:":
+                with contextlib.suppress(aiosqlite.Error):
+                    await self._conn.execute("PRAGMA journal_mode=WAL")
+            await self._conn.execute("PRAGMA foreign_keys=ON")
+        except Exception as exc:
+            raise AdapterConnectionError(
+                f"sqlite: connection failed: {exc}",
+                context={"path": path},
+            ) from exc
 
     async def _do_close(self) -> None:
         for cur in list(self._cursors.values()):
@@ -114,6 +125,11 @@ class SQLiteAdapter(AbstractAdapter):
         try:
             cur = await self._conn.execute(sql, params or {})
         except aiosqlite.Error as exc:
+            if self._cancel_event(handle).is_set():
+                handle.mark_done(QueryStatus.CANCELLED)
+                raise QueryCancelledError(
+                    "query cancelled", context={"query_id": handle.query_id}
+                ) from exc
             handle.mark_done(QueryStatus.FAILED)
             raise QueryError(str(exc), context={"sql": sql}) from exc
         self._cursors[handle.query_id] = cur

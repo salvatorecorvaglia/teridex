@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
@@ -251,7 +252,7 @@ class TeridexApp(App[None]):
 
     def _wire_event_listeners(self) -> None:
         async def on_started(ev: QueryStarted) -> None:
-            self._status().message = f"running… ({ev.sql_preview})"
+            self._status().message = f"running… ({escape(ev.sql_preview)})"
 
         async def on_completed(ev: QueryCompleted) -> None:
             bar = self._status()
@@ -261,7 +262,7 @@ class TeridexApp(App[None]):
             bar.message = "ok"
 
         async def on_failed(ev: QueryFailed) -> None:
-            self._status().message = f"[red]{ev.error_code}: {ev.message}[/]"
+            self._status().message = f"[red]{escape(ev.error_code)}: {escape(ev.message)}[/]"
 
         async def on_action(ev: RunActionRequested) -> None:
             await self.run_action(ev.action)
@@ -285,11 +286,21 @@ class TeridexApp(App[None]):
 
             # Dedicated adapter for schema introspection — never shared with
             # query execution, so a long SELECT cannot block ``Ctrl+R``.
-            introspect_adapter = await _factory(dsn)
+            is_in_memory = dsn.scheme in {"sqlite", "duckdb"} and (
+                not dsn.database or dsn.database == ":memory:"
+            )
 
-            # Bounded pool of execution adapters. ``action_run_query`` acquires
-            # one for the lifetime of its stream and returns it on exit.
-            pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
+            if is_in_memory:
+                shared_adapter = await _factory(dsn)
+                introspect_adapter = shared_adapter
+                pool = ConnectionPool(
+                    dsn, lambda d: asyncio.sleep(0, result=shared_adapter), size=1
+                )
+                await pool._idle.put(shared_adapter)
+                pool._all.append(shared_adapter)
+            else:
+                introspect_adapter = await _factory(dsn)
+                pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
 
             self.state.dsn = dsn
             self.state.adapter = introspect_adapter
@@ -309,7 +320,7 @@ class TeridexApp(App[None]):
             bar.message = ""
         except Exception as exc:
             logger.exception("connection_failed", dsn=dsn.render(mask_password=True))
-            bar.message = f"[red]Connection failed: {exc}[/]"
+            bar.message = f"[red]Connection failed: {escape(str(exc))}[/]"
             self.state.dsn = None
             self.state.adapter = None
             self.state.pool = None
@@ -331,7 +342,7 @@ class TeridexApp(App[None]):
             try:
                 dsn = Dsn.parse(raw)
             except Exception as exc:
-                self._status().message = f"[red]invalid DSN: {exc}[/]"
+                self._status().message = f"[red]invalid DSN: {escape(str(exc))}[/]"
                 return
             self.run_worker(self._connect(dsn))
 
@@ -390,18 +401,20 @@ class TeridexApp(App[None]):
                     )
                 except QueryError as exc:
                     results.loading = False
-                    self._status().message = f"[red]{exc}[/]"
+                    self._status().message = f"[red]{escape(str(exc))}[/]"
                     return
                 cancelled = False
                 try:
                     async for batch in self._current_run.rows:
                         results.loading = False
                         await results.feed(batch)
+                        if results.truncated:
+                            break
                 except QueryCancelledError:
                     cancelled = True
                     self._status().message = "[yellow]cancelled[/]"
                 except TeridexError as exc:
-                    self._status().message = f"[red]{exc}[/]"
+                    self._status().message = f"[red]{escape(str(exc))}[/]"
                 finally:
                     results.loading = False
                     results.mark_done(cancelled=cancelled)
@@ -412,7 +425,7 @@ class TeridexApp(App[None]):
             # connection setup. Clear the spinner so the table isn't stuck.
             logger.exception("run_query_failed")
             results.loading = False
-            self._status().message = f"[red]{exc}[/]"
+            self._status().message = f"[red]{escape(str(exc))}[/]"
         finally:
             self._current_run = None
             self._run_executor = None
@@ -470,7 +483,7 @@ class TeridexApp(App[None]):
         try:
             snap = await self.state.introspector.refresh(lazy=True)
         except TeridexError as exc:
-            self._status().message = f"[red]schema: {exc}[/]"
+            self._status().message = f"[red]schema: {escape(str(exc))}[/]"
             return
         self._tree().populate(snap)
         self._status().message = f"schema refreshed · {snap.object_count} object(s)"
@@ -521,7 +534,7 @@ class TeridexApp(App[None]):
                 exc = done.exception()
                 if exc is not None:
                     logger.exception("command_handler_failed", exc_info=exc)
-                    self._status().message = f"[red]command failed: {exc}[/]"
+                    self._status().message = f"[red]command failed: {escape(str(exc))}[/]"
 
             task.add_done_callback(_report)
 

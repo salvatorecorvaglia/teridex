@@ -14,7 +14,12 @@ import duckdb
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
+from teridex_core.errors import (
+    AdapterConnectionError,
+    AdapterError,
+    QueryCancelledError,
+    QueryError,
+)
 from teridex_core.logging import get_logger
 from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -71,12 +76,18 @@ class DuckDBAdapter(AbstractAdapter):
         config: dict[str, str | bool | int | float | list[str]] | None = None
         if dsn.params:
             config = dict(dsn.params)
-        if config is not None:
-            self._conn = await asyncio.to_thread(
-                duckdb.connect, path, read_only=False, config=config
-            )
-        else:
-            self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=False)
+        try:
+            if config is not None:
+                self._conn = await asyncio.to_thread(
+                    duckdb.connect, path, read_only=False, config=config
+                )
+            else:
+                self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=False)
+        except Exception as exc:
+            raise AdapterConnectionError(
+                f"duckdb: connection failed: {exc}",
+                context={"path": path},
+            ) from exc
 
     async def _do_close(self) -> None:
         if self._conn is not None:
@@ -120,6 +131,11 @@ class DuckDBAdapter(AbstractAdapter):
         try:
             await self._exec_sync(sql, params)
         except duckdb.Error as exc:
+            if self._cancel_event(handle).is_set():
+                handle.mark_done(QueryStatus.CANCELLED)
+                raise QueryCancelledError(
+                    "query cancelled", context={"query_id": handle.query_id}
+                ) from exc
             handle.mark_done(QueryStatus.FAILED)
             raise QueryError(str(exc), context={"sql": sql}) from exc
         handle.mark_streaming()

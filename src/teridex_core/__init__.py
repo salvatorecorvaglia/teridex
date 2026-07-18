@@ -8,17 +8,13 @@ from teridex_core.errors import (
     QueryError,
     TeridexError,
 )
-from teridex_core.result import Err, Ok, Result
 
 __all__ = [
     "AdapterError",
     "ConfigError",
-    "Err",
-    "Ok",
     "PluginError",
     "QueryCancelledError",
     "QueryError",
-    "Result",
     "TeridexError",
 ]
 

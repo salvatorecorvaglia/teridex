@@ -77,7 +77,7 @@ class ConnectionScreen(ModalScreen[str | None]):
                 return
             inp = self.query_one("#conn-input", Input)
             inp.value = dsn
-            inp.focus()
+            self._submit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "conn-submit-btn":

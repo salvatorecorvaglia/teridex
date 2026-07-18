@@ -11,7 +11,12 @@ import asyncpg
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
+from teridex_core.errors import (
+    AdapterConnectionError,
+    AdapterError,
+    QueryCancelledError,
+    QueryError,
+)
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
@@ -72,8 +77,14 @@ class PostgresAdapter(AbstractAdapter):
         self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
-        self._conn = await asyncpg.connect(dsn.render(mask_password=False))
-        self._backend_pid = await self._conn.fetchval("SELECT pg_backend_pid()")
+        try:
+            self._conn = await asyncpg.connect(dsn.render(mask_password=False))
+            self._backend_pid = await self._conn.fetchval("SELECT pg_backend_pid()")
+        except Exception as exc:
+            raise AdapterConnectionError(
+                f"postgres: connection failed: {exc}",
+                context={"dsn": dsn.render(mask_password=True)},
+            ) from exc
 
     async def _do_close(self) -> None:
         if self._conn is not None:
