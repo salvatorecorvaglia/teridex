@@ -24,8 +24,10 @@ pytestmark = pytest.mark.skipif(not DOCKER_AVAILABLE, reason="Docker is not avai
 async def test_postgres_container_introspection() -> None:
     with PostgresContainer("postgres:16-alpine") as pg:
         dsn_str = pg.get_connection_url()
-        if "+psycopg" in dsn_str:
-            dsn_str = dsn_str.replace("+psycopg", "")
+        if "://" in dsn_str:
+            scheme_part, rest = dsn_str.split("://", 1)
+            if "+" in scheme_part:
+                dsn_str = f"{scheme_part.split('+', 1)[0]}://{rest}"
 
         adapter = PostgresAdapter()
         await adapter.connect(Dsn.parse(dsn_str))
@@ -58,8 +60,10 @@ async def test_postgres_container_introspection() -> None:
 async def test_mysql_container_introspection() -> None:
     with MySqlContainer("mysql:8.0") as mysql:
         dsn_str = mysql.get_connection_url()
-        if "+pymysql" in dsn_str:
-            dsn_str = dsn_str.replace("+pymysql", "")
+        if "://" in dsn_str:
+            scheme_part, rest = dsn_str.split("://", 1)
+            if "+" in scheme_part:
+                dsn_str = f"{scheme_part.split('+', 1)[0]}://{rest}"
 
         adapter = MySQLAdapter()
         await adapter.connect(Dsn.parse(dsn_str))
