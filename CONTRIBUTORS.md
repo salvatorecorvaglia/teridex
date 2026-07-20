@@ -1,6 +1,6 @@
 # Contributors 👥
 
-A huge thank you to everyone who has contributed to **Teridez**!
+A huge thank you to everyone who has contributed to **Teridex**!
 
 ## ✨ Lead Maintainer
 
