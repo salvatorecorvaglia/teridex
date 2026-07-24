@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Builder ---------------------------------------------------------
-FROM python:3.13-slim AS builder
+FROM python:3.15-rc-alpine AS builder
 
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
@@ -24,7 +24,7 @@ COPY src ./src
 RUN uv sync --frozen --no-dev --all-extras
 
 # ---- Runtime --------------------------------------------------------
-FROM python:3.13-slim AS runtime
+FROM python:3.15-rc-alpine AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
