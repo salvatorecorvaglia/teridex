@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import contextlib
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import aiosqlite
 
-from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
+from teridex_adapters.introspect.sqlite import SQLiteIntrospector
 from teridex_core.errors import (
     AdapterConnectionError,
     AdapterError,
@@ -20,17 +19,17 @@ from teridex_core.errors import (
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
-from teridex_core.models.schema import (
-    ForeignKey,
-    Index,
-    SchemaSnapshot,
-    TableColumn,
-)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
     from teridex_core.models.connection import Dsn
+    from teridex_core.models.schema import (
+        ForeignKey,
+        Index,
+        SchemaSnapshot,
+        TableColumn,
+    )
     from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
@@ -235,92 +234,20 @@ class SQLiteAdapter(AbstractAdapter):
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        return await _SQLiteIntrospector(self, self._conn).build(lazy=lazy)
+        return await SQLiteIntrospector(self, self._conn).build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        return await _SQLiteIntrospector(self, self._conn).fetch_columns(schema, name)
+        return await SQLiteIntrospector(self, self._conn).fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        return await _SQLiteIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+        return await SQLiteIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
-        return await _SQLiteIntrospector(self, self._conn).fetch_indexes(schema, name)
+        return await SQLiteIntrospector(self, self._conn).fetch_indexes(schema, name)
 
-
-class _SQLiteIntrospector(SchemaIntrospector):
-    def __init__(self, adapter: SQLiteAdapter, conn: aiosqlite.Connection) -> None:
-        self._adapter = adapter
-        self._conn = conn
-
-    def connection_id(self) -> str:
-        return connection_id(self._conn)
-
-    def database_name(self) -> str | None:
-        return self._adapter._dsn.database if self._adapter._dsn else None
-
-    async def list_objects(self) -> list[tuple[str, str, str]]:
-        async with self._conn.execute(
-            "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') "
-            "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        ) as cur:
-            rows = await cur.fetchall()
-        return [("main", name, kind) for name, kind in rows]
-
-    async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
-        async with self._conn.execute(f"PRAGMA table_info({_quote_ident(name)})") as ccur:
-            rows = await ccur.fetchall()
-        return [
-            TableColumn(
-                name=cname,
-                type_native=ctype or "",
-                type=infer_column_type(ctype),
-                nullable=not notnull,
-                default=dflt,
-                is_primary_key=bool(pk),
-                ordinal=cid,
-            )
-            for cid, cname, ctype, notnull, dflt, pk in rows
-        ]
-
-    async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        async with self._conn.execute(f"PRAGMA foreign_key_list({_quote_ident(name)})") as fcur:
-            rows = await fcur.fetchall()
-        grouped = defaultdict(list)
-        for fk_id, seq, ref_table, fcol, tcol, on_update, on_delete, _match in rows:
-            grouped[fk_id].append((seq, ref_table, fcol, tcol, on_update, on_delete))
-
-        fks = []
-        for fk_id, parts in sorted(grouped.items()):
-            parts.sort(key=lambda x: x[0])
-            ref_table = parts[0][1]
-            on_update = parts[0][4]
-            on_delete = parts[0][5]
-            cols = [p[2] for p in parts]
-            ref_cols = [p[3] for p in parts]
-            fks.append(
-                ForeignKey(
-                    name=f"fk_{name}_{fk_id}",
-                    columns=cols,
-                    referenced_table=ref_table,
-                    referenced_columns=ref_cols,
-                    on_delete=on_delete,
-                    on_update=on_update,
-                )
-            )
-        return fks
-
-    async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        async with self._conn.execute(f"PRAGMA index_list({_quote_ident(name)})") as icur:
-            idx_rows = await icur.fetchall()
-        indexes: list[Index] = []
-        for _seq, iname, unique, _origin, _partial in idx_rows:
-            async with self._conn.execute(f"PRAGMA index_info({_quote_ident(iname)})") as iicur:
-                icols = [r[2] for r in await iicur.fetchall()]
-            indexes.append(Index(name=iname, columns=icols, unique=bool(unique)))
-        return indexes

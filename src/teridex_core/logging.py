@@ -47,12 +47,15 @@ def configure_logging(
 ) -> None:
     """Configure structlog + stdlib logging. Idempotent unless force=True."""
 
+    import contextlib  # noqa: PLC0415
+
     global _configured, _log_file_stream  # noqa: PLW0603 - module-level idempotency flags
     if _configured and not force:
         return
 
-    # Do not close the previous log stream in tests to prevent cached loggers
-    # from raising ValueError when writing to a closed file descriptor.
+    if _log_file_stream is not None and hasattr(_log_file_stream, "close"):
+        with contextlib.suppress(Exception):
+            _log_file_stream.close()
     _log_file_stream = None
 
     stream: Any = sys.stderr

@@ -11,7 +11,7 @@ from textual.widgets import Static
 
 # Keybinding labels displayed in the footer (key_label, description).
 # Keep these concise — screen width is limited.
-_FOOTER_BINDINGS: list[tuple[str, str]] = [
+_DEFAULT_FOOTER_BINDINGS: list[tuple[str, str]] = [
     ("^q", "Quit"),
     ("?", "Help"),
     ("^h", "History"),
@@ -21,6 +21,19 @@ _FOOTER_BINDINGS: list[tuple[str, str]] = [
     ("^w", "Close Tab"),
     ("^y", "Copy"),
     ("^e", "Export"),
+    ("^p", "Palette"),
+]
+
+_VIM_FOOTER_BINDINGS: list[tuple[str, str]] = [
+    ("^q", "Quit"),
+    ("?", "Help"),
+    ("^h", "History"),
+    ("^↵", "Run Query"),
+    ("gg", "Top"),
+    ("G", "Bottom"),
+    ("^t", "New Tab"),
+    ("^w", "Close Tab"),
+    ("^y", "Copy"),
     ("^p", "Palette"),
 ]
 
@@ -43,9 +56,9 @@ class StatusBar(Static):
         return value or ""
 
     def render(self) -> str:
-        # Left: keybinding hints, with the active keymap when it isn't the
-        # default — vim bindings are otherwise invisible to the user.
-        shortcuts = "  ".join(f"[bold]{key}[/] {desc}" for key, desc in _FOOTER_BINDINGS)
+        # Left: keybinding hints, with the active keymap when it isn't default
+        bindings = _VIM_FOOTER_BINDINGS if self.mode == "VIM" else _DEFAULT_FOOTER_BINDINGS
+        shortcuts = "  ".join(f"[bold]{key}[/] {desc}" for key, desc in bindings)
         if self.mode and self.mode != "NORMAL":
             shortcuts = f"[bold reverse] {self.mode} [/]  {shortcuts}"
 

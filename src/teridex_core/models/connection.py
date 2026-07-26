@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
-from urllib.parse import parse_qsl, quote, unquote, urlparse
+from urllib.parse import parse_qsl, quote, unquote, urlparse, urlsplit, urlunsplit
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -17,7 +17,18 @@ _VALID_SCHEMES = {"duckdb", "sqlite", "postgres", "postgresql", "mysql"}
 
 def mask_dsn_password(url: str) -> str:
     """Mask credentials in a DSN URL to prevent password leaks in logs/errors."""
+    try:
+        parsed = urlsplit(url)
+        if parsed.password:
+            user = quote(unquote(parsed.username), safe="") if parsed.username else ""
+            host = parsed.hostname or ""
+            port = f":{parsed.port}" if parsed.port is not None else ""
+            netloc = f"{user}:***@{host}{port}"
+            return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        pass
     return re.sub(r"([^:]+://[^:]+:)[^@]+(@)", r"\1***\2", url)
+
 
 
 class Dsn(BaseModel):

@@ -402,6 +402,7 @@ class TeridexApp(App[None]):
                 except QueryError as exc:
                     results.loading = False
                     self._status().message = f"[red]{escape(str(exc))}[/]"
+                    await self._record_history(sql)
                     return
                 cancelled = False
                 try:
@@ -563,18 +564,29 @@ class TeridexApp(App[None]):
     # ---- history ------------------------------------------------------
 
     async def _record_history(self, sql: str) -> None:
-        if self.state.history is None or self._current_run is None:
+        if self.state.history is None:
             return
-        run = self._current_run
+        if self._current_run is not None:
+            run = self._current_run
+            query_id = run.query_id
+            status_val = run.status.value
+            duration = run.duration_ms
+            rows = run.rows_emitted
+        else:
+            query_id = "-"
+            status_val = "failed"
+            duration = None
+            rows = 0
+
         await self.state.history.add(
             HistoryEntry(
-                query_id=run.query_id,
+                query_id=query_id,
                 connection_label=(
                     self.state.dsn.render(mask_password=True) if self.state.dsn else "?"
                 ),
                 sql=sql,
-                status=run.status.value,
-                duration_ms=run.duration_ms,
-                rows=run.rows_emitted,
+                status=status_val,
+                duration_ms=duration,
+                rows=rows,
             )
         )

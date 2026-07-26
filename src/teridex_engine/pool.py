@@ -56,10 +56,11 @@ class ConnectionPool:
                 pass
             # Decide under the lock so ``close()`` cannot race the waiter set:
             # either build a new adapter or register a tracked waiter.
+            task: asyncio.Task[DatabaseAdapter] | None = None
             async with self._lock:
                 if self._closed:
                     raise RuntimeError("pool is closed")
-                if len(self._all) < self._size:
+                if len(self._all) + len(self._connection_tasks) < self._size:
                     # Start connection task in the background. If cancelled,
                     # schedule background cleanup to register/release the adapter.
                     async def _make() -> DatabaseAdapter:
@@ -68,32 +69,38 @@ class ConnectionPool:
                     task = asyncio.create_task(_make())
                     self._connection_tasks.add(task)
                     task.add_done_callback(self._connection_tasks.discard)
-                    try:
-                        adapter = await asyncio.shield(task)
+                else:
+                    # Someone else created/is creating one — wait for an idle adapter.
+                    # Track the waiter so ``close()`` can wake it instead of hanging it.
+                    getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(
+                        self._idle.get()
+                    )
+                    self._waiters.add(getter)
+
+            if task is not None:
+                try:
+                    adapter = await asyncio.shield(task)
+                    async with self._lock:
                         self._all.append(adapter)
-                        adapter_to_release = adapter
-                        sem_needs_release = False
-                        return adapter
-                    except asyncio.CancelledError:
-                        sem_needs_release = False
+                    adapter_to_release = adapter
+                    sem_needs_release = False
+                    return adapter
+                except asyncio.CancelledError:
+                    sem_needs_release = False
 
-                        async def _cleanup() -> None:
-                            try:
-                                a = await task
-                                async with self._lock:
-                                    self._all.append(a)
-                                await self._release(a)
-                            except Exception:
-                                self._sem.release()
+                    async def _cleanup() -> None:
+                        try:
+                            a = await task
+                            async with self._lock:
+                                self._all.append(a)
+                            await self._release(a)
+                        except Exception:
+                            self._sem.release()
 
-                        cleanup_task = asyncio.create_task(_cleanup())
-                        self._cleanup_tasks.add(cleanup_task)
-                        cleanup_task.add_done_callback(self._cleanup_tasks.discard)
-                        raise
-                # Someone else created one — wait for an idle adapter. Track
-                # the waiter so ``close()`` can wake it instead of hanging it.
-                getter: asyncio.Future[DatabaseAdapter] = asyncio.ensure_future(self._idle.get())
-                self._waiters.add(getter)
+                    cleanup_task = asyncio.create_task(_cleanup())
+                    self._cleanup_tasks.add(cleanup_task)
+                    cleanup_task.add_done_callback(self._cleanup_tasks.discard)
+                    raise
             try:
                 adapter = await getter
                 adapter_to_release = adapter

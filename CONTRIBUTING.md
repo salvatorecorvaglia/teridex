@@ -98,7 +98,7 @@ Before submitting any Pull Request, make sure the entire suite (formatting, lint
 Teridex is pluggable. You can contribute new plugins by subclassing the plugin interface and implementing the hooks or panels.
 
 ### Event Bus Hooks
-Plugins can subscribe to events published on the async `EventBus`. Key events defined in [events.py](file:///Users/salvatorecorvaglia/github/teridex/src/teridex_core/events.py) include:
+Plugins can subscribe to events published on the async `EventBus`. Key events defined in [events.py](src/teridex_core/events.py) include:
 
 - `ConnectionOpened` / `ConnectionClosed`
 - `QueryStarted` / `QueryProgress` / `QueryCompleted` / `QueryFailed` / `QueryCancelled`

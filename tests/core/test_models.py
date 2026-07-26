@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from teridex_core.errors import ConfigError
-from teridex_core.models.connection import Dsn
+from teridex_core.models.connection import Dsn, mask_dsn_password
 from teridex_core.models.query import QueryHandle, QueryStatus
 
 
@@ -41,6 +41,16 @@ def test_dsn_render_masks_password() -> None:
     out = d.render(mask_password=True)
     assert "secret" not in out
     assert "***" in out
+
+
+def test_mask_dsn_password_complex() -> None:
+    masked = mask_dsn_password("postgres://user:p@ss@localhost:5432/db?email=a@b.com")
+    assert "p@ss" not in masked
+    assert "***" in masked
+    assert "email=a@b.com" in masked
+
+    masked_simple = mask_dsn_password("sqlite:///:memory:")
+    assert masked_simple == "sqlite:///:memory:"
 
 
 def test_query_handle_lifecycle() -> None:

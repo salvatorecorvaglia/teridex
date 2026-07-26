@@ -64,10 +64,13 @@ class ResultsTable(DataTable[str]):
 
         import asyncio  # noqa: PLC0415
 
-        chunk_size = 200
+        chunk_size = 500
         for i in range(0, len(rows), chunk_size):
             chunk = rows[i : i + chunk_size]
-            self.add_rows(tuple("" if v is None else str(v) for v in row) for row in chunk)
+            formatted_chunk = (
+                tuple("[dim]NULL[/]" if v is None else str(v) for v in row) for row in chunk
+            )
+            self.add_rows(formatted_chunk)
             self._row_count += len(chunk)
             await asyncio.sleep(0)
 
