@@ -250,4 +250,3 @@ class SQLiteAdapter(AbstractAdapter):
         if self._conn is None:
             raise AdapterError("sqlite: not connected")
         return await SQLiteIntrospector(self, self._conn).fetch_indexes(schema, name)
-

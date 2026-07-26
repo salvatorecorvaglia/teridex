@@ -109,6 +109,7 @@ Example usage in a plugin:
 ```python
 from teridex_plugins.api import hook
 
+
 @hook("query.before_execute")
 async def log_query(self, ctx, sql: str) -> None:
     # Do something async before query runs

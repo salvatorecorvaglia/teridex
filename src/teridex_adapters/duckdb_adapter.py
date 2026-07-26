@@ -241,4 +241,3 @@ class DuckDBAdapter(AbstractAdapter):
             raise AdapterError("duckdb: not connected")
         introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
         return await introspector.fetch_indexes(schema, name)
-

@@ -30,7 +30,6 @@ def mask_dsn_password(url: str) -> str:
     return re.sub(r"([^:]+://[^:]+:)[^@]+(@)", r"\1***\2", url)
 
 
-
 class Dsn(BaseModel):
     """Parsed DSN. Use :meth:`parse` to build from a URL string."""
 
