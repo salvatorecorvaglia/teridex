@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-27
+
+### Added
+
+- Modularized database schema introspection into dedicated per-adapter modules (`teridex_adapters.introspect` for DuckDB, MySQL, PostgreSQL, and SQLite).
+- Added Vim mode keybinding hints (`gg` / `G`) in the TUI status bar footer when Vim navigation mode is active.
+
+### Changed
+
+- Optimized TUI results table rendering performance by increasing row chunk size to 500 rows and displaying `NULL` values formatted with `[dim]NULL[/]`.
+- Refactored `ConnectionPool` connection task creation to execute asynchronously outside the state lock and avoid potential lock contention.
+- Updated project documentation including `README.md`, `CONTRIBUTING.md`, `CONTRIBUTORS.md`, `LICENSE`, and `SECURITY.md`.
+
+### Fixed
+
+- Ensured queries failing with a `QueryError` are correctly recorded in the TUI query history log.
+- Cleaned up trailing whitespace in database adapter implementations and core connection models.
+
+### Security
+
+- Updated Docker base image to Python 3.15-rc-alpine to address base image OS package vulnerabilities.
+
 ## [0.6.0] - 2026-07-18
 
 ### Added
