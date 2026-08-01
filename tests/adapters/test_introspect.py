@@ -112,3 +112,37 @@ async def test_fk_and_index_defaults_are_empty() -> None:
     table = snap.schemas["public"][0]
     assert table.foreign_keys == []
     assert table.indexes == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_introspect_hooks() -> None:
+    """Introspector using bulk hooks bypasses per-object fetch methods."""
+
+    class _BulkIntrospector(_StubIntrospector):
+        async def fetch_all_columns(self) -> dict[tuple[str, str], list[TableColumn]]:
+            return {("public", "users"): [_col("id")], ("public", "active_users"): [_col("id")]}
+
+        async def fetch_all_foreign_keys(self) -> dict[tuple[str, str], list[ForeignKey]]:
+            return {("public", "users"): [ForeignKey(name="fk1", columns=["role_id"], referenced_table="roles", referenced_columns=["id"])]}
+
+        async def fetch_all_indexes(self) -> dict[tuple[str, str], list[Index]]:
+            return {("public", "users"): [Index(name="idx_users_id", columns=["id"])]}
+
+    introspector = _BulkIntrospector(
+        [
+            ("public", "users", "table"),
+            ("public", "active_users", "view"),
+        ]
+    )
+    snap = await introspector.build()
+    users = next(o for o in snap.schemas["public"] if o.name == "users")
+
+    assert len(users.columns) == 1
+    assert users.columns[0].name == "id"
+    assert len(users.foreign_keys) == 1
+    assert users.foreign_keys[0].name == "fk1"
+    assert len(users.indexes) == 1
+    assert users.indexes[0].name == "idx_users_id"
+    # Per-object methods were bypassed due to bulk hooks
+    assert introspector.fk_calls == []
+    assert introspector.index_calls == []

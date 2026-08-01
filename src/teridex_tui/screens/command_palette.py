@@ -39,6 +39,8 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
     def __init__(self, commands: list[Command]) -> None:
         super().__init__()
         self._all = commands
+        self._id_to_cmd = {c.id: c for c in commands}
+        self._title_map = {c.id: f"{c.title} {c.description or ''}" for c in commands}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="command-palette"):
@@ -70,18 +72,15 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
         lst.clear()
         ranked: list[Command]
         if not q:
-            ranked = list(self._all)
+            ranked = self._all
         else:
-            # process.extract with a dict input returns (choice, score, key).
-            # ``limit=None`` ranks every command so no match is silently hidden.
-            id_to_cmd = {c.id: c for c in self._all}
             matches = process.extract(
                 q,
-                {c.id: c.title for c in self._all},
+                self._title_map,
                 scorer=fuzz.WRatio,
-                limit=None,
+                limit=15,
             )
-            ranked = [id_to_cmd[key] for (_title, _score, key) in matches]
+            ranked = [self._id_to_cmd[key] for (_choice, _score, key) in matches]
         for cmd in ranked[:15]:
             lst.append(CommandListItem(cmd))
         self.query_one("#palette-title", Static).update(

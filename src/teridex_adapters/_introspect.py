@@ -52,6 +52,15 @@ class SchemaIntrospector(ABC):
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         return []
 
+    async def fetch_all_columns(self) -> dict[tuple[str, str], list[TableColumn]] | None:
+        return None
+
+    async def fetch_all_foreign_keys(self) -> dict[tuple[str, str], list[ForeignKey]] | None:
+        return None
+
+    async def fetch_all_indexes(self) -> dict[tuple[str, str], list[Index]] | None:
+        return None
+
     def build_view(self, schema: str, name: str, kind: str, columns: list[TableColumn]) -> View:
         from typing import Literal, cast  # noqa: PLC0415
 
@@ -64,17 +73,35 @@ class SchemaIntrospector(ABC):
 
     async def build(self, *, lazy: bool = False) -> SchemaSnapshot:
         schemas: dict[str, list[SchemaObject]] = {}
-        for schema_name, name, kind in await self.list_objects():
+        objects = await self.list_objects()
+
+        all_cols = await self.fetch_all_columns() if not lazy else None
+        all_fks = await self.fetch_all_foreign_keys() if not lazy else None
+        all_indexes = await self.fetch_all_indexes() if not lazy else None
+
+        for schema_name, name, kind in objects:
             obj: SchemaObject
             if lazy:
                 cols = []
                 fks = []
                 indexes = []
             else:
-                cols = await self.fetch_columns(schema_name, name)
+                key = (schema_name, name)
+                if all_cols is not None:
+                    cols = all_cols.get(key, [])
+                else:
+                    cols = await self.fetch_columns(schema_name, name)
+
                 if kind == "table":
-                    fks = await self.fetch_foreign_keys(schema_name, name)
-                    indexes = await self.fetch_indexes(schema_name, name)
+                    if all_fks is not None:
+                        fks = all_fks.get(key, [])
+                    else:
+                        fks = await self.fetch_foreign_keys(schema_name, name)
+
+                    if all_indexes is not None:
+                        indexes = all_indexes.get(key, [])
+                    else:
+                        indexes = await self.fetch_indexes(schema_name, name)
                 else:
                     fks = []
                     indexes = []

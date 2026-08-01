@@ -64,15 +64,20 @@ class ResultsTable(DataTable[str]):
 
         import asyncio  # noqa: PLC0415
 
-        chunk_size = 500
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            formatted_chunk = (
-                tuple("[dim]NULL[/]" if v is None else str(v) for v in row) for row in chunk
-            )
-            self.add_rows(formatted_chunk)
-            self._row_count += len(chunk)
-            await asyncio.sleep(0)
+        formatted_rows = [
+            tuple("[dim]NULL[/]" if v is None else str(v) for v in row) for row in rows
+        ]
+
+        if len(formatted_rows) <= 1000:
+            self.add_rows(formatted_rows)
+            self._row_count += len(formatted_rows)
+        else:
+            chunk_size = 1000
+            for i in range(0, len(formatted_rows), chunk_size):
+                chunk = formatted_rows[i : i + chunk_size]
+                self.add_rows(chunk)
+                self._row_count += len(chunk)
+                await asyncio.sleep(0)
 
     def mark_done(self, *, cancelled: bool = False) -> None:
         """Summarize the run on the table border.
