@@ -123,7 +123,16 @@ async def test_bulk_introspect_hooks() -> None:
             return {("public", "users"): [_col("id")], ("public", "active_users"): [_col("id")]}
 
         async def fetch_all_foreign_keys(self) -> dict[tuple[str, str], list[ForeignKey]]:
-            return {("public", "users"): [ForeignKey(name="fk1", columns=["role_id"], referenced_table="roles", referenced_columns=["id"])]}
+            return {
+                ("public", "users"): [
+                    ForeignKey(
+                        name="fk1",
+                        columns=["role_id"],
+                        referenced_table="roles",
+                        referenced_columns=["id"],
+                    )
+                ]
+            }
 
         async def fetch_all_indexes(self) -> dict[tuple[str, str], list[Index]]:
             return {("public", "users"): [Index(name="idx_users_id", columns=["id"])]}

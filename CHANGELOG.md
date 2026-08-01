@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-01
+
+### Added
+
+- Added optional bulk schema introspection hooks (`fetch_all_columns`, `fetch_all_foreign_keys`, `fetch_all_indexes`) to `BaseIntrospector` allowing database adapters to batch-fetch schema metadata.
+- Implemented bulk introspection methods in `PostgreSQLIntrospector` to fetch foreign keys and indexes across all schemas in single database queries, significantly speeding up schema discovery.
+
+### Changed
+
+- Optimized TUI `ResultsTable` row insertion by batch-adding datasets up to 1,000 rows directly without async yielding overhead.
+- Pre-cached command title search strings and lookup mappings in `CommandPaletteScreen`, limiting fuzzy extraction results to 15 items for improved command palette responsiveness.
+- Updated `README.md` project documentation.
+
 ## [0.7.0] - 2026-07-27
 
 ### Added
