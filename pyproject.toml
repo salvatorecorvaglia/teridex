@@ -15,10 +15,7 @@ authors = [
 
 dependencies = [
     "pydantic>=2.9",
-    "pydantic-settings>=2.14.2",
     "structlog>=24.4",
-    "typing-extensions>=4.12",
-    "sqlalchemy>=2.0",
     "aiosqlite>=0.20",
     "textual>=0.83",
     "rich>=13.7",
@@ -53,7 +50,6 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.15",
     "mypy>=1.13",
-    "types-PyYAML",
     "testcontainers>=4.8",
 ]
 
