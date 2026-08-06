@@ -1,6 +1,6 @@
 # Contributing to Teridex 📟
 
-Thank you for your interest in contributing to **Teridex**! This guide will help you set up your local development environment, walk you through our codebase structure, and outline our coding guidelines.
+Thank you for your interest in contributing to **Teridex**! We welcome contributions, bug reports, feature requests, and security improvements from the community.
 
 ---
 
