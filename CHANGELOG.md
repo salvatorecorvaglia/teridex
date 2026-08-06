@@ -70,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added automatic permission hardening (applying `0o600` permissions) to the Teridex configuration file if it is detected to have group/world-writable permissions.
 - Ensured a `QueryCompleted` event is correctly emitted on `GeneratorExit` within the query executor, ensuring proper cleanup and statistics tracking when a query is cancelled.
 - Fixed release checksum (`SHA256SUMS`) generation by running the checksum command directly inside the package distribution directory.
-- Cleaned up obsolete PyPI publish attestation options in the release workflow.
 
 ## [0.5.0] - 2026-07-12
 
