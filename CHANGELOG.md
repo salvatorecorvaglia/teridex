@@ -9,12 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-08-06
 
-### Changed
+### Chore
 
-- Pruned unused dependencies (`sqlalchemy`, `pydantic-settings`, `typing-extensions`, `types-pyyaml`) from `pyproject.toml` and lockfile.
-- Updated project documentation (`CONTRIBUTING.md`).
 - Promoted package version to 1.0.0 for initial official PyPI release.
-
 
 ## [0.7.1] - 2026-08-01
 
