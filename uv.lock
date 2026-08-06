@@ -901,7 +901,7 @@ wheels = [
 
 [[package]]
 name = "teridex"
-version = "0.7.1"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
