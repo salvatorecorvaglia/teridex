@@ -1,23 +1,3 @@
-# OS / System
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-desktop.ini
-
-# IDEs and Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-*.bak
-*.sublime-project
-*.sublime-workspace
-
 # Python bytecode / runtime
 __pycache__/
 *.py[cod]
@@ -48,6 +28,7 @@ MANIFEST
 .venv/
 venv/
 env/
+.uv/
 .uv-cache/
 pip-wheel-metadata/
 
@@ -83,7 +64,7 @@ config.toml
 # Docker (local overrides)
 docker-compose.override.yml
 
-# Teridex (project-specific)
+# Teridex (project-specific runtime & storage)
 *.db
 *.sqlite
 *.sqlite3
@@ -92,6 +73,27 @@ docker-compose.override.yml
 teridex.log
 .teridex/
 scratch/
+
+# IDEs and Editors
+.vscode/
+.idea/
+.zed/
+*.swp
+*.swo
+*~
+*.bak
+*.sublime-project
+*.sublime-workspace
+
+# OS / System
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
 # AI Tools & Agents
 .openai/
@@ -112,4 +114,6 @@ claude-settings.json
 .codex/
 .cagent/
 .cursor/
+.windsurf/
+.cline/
 CLAUDE.md
