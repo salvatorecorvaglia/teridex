@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 import pytest
 
 from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.errors import QueryCancelledError, QueryError
+from teridex_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
 from teridex_core.events import (
     EventBus,
     QueryCancelled,
@@ -13,9 +14,14 @@ from teridex_core.events import (
     QueryFailed,
     QueryStarted,
 )
-from teridex_core.logging import _request_context
+from teridex_core.logging import _request_context, bind_context, clear_context
 from teridex_core.models.connection import Dsn
+from teridex_core.models.query import QueryHandle, QueryStatus
+from teridex_core.models.result import Column, ResultBatch
 from teridex_engine.executor import QueryExecutor
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @pytest.mark.asyncio
@@ -118,6 +124,207 @@ async def test_executor_binds_query_id_into_logging_context() -> None:
     assert _request_context.get() in (None, {})
     assert seen_ctx.get("query_id") == run.query_id
     assert seen_ctx.get("adapter") == "sqlite"
+
+    await bus.close()
+    await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_task_cancellation_still_publishes_a_terminal_event() -> None:
+    """A cancelled *task* must not strand the UI on "running".
+
+    ``asyncio.CancelledError`` is a ``BaseException``, so a bare
+    ``except Exception`` in the stream wrapper would let it through without
+    ever publishing a lifecycle-terminal event. The cancellation has to land
+    while the adapter's stream is awaiting — that is the window a slow query
+    spends nearly all of its time in.
+    """
+    bus = EventBus()
+    cancelled: list[QueryCancelled] = []
+    bus.subscribe(QueryCancelled, lambda e: _append(cancelled, e))
+
+    executor = QueryExecutor(_SlowAdapter(), bus)
+    run = await executor.run("SELECT 1 AS a")
+
+    async def _consume() -> None:
+        async for _ in run.rows:
+            pass
+
+    task = asyncio.create_task(_consume())
+    for _ in range(50):
+        await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    for _ in range(20):
+        await asyncio.sleep(0)
+        if cancelled:
+            break
+    assert cancelled, "task cancellation published no terminal event"
+    assert cancelled[0].query_id == run.query_id
+    await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_abandoned_stream_reports_cancelled_not_completed() -> None:
+    """Breaking out early and closing must not look like a successful run."""
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    await _exec(adapter, "CREATE TABLE t (id INTEGER)")
+    for i in range(5):
+        await _exec(adapter, f"INSERT INTO t VALUES ({i})")
+
+    bus = EventBus()
+    completed: list[QueryCompleted] = []
+    cancelled: list[QueryCancelled] = []
+    bus.subscribe(QueryCompleted, lambda e: _append(completed, e))
+    bus.subscribe(QueryCancelled, lambda e: _append(cancelled, e))
+
+    executor = QueryExecutor(adapter, bus)
+    run = await executor.run("SELECT id FROM t", batch_size=1)
+    async for _ in run.rows:
+        break
+    await run.aclose()
+
+    for _ in range(20):
+        await asyncio.sleep(0)
+        if cancelled:
+            break
+    assert cancelled, "an abandoned stream published no cancellation"
+    assert not completed, "a partial read was reported as a completed query"
+    assert run.status is QueryStatus.CANCELLED
+    await bus.close()
+    await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_aclose_is_idempotent_after_full_consumption() -> None:
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    cancelled: list[QueryCancelled] = []
+    bus.subscribe(QueryCancelled, lambda e: _append(cancelled, e))
+
+    executor = QueryExecutor(adapter, bus)
+    run = await executor.run("SELECT 1 AS a")
+    async for _ in run.rows:
+        pass
+    await run.aclose()
+    await run.aclose()
+
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert not cancelled, "closing an exhausted stream must not look like a cancel"
+    await bus.close()
+    await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_run_restores_rather_than_wipes_surrounding_log_context() -> None:
+    """The executor must not clobber context bound by its caller."""
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    executor = QueryExecutor(adapter, bus)
+
+    bind_context(session_id="outer-session")
+    run = await executor.run("SELECT 1 AS a")
+    async for _ in run.rows:
+        pass
+
+    assert (_request_context.get() or {}).get("session_id") == "outer-session"
+    assert "query_id" not in (_request_context.get() or {})
+    clear_context()
+    await bus.close()
+    await adapter.close()
+
+
+async def _exec(adapter: SQLiteAdapter, sql: str) -> None:
+    handle = await adapter.execute(sql)
+    async for _ in await adapter.stream(handle):
+        pass
+
+
+class _SlowAdapter:
+    """Minimal adapter whose stream parks inside its own await."""
+
+    name = "slow"
+
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    async def execute(self, sql: str, params: object = None) -> QueryHandle:
+        handle = QueryHandle(connection_id="slow", sql=sql)
+        handle.mark_running()
+        return handle
+
+    async def stream(
+        self, handle: QueryHandle, *, batch_size: int = 1000
+    ) -> AsyncIterator[ResultBatch]:
+        async def _gen() -> AsyncIterator[ResultBatch]:
+            yield ResultBatch(columns=[Column(name="a")], rows=[(1,)])
+            await asyncio.sleep(3600)  # never produces a second batch
+            yield ResultBatch(columns=[Column(name="a")], rows=[], is_last=True)
+
+        return _gen()
+
+    async def cancel(self, handle: QueryHandle) -> None:
+        self.cancelled = True
+
+
+@pytest.mark.asyncio
+async def test_timeout_aborts_the_run_and_cancels_the_query() -> None:
+    """``engine.default_timeout_seconds`` must actually bound a run."""
+    adapter = _SlowAdapter()
+    bus = EventBus()
+    failed: list[QueryFailed] = []
+    bus.subscribe(QueryFailed, lambda e: _append(failed, e))
+
+    executor = QueryExecutor(adapter, bus)
+    run = await executor.run("SELECT 1 AS a", timeout=0.05)
+
+    with pytest.raises(QueryTimeoutError):
+        async for _ in run.rows:
+            pass
+
+    assert adapter.cancelled, "a timed-out query must be cancelled server-side"
+    for _ in range(20):
+        await asyncio.sleep(0)
+        if failed:
+            break
+    assert failed, "a timed-out query published no failure event"
+    assert failed[0].error_code == "teridex.query.timeout"
+    await bus.close()
+
+
+@pytest.mark.asyncio
+async def test_timeout_of_zero_means_no_deadline() -> None:
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    executor = QueryExecutor(adapter, bus)
+
+    run = await executor.run("SELECT 1 AS a", timeout=0)
+    rows = [batch async for batch in run.rows]
+
+    assert sum(len(b.rows) for b in rows) == 1
+    await bus.close()
+    await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_a_fast_query_finishes_well_inside_its_timeout() -> None:
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    executor = QueryExecutor(adapter, bus)
+
+    run = await executor.run("SELECT 1 AS a", timeout=30)
+    emitted = 0
+    async for batch in run.rows:
+        emitted += len(batch.rows)
+    assert emitted == 1
 
     await bus.close()
     await adapter.close()

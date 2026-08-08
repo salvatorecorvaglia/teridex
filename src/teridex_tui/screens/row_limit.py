@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual.containers import Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static
+
+from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
-    from textual.events import Key
 
 
-class RowLimitModal(ModalScreen[int | None]):
+class RowLimitModal(BaseModal[int]):
     """Modal prompting for a results display row limit.
 
     Returns the integer limit (0 for unlimited) on submit, or None on cancel.
@@ -42,17 +42,11 @@ class RowLimitModal(ModalScreen[int | None]):
         inp.focus()
         inp.select_all()
 
-    def on_key(self, event: Key) -> None:
-        if event.key == "escape":
-            self.dismiss(None)
-        elif event.key == "enter":
-            self._submit()
-
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "limit-submit-btn":
-            self._submit()
+            self.submit()
 
-    def _submit(self) -> None:
+    def submit(self) -> None:
         value_str = self.query_one("#limit-input", Input).value.strip()
         try:
             val = int(value_str)

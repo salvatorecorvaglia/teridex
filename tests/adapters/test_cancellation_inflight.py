@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 
 import pytest
 
@@ -41,13 +40,11 @@ async def test_sqlite_cancel_inflight() -> None:
         await a.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_postgres_cancel_inflight() -> None:
-    dsn_str = os.getenv("TERIDEX_PG_DSN")
-    if not dsn_str:
-        pytest.skip("TERIDEX_PG_DSN not set")
+async def test_postgres_cancel_inflight(postgres_dsn: str) -> None:
     a = PostgresAdapter()
-    await a.connect(Dsn.parse(dsn_str))
+    await a.connect(Dsn.parse(postgres_dsn))
     try:
         # pg_sleep blocks the connection on the server
         h = await a.execute("SELECT pg_sleep(3)")
@@ -68,13 +65,11 @@ async def test_postgres_cancel_inflight() -> None:
         await a.close()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_mysql_cancel_inflight() -> None:
-    dsn_str = os.getenv("TERIDEX_MYSQL_DSN")
-    if not dsn_str:
-        pytest.skip("TERIDEX_MYSQL_DSN not set")
+async def test_mysql_cancel_inflight(mysql_dsn: str) -> None:
     a = MySQLAdapter()
-    await a.connect(Dsn.parse(dsn_str))
+    await a.connect(Dsn.parse(mysql_dsn))
     try:
 
         async def cancel_later() -> None:

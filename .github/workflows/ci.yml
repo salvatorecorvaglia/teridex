@@ -54,7 +54,23 @@ jobs:
       - name: Sync workspace
         run: uv sync --all-extras --dev --frozen
 
+      # On ubuntu the runner has a Docker daemon, so the Postgres/MySQL
+      # conformance fixtures start real containers. On macOS there is no
+      # daemon, so those tests are excluded rather than silently skipped.
       - name: Test (pytest + coverage gate)
-        run: ./scripts/test.sh
+        run: ./tests/scripts/test.sh
         env:
           TERIDEX_TEST_MARKERS: ${{ matrix.os == 'ubuntu-latest' && 'integration or not integration' || 'not integration' }}
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The image is a shipped artifact; building it here stops it rotting
+      # unnoticed, which is how it came to reference apt-get on an Alpine base.
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t teridex:ci .
+
+      - name: Smoke-test the image
+        run: docker run --rm teridex:ci version

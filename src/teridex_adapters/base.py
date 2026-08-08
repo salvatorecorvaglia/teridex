@@ -138,13 +138,31 @@ class AbstractAdapter(ABC):
         return flag
 
     def _set_metadata(self, handle: QueryHandle, meta: QueryMetadata) -> None:
+        # An adapter serves one query at a time, and callers read metadata
+        # *after* draining the stream (row counts, server messages). Keeping
+        # only the latest entry makes it available then without the dict
+        # growing once per query for the life of the connection.
+        self._metadata.clear()
         self._metadata[handle.query_id] = meta
 
     def _forget(self, handle: QueryHandle) -> None:
+        """Drop per-query state once its stream is finished.
+
+        Metadata deliberately survives: it describes the completed result and
+        is what the UI renders after the last batch. It is bounded by
+        :meth:`_set_metadata` and cleared by :meth:`reset`.
+        """
         self._cancel_flags.pop(handle.query_id, None)
-        self._metadata.pop(handle.query_id, None)
 
     async def reset(self) -> None:
+        """Return the adapter to a clean state before it is reused.
+
+        Called by :class:`~teridex_engine.pool.ConnectionPool` on release.
+        Subclasses **must** also unwind connection-level state — an open
+        transaction, a server-side cursor — because the next caller inherits
+        this connection and would otherwise run inside someone else's
+        transaction.
+        """
         self._cancel_flags.clear()
         self._metadata.clear()
 

@@ -6,11 +6,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz, process
+from rich.markup import escape
 from textual.containers import Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Input, ListItem, ListView, Static
 
 from teridex_plugins.api import Command
+from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -23,8 +24,13 @@ class _Entry:
 
     @property
     def label(self) -> str:
-        binding = f"  [dim]({self.cmd.default_binding})[/]" if self.cmd.default_binding else ""
-        return f"[b]{self.cmd.title}[/]{binding}\n[dim]{self.cmd.description or self.cmd.id}[/]"
+        # Titles/descriptions can come from third-party plugins — escape them
+        # so a stray bracket cannot break the palette's rendering.
+        binding = (
+            f"  [dim]({escape(self.cmd.default_binding)})[/]" if self.cmd.default_binding else ""
+        )
+        subtitle = escape(self.cmd.description or self.cmd.id)
+        return f"[b]{escape(self.cmd.title)}[/]{binding}\n[dim]{subtitle}[/]"
 
 
 class CommandListItem(ListItem):
@@ -33,7 +39,7 @@ class CommandListItem(ListItem):
         self.cmd = cmd
 
 
-class CommandPaletteScreen(ModalScreen[Command | None]):
+class CommandPaletteScreen(BaseModal[Command]):
     DEFAULT_CSS = ""
 
     def __init__(self, commands: list[Command]) -> None:
@@ -56,16 +62,15 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
         self._refresh(event.value)
 
     def on_key(self, event: Key) -> None:
-        if event.key == "escape":
-            self.dismiss(None)
-        elif event.key == "enter":
-            self._submit()
-        elif event.key in {"up", "down"}:
-            lst = self.query_one("#palette-list", ListView)
-            lst.post_message(event)
+        # Arrow keys drive the result list while the search input keeps focus;
+        # escape/enter fall through to the shared modal behaviour.
+        if event.key in {"up", "down"}:
+            self.query_one("#palette-list", ListView).post_message(event)
+        else:
+            super().on_key(event)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        self._submit()
+        self.submit()
 
     def _refresh(self, q: str) -> None:
         lst = self.query_one("#palette-list", ListView)
@@ -87,7 +92,7 @@ class CommandPaletteScreen(ModalScreen[Command | None]):
             f"[b]Command palette[/b]  [dim]{len(ranked)}/{len(self._all)}[/]"
         )
 
-    def _submit(self) -> None:
+    def submit(self) -> None:
         lst = self.query_one("#palette-list", ListView)
         item = lst.highlighted_child
         if not isinstance(item, CommandListItem):

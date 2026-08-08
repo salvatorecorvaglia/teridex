@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from importlib.metadata import EntryPoint, entry_points
 from typing import TYPE_CHECKING, Any
+
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
 
 from teridex_core import __version__ as _teridex_version
 from teridex_core.errors import PluginError, PluginLoadError
@@ -20,48 +22,25 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_SPEC_CLAUSE = re.compile(r"\s*(>=|<=|==|!=|>|<)\s*([0-9][0-9.]*)\s*")
-
-
-def _parse_version(value: str) -> tuple[int, ...]:
-    """Parse a dotted version into an int tuple (non-numeric suffixes dropped)."""
-    parts: list[int] = []
-    for chunk in value.split("."):
-        digits = "".join(c for c in chunk if c.isdigit())
-        parts.append(int(digits) if digits else 0)
-    return tuple(parts)
-
 
 def version_satisfies(version: str, specifier: str) -> bool:
-    """Check ``version`` against a comma-separated PEP 440-ish ``specifier``.
+    """Check ``version`` against a PEP 440 ``specifier`` such as ``>=1.2,<2``.
 
-    Supports ``>= <= == != > <``. Unrecognized clauses are ignored rather than
-    treated as a failure, so an exotic constraint never silently hides a plugin.
+    Delegates to :mod:`packaging` so the full grammar — including ``~=`` and
+    pre-release handling — behaves the way every other Python tool does. A
+    specifier we cannot parse is treated as *unsatisfied*: a plugin that
+    declares a constraint we do not understand has not been shown to be
+    compatible, and loading it anyway is how incompatible plugins crash the
+    host.
     """
     spec = specifier.strip()
     if not spec:
         return True
-    current = _parse_version(version)
-    for clause in spec.split(","):
-        match = _SPEC_CLAUSE.fullmatch(clause)
-        if match is None:
-            continue
-        op, target_str = match.group(1), match.group(2)
-        target = _parse_version(target_str)
-        width = max(len(current), len(target))
-        lhs = current + (0,) * (width - len(current))
-        rhs = target + (0,) * (width - len(target))
-        ok = {
-            ">=": lhs >= rhs,
-            "<=": lhs <= rhs,
-            "==": lhs == rhs,
-            "!=": lhs != rhs,
-            ">": lhs > rhs,
-            "<": lhs < rhs,
-        }[op]
-        if not ok:
-            return False
-    return True
+    try:
+        return Version(version) in SpecifierSet(spec, prereleases=True)
+    except (InvalidSpecifier, InvalidVersion):
+        logger.warning("plugin_specifier_invalid", specifier=specifier, version=version)
+        return False
 
 
 class PluginLoader:
@@ -154,6 +133,10 @@ class PluginLoader:
             except Exception as exc:
                 self._registry.remove_plugin(manifest.id)
                 self._contexts.pop(manifest.id, None)
+                # ``on_load`` may have subscribed before it failed; closing the
+                # context tears those subscriptions down instead of leaving a
+                # half-loaded plugin receiving events.
+                ctx.close()
                 raise PluginLoadError(
                     f"on_load failed for plugin {manifest.id!r}",
                     context={"error": str(exc)},

@@ -7,6 +7,7 @@ connected adapter instances across queries and bounds the concurrency.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -18,6 +19,11 @@ from teridex_core.protocols.adapter import DatabaseAdapter
 logger = get_logger(__name__)
 
 AdapterFactory = Callable[[Dsn], Awaitable[DatabaseAdapter]]
+
+# How long ``close()`` waits for in-flight release/cleanup tasks before giving
+# up on them. Long enough for a normal reset+close, short enough that a wedged
+# connection cannot hang application shutdown.
+_CLEANUP_TIMEOUT = 5.0
 
 
 class ConnectionPool:
@@ -37,6 +43,21 @@ class ConnectionPool:
         self._waiters: set[asyncio.Future[DatabaseAdapter]] = set()
         self._connection_tasks: set[asyncio.Task[Any]] = set()
         self._cleanup_tasks: set[asyncio.Task[Any]] = set()
+
+    async def preload(self, adapter: DatabaseAdapter) -> None:
+        """Adopt an already-connected *adapter* as an idle pool member.
+
+        Used when the caller had to build the connection itself — an in-memory
+        DuckDB database cannot be reached by a second connection, so the pool
+        must be handed the one that exists rather than creating its own.
+        """
+        async with self._lock:
+            if self._closed:
+                raise RuntimeError("pool is closed")
+            if len(self._all) >= self._size:
+                raise ValueError("pool is already at capacity")
+            self._all.append(adapter)
+            self._idle.put_nowait(adapter)
 
     async def _acquire(self) -> DatabaseAdapter:
         if self._closed:
@@ -133,12 +154,20 @@ class ConnectionPool:
             finally:
                 async with self._lock:
                     if self._closed:
+                        # ``close()`` empties ``_all``, so an adapter that was
+                        # checked out at that moment is no longer listed. Close
+                        # it regardless — testing membership first would leak
+                        # exactly the connections that were busy at shutdown.
                         if adapter in self._all:
                             self._all.remove(adapter)
+                        with contextlib.suppress(Exception):
                             await adapter.close()
                         self._sem.release()
                     else:
-                        await self._idle.put(adapter)
+                        # ``put_nowait`` rather than ``put``: the queue is sized
+                        # to the pool, so a blocking put under the lock could
+                        # only ever deadlock.
+                        self._idle.put_nowait(adapter)
                         self._sem.release()
 
         # Shield the cleanup so that even if the outer task gets cancelled,
@@ -166,6 +195,7 @@ class ConnectionPool:
             self._connection_tasks.clear()
             # We do NOT cancel self._cleanup_tasks, let them run to completion
             # so they can release/close any completed connection.
+            pending_cleanup = list(self._cleanup_tasks)
             adapters = list(self._all)
             self._all.clear()
         for adapter in adapters:
@@ -173,3 +203,13 @@ class ConnectionPool:
                 await adapter.close()
             except Exception:
                 logger.exception("pool_close_adapter_failed")
+        if pending_cleanup:
+            # Await them so the loop does not shut down underneath a pending
+            # task ("Task was destroyed but it is pending"). Bounded, because a
+            # wedged cleanup must not hang application shutdown.
+            done, still_pending = await asyncio.wait(pending_cleanup, timeout=_CLEANUP_TIMEOUT)
+            for task in done:
+                if not task.cancelled() and task.exception() is not None:
+                    logger.warning("pool_cleanup_task_failed", error=str(task.exception()))
+            for task in still_pending:
+                task.cancel()

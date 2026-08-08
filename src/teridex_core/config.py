@@ -10,12 +10,14 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from teridex_core.errors import ConfigError
+from teridex_core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class UIConfig(BaseModel):
     theme: str = "monokai"
     keymap: Literal["default", "vim"] = "default"
-    show_status_bar: bool = True
     row_batch_size: int = Field(default=1000, ge=10, le=100_000)
     # Max rows held in the results grid. ``0`` means unlimited; a positive
     # cap protects memory on very large result sets.
@@ -55,7 +57,6 @@ class TeridexConfig(BaseModel):
     engine: EngineConfig = Field(default_factory=EngineConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
-    connections: dict[str, str] = Field(default_factory=dict)
 
 
 def default_config_path() -> Path:
@@ -110,9 +111,17 @@ def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
     toml_data: dict[str, Any] = {}
     cfg_path = path or default_config_path()
     if cfg_path.exists():
-        with contextlib.suppress(Exception):
+        # Warn, don't mutate: the config may hold DSN credentials, but silently
+        # rewriting the permissions of a file we were only asked to *read* is a
+        # surprise, and it fights with deliberate setups (a shared config on a
+        # locked-down directory, a read-only mount, version-controlled dotfiles).
+        with contextlib.suppress(OSError):
             if cfg_path.stat().st_mode & 0o077:
-                cfg_path.chmod(0o600)
+                logger.warning(
+                    "config_permissions_permissive",
+                    path=str(cfg_path),
+                    hint="run `chmod 600` on it if it contains credentials",
+                )
         try:
             with cfg_path.open("rb") as fh:
                 toml_data = tomllib.load(fh)

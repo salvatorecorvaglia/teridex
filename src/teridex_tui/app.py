@@ -18,7 +18,6 @@ from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
-from teridex_adapters import create_adapter_for_dsn
 from teridex_core.config import TeridexConfig, load_config
 from teridex_core.errors import QueryCancelledError, QueryError, TeridexError
 from teridex_core.events import (
@@ -30,9 +29,7 @@ from teridex_core.events import (
 from teridex_core.logging import clear_context, configure_logging, get_logger
 from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor, QueryRun
-from teridex_engine.history import HistoryEntry, QueryHistory
-from teridex_engine.introspector import Introspector
-from teridex_engine.pool import ConnectionPool
+from teridex_engine.history import HistoryEntry
 from teridex_plugins.context import PluginContext
 from teridex_plugins.loader import PluginLoader
 from teridex_plugins.registry import PluginRegistry
@@ -45,6 +42,7 @@ from teridex_tui.screens.help import HelpModal
 from teridex_tui.screens.history import HistoryModal
 from teridex_tui.screens.main import MainScreen
 from teridex_tui.screens.row_limit import RowLimitModal
+from teridex_tui.session import Session, open_session
 from teridex_tui.state import AppState
 from teridex_tui.themes import THEMES
 from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, StatusBar
@@ -52,7 +50,6 @@ from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
-    from teridex_adapters.base import AbstractAdapter
     from teridex_plugins.api import Command
 
 logger = get_logger(__name__)
@@ -99,6 +96,8 @@ class TeridexApp(App[None]):
         self._run_executor: QueryExecutor | None = None
         self._query_in_flight = False
         self._palette_task: asyncio.Task[None] | None = None
+        self._session: Session | None = None
+        self._connect_lock = asyncio.Lock()
         if self.cfg.ui.keymap == "vim":
             for key, action, desc in VIM_BINDINGS:
                 if (key, action, desc) in DEFAULT_BINDINGS:
@@ -138,12 +137,9 @@ class TeridexApp(App[None]):
         if loader is not None:
             with contextlib.suppress(Exception):
                 loader.unload_all()
-        if self.state.history is not None:
-            await self.state.history.close()
-        if self.state.pool is not None:
-            await self.state.pool.close()
-        if self.state.adapter is not None:
-            await self.state.adapter.close()
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
         await self.state.bus.close()
 
     # ---- setup helpers ------------------------------------------------
@@ -262,7 +258,7 @@ class TeridexApp(App[None]):
             bar.message = "ok"
 
         async def on_failed(ev: QueryFailed) -> None:
-            self._status().message = f"[red]{escape(ev.error_code)}: {escape(ev.message)}[/]"
+            self._report_error(ev.error_code, ev.message)
 
         async def on_action(ev: RunActionRequested) -> None:
             await self.run_action(ev.action)
@@ -273,65 +269,41 @@ class TeridexApp(App[None]):
         self.state.bus.subscribe(RunActionRequested, on_action)
 
     async def _connect(self, dsn: Dsn) -> None:
-        bar = self._status()
-        bar.message = "connecting…"
-        introspect_adapter = None
-        history = None
-        try:
+        """Open a session for *dsn* and adopt it, replacing any current one.
 
-            async def _factory(d: Dsn) -> AbstractAdapter:
-                a = create_adapter_for_dsn(d)
-                await a.connect(d)
-                return a
+        Guarded by a lock: submitting the connection dialog twice in quick
+        succession used to race two connects into ``self.state``, and whichever
+        lost silently leaked its connections.
+        """
+        async with self._connect_lock:
+            bar = self._status()
+            bar.message = "connecting…"
+            try:
+                session = await open_session(dsn, self.cfg, self.state.bus)
+            except Exception as exc:
+                logger.exception("connection_failed", dsn=dsn.render(mask_password=True))
+                self._report_error("Connection failed", exc)
+                return
 
-            # Dedicated adapter for schema introspection — never shared with
-            # query execution, so a long SELECT cannot block ``Ctrl+R``.
-            is_in_memory = dsn.scheme in {"sqlite", "duckdb"} and (
-                not dsn.database or dsn.database == ":memory:"
-            )
-
-            if is_in_memory:
-                shared_adapter = await _factory(dsn)
-                introspect_adapter = shared_adapter
-                pool = ConnectionPool(
-                    dsn, lambda d: asyncio.sleep(0, result=shared_adapter), size=1
-                )
-                await pool._idle.put(shared_adapter)
-                pool._all.append(shared_adapter)
-            else:
-                introspect_adapter = await _factory(dsn)
-                pool = ConnectionPool(dsn, _factory, size=self.cfg.engine.pool_size)
-
-            self.state.dsn = dsn
-            self.state.adapter = introspect_adapter
-            self.state.pool = pool
-            self.state.introspector = Introspector(introspect_adapter, self.state.bus)
-            # History store
-            history = QueryHistory(
-                Path.home() / ".teridex" / "history.db",
-                max_entries=self.cfg.engine.max_history_entries,
-            )
-            await history.open()
-            self.state.history = history
-            self._publish_connection_services()
-            bar.connection = dsn.render(mask_password=True)
+            await self._adopt(session)
+            bar.connection = session.dsn.render(mask_password=True)
             await self.action_refresh_schema()
-            # Clear transient message so the footer shows "Database Connected."
+            # Clear the transient message so the footer shows "Database Connected."
             bar.message = ""
-        except Exception as exc:
-            logger.exception("connection_failed", dsn=dsn.render(mask_password=True))
-            bar.message = f"[red]Connection failed: {escape(str(exc))}[/]"
-            self.state.dsn = None
-            self.state.adapter = None
-            self.state.pool = None
-            self.state.introspector = None
-            self.state.history = None
-            if introspect_adapter is not None:
-                with contextlib.suppress(Exception):
-                    await introspect_adapter.close()
-            if history is not None:
-                with contextlib.suppress(Exception):
-                    await history.close()
+
+    async def _adopt(self, session: Session | None) -> None:
+        """Install *session* as the current one, closing whatever it replaces."""
+        previous = self._session
+        self._session = session
+        self.state.dsn = session.dsn if session else None
+        self.state.adapter = session.adapter if session else None
+        self.state.pool = session.pool if session else None
+        self.state.introspector = session.introspector if session else None
+        self.state.history = session.history if session else None
+        if previous is not None:
+            await previous.close()
+        if session is not None:
+            self._publish_connection_services()
 
     def _show_connection_dialog(self) -> None:
         """Push the connection dialog and connect on result."""
@@ -342,7 +314,7 @@ class TeridexApp(App[None]):
             try:
                 dsn = Dsn.parse(raw)
             except Exception as exc:
-                self._status().message = f"[red]invalid DSN: {escape(str(exc))}[/]"
+                self._report_error("Invalid DSN", exc)
                 return
             self.run_worker(self._connect(dsn))
 
@@ -368,6 +340,20 @@ class TeridexApp(App[None]):
 
     def _action_bar(self) -> ActionBar:
         return self.query_one(ActionBar)
+
+    # ---- user feedback -------------------------------------------------
+
+    def _report_error(self, headline: str, exc: BaseException | str) -> None:
+        """Surface an error in the status bar *and* as a notification.
+
+        The status bar is a single line shared with the keybinding hints, so
+        it truncates exactly the long messages that matter most — a SQL error
+        from the server. The toast carries the full text; the status line keeps
+        the short form so the last error stays visible after the toast fades.
+        """
+        detail = str(exc)
+        self._status().message = f"[red]{escape(headline)}: {escape(detail)}[/]"
+        self.notify(detail, title=headline, severity="error", timeout=10)
 
     # ---- actions ------------------------------------------------------
 
@@ -397,16 +383,19 @@ class TeridexApp(App[None]):
                 self._run_executor = executor
                 try:
                     self._current_run = await executor.run(
-                        sql, batch_size=self.cfg.ui.row_batch_size
+                        sql,
+                        batch_size=self.cfg.ui.row_batch_size,
+                        timeout=self.cfg.engine.default_timeout_seconds,
                     )
                 except QueryError as exc:
                     results.loading = False
-                    self._status().message = f"[red]{escape(str(exc))}[/]"
+                    self._report_error("Query failed", exc)
                     await self._record_history(sql)
                     return
                 cancelled = False
+                run = self._current_run
                 try:
-                    async for batch in self._current_run.rows:
+                    async for batch in run.rows:
                         results.loading = False
                         await results.feed(batch)
                         if results.truncated:
@@ -415,8 +404,14 @@ class TeridexApp(App[None]):
                     cancelled = True
                     self._status().message = "[yellow]cancelled[/]"
                 except TeridexError as exc:
-                    self._status().message = f"[red]{escape(str(exc))}[/]"
+                    self._report_error("Query failed", exc)
                 finally:
+                    # Close the stream before the adapter goes back to the pool.
+                    # Abandoning it (the ``truncated`` break above) would leave a
+                    # server-side cursor — and, on Postgres, an open transaction
+                    # — on a connection the next query is about to reuse.
+                    with contextlib.suppress(Exception):
+                        await run.aclose()
                     results.loading = False
                     results.mark_done(cancelled=cancelled)
                     self._status().truncated = results.truncated
@@ -426,7 +421,7 @@ class TeridexApp(App[None]):
             # connection setup. Clear the spinner so the table isn't stuck.
             logger.exception("run_query_failed")
             results.loading = False
-            self._status().message = f"[red]{escape(str(exc))}[/]"
+            self._report_error("Query failed", exc)
         finally:
             self._current_run = None
             self._run_executor = None
@@ -450,9 +445,22 @@ class TeridexApp(App[None]):
         try:
             n = await results.export_csv(path)
         except OSError as exc:
-            self._status().message = f"[red]export failed: {exc}[/]"
+            self._report_error("export failed", exc)
             return
-        self._status().message = f"exported {n} row{'s' if n != 1 else ''} → {path}"
+        summary = f"exported {n} row{'s' if n != 1 else ''} → {path}"
+        if results.truncated:
+            # The grid only holds what the display cap allowed, so the export
+            # is a partial one. Saying so beats a file that quietly disagrees
+            # with the query.
+            summary += " (display cap reached — partial export)"
+            self.notify(
+                f"Only the {n} displayed rows were exported; the result set is larger. "
+                "Raise the row limit to export everything.",
+                title="Partial export",
+                severity="warning",
+                timeout=8,
+            )
+        self._status().message = escape(summary)
 
     async def action_set_row_limit(self) -> None:
         current_limit = self.cfg.ui.max_display_rows
@@ -484,7 +492,7 @@ class TeridexApp(App[None]):
         try:
             snap = await self.state.introspector.refresh(lazy=True)
         except TeridexError as exc:
-            self._status().message = f"[red]schema: {escape(str(exc))}[/]"
+            self._report_error("Schema refresh failed", exc)
             return
         self._tree().populate(snap)
         self._status().message = f"schema refreshed · {snap.object_count} object(s)"
@@ -535,7 +543,7 @@ class TeridexApp(App[None]):
                 exc = done.exception()
                 if exc is not None:
                     logger.exception("command_handler_failed", exc_info=exc)
-                    self._status().message = f"[red]command failed: {escape(str(exc))}[/]"
+                    self._report_error("Command failed", exc)
 
             task.add_done_callback(_report)
 

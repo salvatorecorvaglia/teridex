@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import contextlib
 from typing import TYPE_CHECKING, Any, ClassVar
+from urllib.parse import urlencode
 
 import aiosqlite
 
-from teridex_adapters._typeinfer import infer_column_type
+from teridex_adapters._params import coerce_params
+from teridex_adapters._typeinfer import infer_column_type_from_value
 from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_adapters.introspect.sqlite import SQLiteIntrospector
 from teridex_core.errors import (
@@ -18,10 +20,10 @@ from teridex_core.errors import (
 )
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
-from teridex_core.models.result import Column, ResultBatch
+from teridex_core.models.result import Column, ColumnType, ResultBatch
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Mapping
+    from collections.abc import AsyncIterator, Mapping, Sequence
 
     from teridex_core.models.connection import Dsn
     from teridex_core.models.schema import (
@@ -34,9 +36,34 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Connect kwargs a DSN may set. ``uri`` is what makes shared-cache in-memory
+# databases reachable by more than one connection.
+_ALLOWED_PARAMS = frozenset(
+    {"uri", "timeout", "detect_types", "cached_statements", "check_same_thread"}
+)
 
-def _quote_ident(name: str) -> str:
-    return '"' + name.replace('"', '""') + '"'
+# Parameters that belong to SQLite's own URI grammar rather than to
+# ``sqlite3.connect``. They travel on the path (``file:db?mode=memory``), so a
+# DSN like ``sqlite:///file:x?mode=memory&cache=shared&uri=true`` has to route
+# them back onto the filename instead of passing them as connect kwargs.
+_URI_PARAMS = frozenset({"mode", "cache", "immutable", "nolock", "psow", "vfs"})
+
+
+def _split_uri_params(params: Mapping[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Split DSN params into (SQLite URI params, connect kwargs)."""
+    uri_params = {k: v for k, v in params.items() if k in _URI_PARAMS}
+    kwargs = {k: v for k, v in params.items() if k not in _URI_PARAMS}
+    return uri_params, kwargs
+
+
+def _typed_columns(columns: list[Column], sample: Sequence[Any]) -> list[Column]:
+    """Re-type *columns* from a sample row, leaving names untouched."""
+    typed = [
+        col.model_copy(update={"type": infer_column_type_from_value(value)})
+        for col, value in zip(columns, sample, strict=False)
+    ]
+    # A short row leaves the trailing columns as they were.
+    return typed + columns[len(typed) :]
 
 
 class _SQLiteTransaction:
@@ -71,16 +98,14 @@ class SQLiteAdapter(AbstractAdapter):
 
     async def _do_connect(self, dsn: Dsn) -> None:
         path = dsn.database or ":memory:"
+        uri_params, raw_kwargs = _split_uri_params(dsn.params)
         conn_kwargs: dict[str, Any] = {"isolation_level": None}
-        for k, v in dsn.params.items():
-            if v.lower() == "true":
-                conn_kwargs[k] = True
-            elif v.lower() == "false":
-                conn_kwargs[k] = False
-            elif v.isdigit():
-                conn_kwargs[k] = int(v)
-            else:
-                conn_kwargs[k] = v
+        conn_kwargs.update(coerce_params(raw_kwargs, _ALLOWED_PARAMS, adapter="sqlite"))
+        if uri_params:
+            separator = "&" if "?" in path else "?"
+            path = path + separator + urlencode(uri_params)
+            # SQLite only honours those parameters in URI mode.
+            conn_kwargs["uri"] = True
         try:
             self._conn = await aiosqlite.connect(path, **conn_kwargs)
             # WAL mode is fine on file dbs, no-op on memory.
@@ -158,8 +183,7 @@ class SQLiteAdapter(AbstractAdapter):
         async def _gen() -> AsyncIterator[ResultBatch]:
             description: list[Any] = list(cur.description or [])
             columns = [
-                Column(name=d[0], type=infer_column_type(None), type_native=None)
-                for d in description
+                Column(name=d[0], type=ColumnType.UNKNOWN, type_native=None) for d in description
             ]
             self._set_metadata(
                 handle,
@@ -173,6 +197,7 @@ class SQLiteAdapter(AbstractAdapter):
                 handle.mark_done(QueryStatus.SUCCEEDED)
                 yield ResultBatch(columns=[], rows=[], is_last=True)
                 return
+            typed = False
             try:
                 while True:
                     if cancel.is_set():
@@ -189,11 +214,26 @@ class SQLiteAdapter(AbstractAdapter):
                                 "query cancelled", context={"query_id": handle.query_id}
                             ) from exc
                         raise QueryError(str(exc), context={"sql": handle.sql}) from exc
-                    if not rows:
+                    materialized = [tuple(r) for r in rows]
+                    if not materialized:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)
                         return
-                    yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
+                    if not typed:
+                        # SQLite's cursor description carries names only, so the
+                        # first row of data is the only type information there
+                        # is. Types stay UNKNOWN if the result set is empty.
+                        columns = _typed_columns(columns, materialized[0])
+                        self._set_metadata(
+                            handle,
+                            QueryMetadata(
+                                column_names=[c.name for c in columns],
+                                column_types=[c.type.value for c in columns],
+                                affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
+                            ),
+                        )
+                        typed = True
+                    yield ResultBatch(columns=columns, rows=materialized, is_last=False)
             finally:
                 await cur.close()
                 self._cursors.pop(handle.query_id, None)
@@ -225,6 +265,12 @@ class SQLiteAdapter(AbstractAdapter):
             with contextlib.suppress(Exception):
                 await cur.close()
         self._cursors.clear()
+        if self._conn is not None and self._conn.in_transaction:
+            # ``isolation_level=None`` means we only ever hold a transaction
+            # that SQL explicitly opened, so anything still open here is a
+            # leftover the next caller must not inherit.
+            with contextlib.suppress(Exception):
+                await self._conn.execute("ROLLBACK")
 
     async def begin(self) -> Transaction:
         if self._conn is None:

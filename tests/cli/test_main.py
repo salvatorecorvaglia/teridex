@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
@@ -73,3 +74,68 @@ def test_run_executes_query_and_prints_rows() -> None:
     assert result.exit_code == 0
     assert "42" in result.stdout
     assert "answer" in result.stdout
+
+
+def test_run_defaults_to_a_rendered_table() -> None:
+    result = runner.invoke(app, ["run", "--dsn", "duckdb:///:memory:", "SELECT 1 AS n"])
+    assert result.exit_code == 0
+    assert "n" in result.stdout
+    assert "row(s)" in result.stdout
+
+
+def test_run_csv_writes_plain_data() -> None:
+    result = runner.invoke(
+        app,
+        ["run", "--dsn", "duckdb:///:memory:", "SELECT 1 AS n, 'a,b' AS txt", "--format", "csv"],
+    )
+    assert result.exit_code == 0
+    # Quoted because the value contains the delimiter — and no table borders.
+    assert 'n,txt\n1,"a,b"' in result.stdout
+    assert "┏" not in result.stdout
+
+
+def test_run_json_writes_parsable_output() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--dsn",
+            "duckdb:///:memory:",
+            "SELECT 1 AS n, NULL AS empty",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == [{"n": 1, "empty": None}]
+
+
+def test_run_renders_markup_in_values_literally() -> None:
+    """A value containing Rich markup must not restyle — or crash — the table."""
+    result = runner.invoke(app, ["run", "--dsn", "duckdb:///:memory:", "SELECT '[bold]x[/]' AS v"])
+    assert result.exit_code == 0
+    assert "[bold]x[/]" in result.stdout
+
+
+def test_run_limit_caps_printed_rows() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--dsn",
+            "duckdb:///:memory:",
+            "SELECT * FROM range(100) t(i)",
+            "--limit",
+            "3",
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0
+    data_lines = [ln for ln in result.stdout.strip().splitlines() if ln]
+    assert len(data_lines) == 4  # header + 3 rows
+
+
+def test_plugins_list_runs() -> None:
+    result = runner.invoke(app, ["plugins", "list"])
+    assert result.exit_code == 0

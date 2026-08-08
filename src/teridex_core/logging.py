@@ -10,14 +10,17 @@ Use :func:`get_logger` everywhere. Inject per-request context with
 
 from __future__ import annotations
 
+import atexit
+import contextlib
 import logging
 import sys
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
     from structlog.types import EventDict, Processor
@@ -27,7 +30,12 @@ _request_context: ContextVar[dict[str, Any] | None] = ContextVar(
 )
 
 _configured = False
-_log_file_stream: Any = None
+# Open log-file streams, keyed by resolved path. Reconfiguring must never close
+# a stream that is still live: structlog caches bound loggers on first use, and
+# those cached loggers keep writing to the file object they were built with. A
+# closed stream would turn every subsequent log call into ValueError. Streams
+# are therefore reused across reconfigurations and closed only at exit.
+_log_file_streams: dict[str, Any] = {}
 
 
 def _merge_request_context(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
@@ -38,6 +46,30 @@ def _merge_request_context(_logger: Any, _method_name: str, event_dict: EventDic
     return event_dict
 
 
+def _open_log_stream(log_file: Path) -> Any:
+    """Return an append stream for *log_file*, reusing one already open for it."""
+    key = str(log_file)
+    existing = _log_file_streams.get(key)
+    if existing is not None and not getattr(existing, "closed", False):
+        return existing
+    try:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        stream = log_file.open("a", encoding="utf-8")
+    except OSError:
+        # Caller falls back to stderr if the log file cannot be opened.
+        return None
+    _log_file_streams[key] = stream
+    atexit.register(_close_log_streams)
+    return stream
+
+
+def _close_log_streams() -> None:
+    for stream in _log_file_streams.values():
+        with contextlib.suppress(Exception):
+            stream.close()
+    _log_file_streams.clear()
+
+
 def configure_logging(
     *,
     level: str = "INFO",
@@ -46,27 +78,13 @@ def configure_logging(
     force: bool = False,
 ) -> None:
     """Configure structlog + stdlib logging. Idempotent unless force=True."""
-
-    import contextlib  # noqa: PLC0415
-
-    global _configured, _log_file_stream  # noqa: PLW0603 - module-level idempotency flags
+    global _configured  # noqa: PLW0603 - module-level idempotency flag
     if _configured and not force:
         return
 
-    if _log_file_stream is not None and hasattr(_log_file_stream, "close"):
-        with contextlib.suppress(Exception):
-            _log_file_stream.close()
-    _log_file_stream = None
-
     stream: Any = sys.stderr
     if log_file is not None:
-        try:
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            stream = log_file.open("a", encoding="utf-8")
-            _log_file_stream = stream
-        except OSError:
-            # Fallback to sys.stderr if log file cannot be opened
-            stream = sys.stderr
+        stream = _open_log_stream(log_file) or sys.stderr
 
     if json is None:
         json = not stream.isatty() if hasattr(stream, "isatty") else True
@@ -112,12 +130,40 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     return bound
 
 
-def bind_context(**kwargs: Any) -> None:
-    """Bind keys onto the current logging context (request/query scope)."""
+def bind_context(**kwargs: Any) -> Token[dict[str, Any] | None]:
+    """Bind keys onto the current logging context (request/query scope).
+
+    Returns the :class:`~contextvars.Token` for the previous value. Pass it to
+    :func:`reset_context` to restore exactly what was bound before, instead of
+    wiping context that belongs to an unrelated caller.
+    """
     current = _request_context.get() or {}
     ctx = {**current, **kwargs}
-    _request_context.set(ctx)
+    return _request_context.set(ctx)
+
+
+def reset_context(token: Token[dict[str, Any] | None]) -> None:
+    """Restore the logging context captured by :func:`bind_context`."""
+    with contextlib.suppress(ValueError):
+        # ValueError when the token was created in a different Context — the
+        # scope already ended, so there is nothing to restore.
+        _request_context.reset(token)
+
+
+@contextlib.contextmanager
+def log_context(**kwargs: Any) -> Iterator[None]:
+    """Scope ``kwargs`` onto the logging context for the duration of the block."""
+    token = bind_context(**kwargs)
+    try:
+        yield
+    finally:
+        reset_context(token)
 
 
 def clear_context() -> None:
+    """Drop the entire request-scoped logging context.
+
+    Prefer :func:`log_context` / :func:`reset_context`; this wipes keys bound by
+    any caller and exists for process-level teardown (e.g. CLI exit).
+    """
     _request_context.set(None)

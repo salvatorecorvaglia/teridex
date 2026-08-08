@@ -7,10 +7,12 @@ per-connection lock so the embedded DB is touched by one thread at a time.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import duckdb
 
+from teridex_adapters._params import coerce_params
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_adapters.introspect.duckdb import DuckDBIntrospector
@@ -38,6 +40,15 @@ if TYPE_CHECKING:
     from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
+
+_INTROSPECTION = "<introspection>"
+
+# DuckDB settings a DSN may set. The full config surface includes switches that
+# relax sandboxing (``allow_unsigned_extensions``, ``enable_external_access``),
+# so a connection string gets an explicit, conservative subset.
+_ALLOWED_PARAMS = frozenset(
+    {"access_mode", "memory_limit", "threads", "max_memory", "temp_directory"}
+)
 
 
 class _DuckDBTransaction:
@@ -69,20 +80,34 @@ class DuckDBAdapter(AbstractAdapter):
         super().__init__()
         self._conn: duckdb.DuckDBPyConnection | None = None
         self._lock = asyncio.Lock()
+        # DuckDB's result set lives on the *connection*, not on a cursor: any
+        # other statement executed before the current stream is drained silently
+        # replaces the rows still being read. ``_streaming`` names the query that
+        # owns the connection so a competing caller fails loudly instead.
+        self._streaming: str | None = None
+
+    def _claim_result_set(self, owner: str) -> None:
+        if self._streaming is not None and self._streaming != owner:
+            raise AdapterError(
+                "duckdb: a result set is still being streamed on this connection; "
+                "finish or cancel it before running another statement",
+                context={"adapter": self.name, "streaming_query_id": self._streaming},
+            )
 
     async def _do_connect(self, dsn: Dsn) -> None:
         path = dsn.database or ":memory:"
-        # duckdb.connect is sync; wrap.
-        config: dict[str, str | bool | int | float | list[str]] | None = None
-        if dsn.params:
-            config = dict(dsn.params)
+        config = coerce_params(dsn.params, _ALLOWED_PARAMS, adapter="duckdb")
+        # ``access_mode=read_only`` is how DuckDB itself spells a read-only
+        # connection; honour it instead of silently ignoring the request.
+        read_only = str(config.pop("access_mode", "")).lower() == "read_only"
         try:
-            if config is not None:
+            # duckdb.connect is sync; wrap.
+            if config:
                 self._conn = await asyncio.to_thread(
-                    duckdb.connect, path, read_only=False, config=config
+                    duckdb.connect, path, read_only=read_only, config=config
                 )
             else:
-                self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=False)
+                self._conn = await asyncio.to_thread(duckdb.connect, path, read_only=read_only)
         except Exception as exc:
             raise AdapterConnectionError(
                 f"duckdb: connection failed: {exc}",
@@ -90,6 +115,7 @@ class DuckDBAdapter(AbstractAdapter):
             ) from exc
 
     async def _do_close(self) -> None:
+        self._streaming = None
         if self._conn is not None:
             await asyncio.to_thread(self._conn.close)
             self._conn = None
@@ -128,6 +154,7 @@ class DuckDBAdapter(AbstractAdapter):
             params=dict(params) if params else None,
         )
         handle.mark_running()
+        self._claim_result_set(handle.query_id)
         try:
             await self._exec_sync(sql, params)
         except duckdb.Error as exc:
@@ -139,6 +166,7 @@ class DuckDBAdapter(AbstractAdapter):
             handle.mark_done(QueryStatus.FAILED)
             raise QueryError(str(exc), context={"sql": sql}) from exc
         handle.mark_streaming()
+        self._streaming = handle.query_id
         return handle
 
     async def stream(
@@ -198,12 +226,16 @@ class DuckDBAdapter(AbstractAdapter):
                         return
                     yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
             finally:
+                if self._streaming == handle.query_id:
+                    self._streaming = None
                 self._forget(handle)
 
         return _gen()
 
     async def cancel(self, handle: QueryHandle) -> None:
         await super().cancel(handle)
+        if self._streaming == handle.query_id:
+            self._streaming = None
         if self._conn is None:
             return
         # interrupt() is thread-safe and aborts the in-progress query on the
@@ -215,29 +247,44 @@ class DuckDBAdapter(AbstractAdapter):
         except Exception as exc:
             logger.warning("duckdb_interrupt_failed", query_id=handle.query_id, error=str(exc))
 
+    async def reset(self) -> None:
+        await super().reset()
+        self._streaming = None
+        if self._conn is None:
+            return
+        # Roll back anything an abandoned stream or a failed transaction block
+        # left open. DuckDB errors when no transaction is active, which is the
+        # common case — hence the suppression.
+        with contextlib.suppress(Exception):
+            await self._exec_sync("ROLLBACK")
+
     async def begin(self) -> Transaction:
         return _DuckDBTransaction(self)
 
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
+        self._claim_result_set(_INTROSPECTION)
         introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
         return await introspector.build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
+        self._claim_result_set(_INTROSPECTION)
         introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
         return await introspector.fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
+        self._claim_result_set(_INTROSPECTION)
         introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
         return await introspector.fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
         if self._conn is None:
             raise AdapterError("duckdb: not connected")
+        self._claim_result_set(_INTROSPECTION)
         introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
         return await introspector.fetch_indexes(schema, name)

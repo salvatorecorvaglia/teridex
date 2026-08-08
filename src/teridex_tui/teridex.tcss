@@ -147,8 +147,12 @@ ResultsTable {
     height: 100%;
 }
 
-/* ── Command Palette overlay ── */
-CommandPalette {
+/* ── Command Palette overlay ──
+ * Selector is the container's id, not a type selector: the screen class is
+ * `CommandPaletteScreen`, so a bare `CommandPalette` selector matched
+ * Textual's own built-in palette instead and this block never applied.
+ */
+#command-palette {
     layer: overlay;
     align: center top;
     width: 70%;
@@ -221,5 +225,56 @@ CommandPalette {
     min-width: 14;
     background: $primary;
     color: $background;
+    text-style: bold;
+}
+
+/* ── Focus, hover and disabled states ──
+ * Teridex is keyboard-first, so "where am I?" has to be answerable at a
+ * glance. Nothing here was styled before, leaving focus to whatever Textual's
+ * defaults happened to render against the theme's own colours.
+ */
+#schema-tree:focus,
+#results-table:focus,
+#history-list:focus,
+#palette-list:focus,
+#conn-presets:focus {
+    border: round $accent;
+}
+
+#sql-editor:focus,
+#palette-input:focus,
+#conn-input:focus,
+#limit-input:focus {
+    border: round $accent;
+}
+
+/* The focused panel's title is highlighted too, so the active pane reads
+ * clearly even on terminals with a muted border palette. */
+#sidebar:focus-within,
+#editor-panel:focus-within,
+#results-panel:focus-within {
+    border: round $accent;
+    border-title-color: $accent;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+Button:hover {
+    background: $accent;
+    color: $background;
+}
+
+Button:disabled {
+    text-style: dim;
+}
+
+ListView > ListItem.--highlight {
+    background: $primary 30%;
+}
+
+ListView:focus > ListItem.--highlight {
+    background: $primary 50%;
     text-style: bold;
 }

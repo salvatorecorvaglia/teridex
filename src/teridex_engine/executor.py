@@ -8,11 +8,13 @@ Wraps a :class:`DatabaseAdapter`, emits lifecycle events on an
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
-from teridex_core.errors import QueryCancelledError, QueryError
+from teridex_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
 from teridex_core.events import (
     EventBus,
     QueryCancelled,
@@ -21,16 +23,19 @@ from teridex_core.events import (
     QueryProgress,
     QueryStarted,
 )
-from teridex_core.logging import bind_context, clear_context, get_logger
+from teridex_core.logging import bind_context, get_logger, reset_context
+from teridex_core.models.query import QueryStatus
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-    from teridex_core.models.query import QueryHandle, QueryStatus
+    from teridex_core.models.query import QueryHandle
     from teridex_core.models.result import ResultBatch
     from teridex_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
+
+_UNEXPECTED = "teridex.query.unexpected"
 
 
 @dataclass
@@ -54,6 +59,18 @@ class QueryRun:
     def duration_ms(self) -> float | None:
         return self.handle.duration_ms
 
+    async def aclose(self) -> None:
+        """Finalize the stream, releasing the adapter's cursor/transaction.
+
+        Safe to call after full consumption (a no-op) and safe to call twice.
+        Callers that stop iterating early **must** call this: leaving
+        finalization to the garbage collector can hand a connection back to the
+        pool while it is still inside a transaction.
+        """
+        aclose = getattr(self.rows, "aclose", None)
+        if aclose is not None:
+            await aclose()
+
 
 class QueryExecutor:
     """Executes SQL against an adapter and broadcasts lifecycle events."""
@@ -69,26 +86,42 @@ class QueryExecutor:
         *,
         batch_size: int = 1000,
         progress_every: int = 5000,
+        # ASYNC109 wants callers to wrap the call in ``asyncio.timeout``
+        # instead. That cannot work here: the deadline has to bound the
+        # *iterator this returns*, which the caller drains long after ``run()``
+        # has returned — and expiry has to cancel the query server-side, not
+        # merely abandon it.
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> QueryRun:
         """Start execution and return a :class:`QueryRun` whose ``rows`` you iterate.
 
         The returned iterator emits events as it consumes the stream.
 
-        Note: The caller must iterate `run.rows` to ensure that lifecycle events
-        are sent and the structured logging context is cleared via `clear_context()`.
-        If the iterator is discarded without being fully consumed, the caller
-        should manually call `clear_context()`.
+        The caller owns ``run.rows``: iterate it to completion, or call
+        ``await run.rows.aclose()`` when abandoning it early. Closing is what
+        publishes the terminal lifecycle event and unwinds the adapter's
+        cursor/transaction — relying on garbage collection defers both to an
+        arbitrary later moment, on an arbitrary task.
+
+        ``timeout`` bounds the *whole* run — execution plus streaming — and
+        raises :class:`QueryTimeoutError` from the iterator when it expires.
+        ``None`` or a non-positive value disables it. The adapter is asked to
+        cancel first, so the server stops working on the query rather than
+        just the client walking away.
         """
         started = time.perf_counter()
+        deadline = time.monotonic() + timeout if timeout is not None and timeout > 0 else None
+        # A pre-flight failure has no handle yet, so mint the id up front and
+        # carry it into both the failure event and (on success) the handle —
+        # the UI can then correlate every event to one run.
+        query_id = uuid4().hex
         try:
             handle = await self._adapter.execute(sql, params)
         except Exception as exc:
             self._bus.publish(
                 QueryFailed(
-                    query_id="-",
-                    error_code=getattr(exc, "code", "teridex.query.unexpected")
-                    if isinstance(exc, QueryError)
-                    else "teridex.query.unexpected",
+                    query_id=query_id,
+                    error_code=exc.code if isinstance(exc, QueryError) else _UNEXPECTED,
                     message=str(exc),
                 )
             )
@@ -97,7 +130,7 @@ class QueryExecutor:
         # Bind the query identity into the structured-logging contextvar so
         # every log line emitted while this run is in flight carries
         # ``query_id`` + ``adapter`` without each callsite needing to know.
-        bind_context(query_id=handle.query_id, adapter=self._adapter.name)
+        token = bind_context(query_id=handle.query_id, adapter=self._adapter.name)
 
         self._bus.publish(
             QueryStarted(
@@ -114,55 +147,91 @@ class QueryExecutor:
         try:
             source = await self._adapter.stream(handle, batch_size=batch_size)
         except BaseException:
-            clear_context()
+            reset_context(token)
             raise
         run = QueryRun(handle=handle, rows=source)
 
+        def _elapsed_ms() -> float:
+            return (time.perf_counter() - started) * 1000.0
+
+        async def _next_batch(iterator: AsyncIterator[ResultBatch]) -> ResultBatch | None:
+            """Pull the next batch, bounded by the run's deadline."""
+            if deadline is None:
+                return await anext(iterator, None)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError
+            async with asyncio.timeout(remaining):
+                return await anext(iterator, None)
+
         async def _wrap() -> AsyncIterator[ResultBatch]:
+            next_progress_at = progress_every
             try:
-                async for batch in source:
+                while True:
+                    try:
+                        batch = await _next_batch(source)
+                    except TimeoutError as exc:
+                        # Ask the server to stop too — walking away client-side
+                        # would leave the query burning resources over there.
+                        with contextlib.suppress(Exception):
+                            await self._adapter.cancel(handle)
+                        handle.mark_done(QueryStatus.FAILED)
+                        raise QueryTimeoutError(
+                            f"query exceeded its {timeout:.1f}s timeout",
+                            context={"query_id": handle.query_id, "timeout_seconds": timeout},
+                        ) from exc
+                    if batch is None:
+                        break
                     run.rows_emitted += len(batch.rows)
-                    if (
-                        run.rows_emitted > 0
-                        and progress_every > 0
-                        and run.rows_emitted % progress_every < batch_size
-                    ):
+                    if progress_every > 0 and run.rows_emitted >= next_progress_at:
+                        # Skip past any thresholds a single large batch crossed
+                        # so one batch never emits a burst of progress events.
+                        next_progress_at = (run.rows_emitted // progress_every + 1) * progress_every
                         self._bus.publish(
                             QueryProgress(query_id=handle.query_id, rows_emitted=run.rows_emitted)
+                        )
+                    if run.cancel_event.is_set():
+                        # Cooperative stop: the adapter's own cancellation may
+                        # not interrupt a batch already in flight.
+                        raise QueryCancelledError(
+                            "query cancelled", context={"query_id": handle.query_id}
                         )
                     yield batch
                 self._bus.publish(
                     QueryCompleted(
                         query_id=handle.query_id,
                         rows=run.rows_emitted,
-                        duration_ms=(time.perf_counter() - started) * 1000.0,
+                        duration_ms=_elapsed_ms(),
                     )
                 )
             except GeneratorExit:
-                self._bus.publish(
-                    QueryCompleted(
-                        query_id=handle.query_id,
-                        rows=run.rows_emitted,
-                        duration_ms=(time.perf_counter() - started) * 1000.0,
-                    )
-                )
+                # The consumer abandoned the stream (early ``break`` + aclose).
+                # That is a cancellation, not a completion — reporting it as a
+                # success would record a partial read as the full result.
+                if handle.finished_at is None:
+                    handle.mark_done(QueryStatus.CANCELLED)
+                self._bus.publish(QueryCancelled(query_id=handle.query_id))
                 raise
             except QueryCancelledError:
+                self._bus.publish(QueryCancelled(query_id=handle.query_id))
+                raise
+            except asyncio.CancelledError:
+                # CancelledError is a BaseException, so without this the run
+                # would end with no terminal event and leave the UI stuck on
+                # "running".
                 self._bus.publish(QueryCancelled(query_id=handle.query_id))
                 raise
             except Exception as exc:
                 self._bus.publish(
                     QueryFailed(
                         query_id=handle.query_id,
-                        error_code=getattr(exc, "code", "teridex.query.unexpected")
-                        if isinstance(exc, QueryError)
-                        else "teridex.query.unexpected",
+                        error_code=exc.code if isinstance(exc, QueryError) else _UNEXPECTED,
                         message=str(exc),
                     )
                 )
                 raise
             finally:
-                clear_context()
+                reset_context(token)
 
         run.rows = _wrap()
         return run

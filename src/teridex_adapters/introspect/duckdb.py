@@ -16,6 +16,34 @@ if TYPE_CHECKING:
     from teridex_core.models.connection import Dsn
 
 
+def _index_columns(expressions: object) -> list[str]:
+    """Normalize ``duckdb_indexes().expressions`` into a column list.
+
+    DuckDB returns either a real list or its string rendering
+    (``[a, b]``). Splitting the string on commas is wrong for an expression
+    key containing one, so only the outer brackets are stripped when a list
+    is not already given.
+    """
+    if isinstance(expressions, list | tuple):
+        return [str(e).strip() for e in expressions if str(e).strip()]
+    if expressions is None:
+        return []
+    text = str(expressions).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [part.strip() for part in text.split(",") if part.strip()]
+
+
+def _primary_key_columns(conn: duckdb.DuckDBPyConnection) -> dict[tuple[str, str], frozenset[str]]:
+    """Map ``(schema, table)`` to the names of its primary-key columns."""
+    rows = conn.execute(
+        "SELECT schema_name, table_name, constraint_column_names "
+        "FROM duckdb_constraints() "
+        "WHERE constraint_type = 'PRIMARY KEY'"
+    ).fetchall()
+    return {(schema, table): frozenset(cols) for schema, table, cols in rows}
+
+
 class DuckDBIntrospector(SchemaIntrospector):
     """DuckDB-specific schema introspector.
 
@@ -134,18 +162,102 @@ class DuckDBIntrospector(SchemaIntrospector):
                 "WHERE schema_name = ? AND table_name = ?",
                 [schema, name],
             ).fetchall()
-            indexes = []
-            for idx_name, exprs, is_uniq, is_pri in rows:
-                cols = [c.strip() for c in exprs.strip("[]").split(",") if c.strip()]
-                indexes.append(
+            return [
+                Index(
+                    name=idx_name,
+                    columns=_index_columns(exprs),
+                    unique=bool(is_uniq),
+                    primary=bool(is_pri),
+                )
+                for idx_name, exprs, is_uniq, is_pri in rows
+            ]
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)
+
+    # ---- bulk variants -------------------------------------------------
+    # One sweep per kind instead of three queries per table. Each is a single
+    # round trip into the embedded engine, so a wide schema no longer costs
+    # O(tables) thread hops on connect.
+
+    async def fetch_all_columns(self) -> dict[tuple[str, str], list[TableColumn]]:
+        conn = self._conn
+
+        def _fetch() -> dict[tuple[str, str], list[TableColumn]]:
+            rows = conn.execute(
+                "SELECT c.table_schema, c.table_name, c.column_name, c.data_type, "
+                "       c.is_nullable, c.column_default, c.ordinal_position "
+                "FROM information_schema.columns c "
+                "WHERE c.table_schema NOT IN ('pg_catalog','information_schema') "
+                "ORDER BY c.table_schema, c.table_name, c.ordinal_position"
+            ).fetchall()
+            primary = _primary_key_columns(conn)
+            res: dict[tuple[str, str], list[TableColumn]] = {}
+            for schema, table, cname, ctype, nullable, default, ordinal in rows:
+                key = (schema, table)
+                res.setdefault(key, []).append(
+                    TableColumn(
+                        name=cname,
+                        type_native=ctype,
+                        type=infer_column_type(ctype),
+                        nullable=nullable == "YES",
+                        default=default,
+                        ordinal=ordinal or 0,
+                        is_primary_key=cname in primary.get(key, frozenset()),
+                    )
+                )
+            return res
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)
+
+    async def fetch_all_foreign_keys(self) -> dict[tuple[str, str], list[ForeignKey]]:
+        conn = self._conn
+
+        def _fetch() -> dict[tuple[str, str], list[ForeignKey]]:
+            rows = conn.execute(
+                "SELECT schema_name, table_name, constraint_name, "
+                "       constraint_column_names, referenced_table, referenced_column_names "
+                "FROM duckdb_constraints() "
+                "WHERE constraint_type = 'FOREIGN KEY'"
+            ).fetchall()
+            res: dict[tuple[str, str], list[ForeignKey]] = {}
+            for schema, table, cname, cols, ref_table, ref_cols in rows:
+                key = (schema, table)
+                existing = res.setdefault(key, [])
+                existing.append(
+                    ForeignKey(
+                        name=cname or f"fk_{table}_{len(existing)}",
+                        columns=list(cols),
+                        referenced_table=ref_table,
+                        referenced_columns=list(ref_cols),
+                    )
+                )
+            return res
+
+        async with self._lock:
+            return await asyncio.to_thread(_fetch)
+
+    async def fetch_all_indexes(self) -> dict[tuple[str, str], list[Index]]:
+        conn = self._conn
+
+        def _fetch() -> dict[tuple[str, str], list[Index]]:
+            rows = conn.execute(
+                "SELECT schema_name, table_name, index_name, expressions, "
+                "       is_unique, is_primary "
+                "FROM duckdb_indexes()"
+            ).fetchall()
+            res: dict[tuple[str, str], list[Index]] = {}
+            for schema, table, idx_name, exprs, is_uniq, is_pri in rows:
+                res.setdefault((schema, table), []).append(
                     Index(
                         name=idx_name,
-                        columns=cols,
+                        columns=_index_columns(exprs),
                         unique=bool(is_uniq),
                         primary=bool(is_pri),
                     )
                 )
-            return indexes
+            return res
 
         async with self._lock:
             return await asyncio.to_thread(_fetch)

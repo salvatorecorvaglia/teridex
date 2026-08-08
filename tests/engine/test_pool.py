@@ -133,3 +133,77 @@ async def test_pool_close_cancellation_safety_does_not_leak_adapter() -> None:
     assert len(connections_created) > 0
     for a in connections_created:
         assert a.connected is False
+
+
+@pytest.mark.asyncio
+async def test_close_closes_an_adapter_that_was_checked_out() -> None:
+    """Closing the pool must not leak the connections that were in use.
+
+    ``close()`` empties ``_all``, so the release path could no longer find the
+    checked-out adapter in it and skipped closing that connection entirely.
+    """
+    pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=2)
+    released: list[DatabaseAdapter] = []
+
+    async def _hold() -> None:
+        async with pool.acquire() as adapter:
+            released.append(adapter)
+            await asyncio.sleep(0.05)
+
+    holder = asyncio.create_task(_hold())
+    for _ in range(20):
+        await asyncio.sleep(0)
+        if released:
+            break
+    assert released, "never acquired an adapter"
+
+    await pool.close()
+    await holder
+    for _ in range(50):
+        await asyncio.sleep(0)
+        if not released[0].connected:  # type: ignore[attr-defined]
+            break
+    assert not released[0].connected, "checked-out adapter was left open"  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_preload_adopts_an_existing_connection() -> None:
+    pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=1)
+    seeded = await _factory(Dsn.parse(_MEM))
+    await pool.preload(seeded)
+    try:
+        async with pool.acquire() as adapter:
+            assert adapter is seeded
+        # Still usable after being returned.
+        async with pool.acquire() as adapter:
+            assert adapter is seeded
+    finally:
+        await pool.close()
+    assert not seeded.connected  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_preload_refuses_to_exceed_capacity() -> None:
+    pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=1)
+    await pool.preload(await _factory(Dsn.parse(_MEM)))
+    try:
+        with pytest.raises(ValueError, match="capacity"):
+            await pool.preload(await _factory(Dsn.parse(_MEM)))
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_release_rolls_back_a_transaction_left_open() -> None:
+    """A connection must never return to the pool inside a transaction."""
+    pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=1)
+    try:
+        async with pool.acquire() as adapter:
+            await adapter.execute("BEGIN")
+            assert adapter._conn.in_transaction  # type: ignore[attr-defined]
+            leaked = adapter
+        assert not leaked._conn.in_transaction, (  # type: ignore[attr-defined]
+            "adapter went back to the pool still in a transaction"
+        )
+    finally:
+        await pool.close()

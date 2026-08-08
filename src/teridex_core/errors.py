@@ -57,17 +57,9 @@ class QueryTimeoutError(QueryError):
     code = "teridex.query.timeout"
 
 
-class IntrospectionError(AdapterError):
-    code = "teridex.adapter.introspection"
-
-
 class PluginError(TeridexError):
     code = "teridex.plugin"
 
 
 class PluginLoadError(PluginError):
     code = "teridex.plugin.load"
-
-
-class DependencyResolutionError(TeridexError):
-    code = "teridex.di.resolution"

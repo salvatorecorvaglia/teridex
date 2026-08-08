@@ -112,9 +112,12 @@ class QueryHistory:
 
     async def recent(self, limit: int = 50) -> list[HistoryEntry]:
         conn = self._require()
+        # Ordered by ``id`` (insertion order) rather than by the ISO text in
+        # ``started_at``, which sorts incorrectly once entries carry different
+        # UTC offsets.
         async with conn.execute(
             "SELECT id, query_id, connection_label, sql, status, duration_ms,"
-            " rows, error, started_at FROM history ORDER BY started_at DESC LIMIT ?",
+            " rows, error, started_at FROM history ORDER BY id DESC LIMIT ?",
             (limit,),
         ) as cur:
             rows = await cur.fetchall()
@@ -144,9 +147,16 @@ class QueryHistory:
 
     async def _trim(self) -> None:
         conn = self._require()
+        # Retention by rowid rather than by ``started_at``: ``id`` is
+        # AUTOINCREMENT so it already orders by insertion, it is the primary
+        # key (so this is an index scan, not a sort of the whole table every
+        # 50 inserts), and it does not depend on timestamps whose text
+        # representation sorts wrongly across UTC offsets.
+        # The subquery yields NULL below the retention limit, and
+        # ``id <= NULL`` matches nothing — so a small table is left alone.
         await conn.execute(
-            "DELETE FROM history WHERE id NOT IN ("
-            "  SELECT id FROM history ORDER BY started_at DESC LIMIT ?"
+            "DELETE FROM history WHERE id <= ("
+            "  SELECT id FROM history ORDER BY id DESC LIMIT 1 OFFSET ?"
             ")",
             (self._max,),
         )

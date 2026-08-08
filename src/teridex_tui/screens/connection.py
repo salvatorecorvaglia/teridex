@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from textual.containers import Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Input, ListItem, ListView, Static
+
+from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -22,7 +23,7 @@ _PRESETS: list[tuple[str, str]] = [
 ]
 
 
-class ConnectionScreen(ModalScreen[str | None]):
+class ConnectionScreen(BaseModal[str]):
     """Modal prompting for a database DSN.
 
     Returns the raw DSN string on submit, or ``None`` on escape/cancel.
@@ -51,15 +52,14 @@ class ConnectionScreen(ModalScreen[str | None]):
     def on_mount(self) -> None:
         self.query_one("#conn-input", Input).focus()
 
+    def handles_enter_itself(self) -> bool:
+        # A focused preset list emits ListView.Selected on enter.
+        return self.query_one("#conn-presets", ListView).has_focus
+
     def on_key(self, event: Key) -> None:
-        if event.key == "escape":
-            self.dismiss(None)
-        elif event.key == "enter":
-            lst = self.query_one("#conn-presets", ListView)
-            if lst.has_focus:
-                return
-            self._submit()
-        elif event.key == "down":
+        # Up/down move focus between the input and the preset list; everything
+        # else (escape/enter) is the shared modal behaviour.
+        if event.key == "down":
             inp = self.query_one("#conn-input", Input)
             if inp.has_focus:
                 self.query_one("#conn-presets", ListView).focus()
@@ -67,6 +67,8 @@ class ConnectionScreen(ModalScreen[str | None]):
             lst = self.query_one("#conn-presets", ListView)
             if lst.has_focus and lst.index == 0:
                 self.query_one("#conn-input", Input).focus()
+        else:
+            super().on_key(event)
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if event.item and event.item.id and event.item.id.startswith("preset-"):
@@ -77,13 +79,13 @@ class ConnectionScreen(ModalScreen[str | None]):
                 return
             inp = self.query_one("#conn-input", Input)
             inp.value = dsn
-            self._submit()
+            self.submit()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "conn-submit-btn":
-            self._submit()
+            self.submit()
 
-    def _submit(self) -> None:
+    def submit(self) -> None:
         value = self.query_one("#conn-input", Input).value.strip()
         if not value:
             return

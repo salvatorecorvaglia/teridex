@@ -8,9 +8,11 @@ wide schemas instead of O(objects * columns).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
 from textual.widgets import Tree
 
 from teridex_core.models.schema import SchemaObject
@@ -31,16 +33,16 @@ class SchemaTree(Tree[object]):
 
     def populate(self, snapshot: SchemaSnapshot) -> None:
         self.clear()
-        self.root.set_label(snapshot.database or "(database)")
+        self.root.set_label(escape(snapshot.database or "(database)"))
         for schema_name, objects in sorted(snapshot.schemas.items()):
-            schema_node = self.root.add(schema_name, data=None, expand=True)
+            schema_node = self.root.add(escape(schema_name), data=None, expand=True)
             tables_node = schema_node.add("Tables", data=None, expand=False)
             views_node = schema_node.add("Views", data=None, expand=False)
             for obj in sorted(objects, key=lambda o: o.name):
                 parent = views_node if obj.kind in {"view", "materialized_view"} else tables_node
                 # Object node carries the SchemaObject; columns are added lazily
                 # in ``on_tree_node_expanded``.
-                parent.add(obj.name, data=obj, expand=False)
+                parent.add(escape(obj.name), data=obj, expand=False)
         self.root.expand()
 
     async def on_tree_node_expanded(self, event: Tree.NodeExpanded[object]) -> None:
@@ -60,8 +62,6 @@ class SchemaTree(Tree[object]):
             if introspector is not None:
                 schema_name = obj.schema_name or ""
                 try:
-                    import asyncio  # noqa: PLC0415
-
                     if obj.kind == "table":
                         cols, fks, indexes = await asyncio.gather(
                             introspector.fetch_columns(schema_name, obj.name),
@@ -86,7 +86,10 @@ class SchemaTree(Tree[object]):
                     status = getattr(self.app, "_status", None)
                     if status is not None:
                         with contextlib.suppress(Exception):
-                            status().message = f"[red]Failed to introspect {obj.name}: {exc}[/]"
+                            status().message = (
+                                f"[red]Failed to introspect "
+                                f"{escape(obj.name)}: {escape(str(exc))}[/]"
+                            )
                     return
 
         self._fill_object_node(node, obj)
@@ -99,7 +102,8 @@ class SchemaTree(Tree[object]):
                 pk = " [yellow](PK)[/]" if col.is_primary_key else ""
                 null = "" if col.nullable else " [red]NOT NULL[/]"
                 cols_node.add_leaf(
-                    f"[bold]{col.name}[/]  [italic dim]{col.type_native}[/]{pk}{null}",
+                    f"[bold]{escape(col.name)}[/]  "
+                    f"[italic dim]{escape(col.type_native)}[/]{pk}{null}",
                     data=None,
                 )
         # Indexes
@@ -108,7 +112,7 @@ class SchemaTree(Tree[object]):
             for idx in obj.indexes:
                 marker = "★" if idx.primary else ("◆" if idx.unique else "·")
                 idx_node.add_leaf(
-                    f"{marker} [bold]{idx.name}[/]  ({', '.join(idx.columns)})",
+                    f"{marker} [bold]{escape(idx.name)}[/]  ({escape(', '.join(idx.columns))})",
                     data=None,
                 )
         # Foreign keys
@@ -116,7 +120,8 @@ class SchemaTree(Tree[object]):
             fk_node = node.add("foreign keys", data=None, expand=False)
             for fk in obj.foreign_keys:
                 fk_node.add_leaf(
-                    f"{', '.join(fk.columns)} → "
-                    f"{fk.referenced_table}({', '.join(fk.referenced_columns)})",
+                    f"{escape(', '.join(fk.columns))} → "
+                    f"{escape(fk.referenced_table)}"
+                    f"({escape(', '.join(fk.referenced_columns))})",
                     data=None,
                 )

@@ -35,7 +35,10 @@ class PluginContext:
         self.plugin_id = plugin_id
         self._bus = event_bus
         self._registry = registry
-        self._services = services or {}
+        # Copy, don't alias: the loader hands the same mapping to every plugin,
+        # and ``update_services`` would otherwise let one plugin rewrite what
+        # every other plugin resolves.
+        self._services = dict(services) if services else {}
         self.logger = logger.bind(plugin_id=plugin_id)
         self._subscriptions: list[tuple[type[Any], Callable[[Any], Awaitable[None]]]] = []
 

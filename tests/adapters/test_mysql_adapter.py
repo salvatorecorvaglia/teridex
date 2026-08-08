@@ -1,70 +1,64 @@
-"""MySQL conformance — gated on the ``TERIDEX_MYSQL_DSN`` env var."""
+"""MySQL runs the shared adapter conformance suite.
+
+Needs a server: either ``TERIDEX_MYSQL_DSN`` (see
+``tests/scripts/test-integration.sh``) or a reachable Docker daemon, from which the
+``mysql_dsn`` fixture starts a container.
+"""
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 import pytest
 
 pytest.importorskip("asyncmy")
 
+from teridex_adapters.mysql_adapter import MySQLAdapter
+from teridex_core.models.connection import Dsn
+from tests.adapters._conformance import AdapterConformance, drain
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from teridex_adapters.mysql_adapter import MySQLAdapter
-from teridex_core.models.connection import Dsn
-from tests.adapters._conformance import (
-    assert_cancel_raises,
-    assert_connect_and_ping,
-    assert_create_insert_select,
-    assert_introspect_includes,
-)
-
-_DSN = os.getenv("TERIDEX_MYSQL_DSN", "")
-
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(not _DSN, reason="TERIDEX_MYSQL_DSN not set"),
-]
+pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-async def adapter() -> AsyncIterator[MySQLAdapter]:
-    a = MySQLAdapter()
-    await a.connect(Dsn.parse(_DSN))
+class TestMySQLConformance(AdapterConformance):
+    create_table_sql = "CREATE TABLE teridex_conformance (id INT, name VARCHAR(32))"
+
+    @pytest.fixture
+    async def adapter(self, mysql_dsn: str) -> AsyncIterator[MySQLAdapter]:
+        a = MySQLAdapter()
+        await a.connect(Dsn.parse(mysql_dsn))
+        try:
+            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            yield a
+        finally:
+            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await a.close()
+
+
+@pytest.mark.asyncio
+async def test_composite_foreign_key_introspection(mysql_dsn: str) -> None:
+    dsn = Dsn.parse(mysql_dsn)
+    adapter = MySQLAdapter()
+    await adapter.connect(dsn)
     try:
-        await _drain(a, "DROP TABLE IF EXISTS teridex_conformance")
-        yield a
+        await drain(adapter, "DROP TABLE IF EXISTS fk_child")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_parent")
+        await drain(adapter, "CREATE TABLE fk_parent (id1 INT, id2 INT, PRIMARY KEY (id1, id2))")
+        await drain(
+            adapter,
+            "CREATE TABLE fk_child (c1 INT, c2 INT, "
+            "FOREIGN KEY (c1, c2) REFERENCES fk_parent (id1, id2))",
+        )
+
+        fks = await adapter.fetch_foreign_keys(dsn.database or "test", "fk_child")
+        assert len(fks) == 1
+        assert fks[0].referenced_table == "fk_parent"
+        assert fks[0].columns == ["c1", "c2"]
+        assert fks[0].referenced_columns == ["id1", "id2"]
     finally:
-        await _drain(a, "DROP TABLE IF EXISTS teridex_conformance")
-        await a.close()
-
-
-async def _drain(a: MySQLAdapter, sql: str) -> None:
-    h = await a.execute(sql)
-    async for _ in await a.stream(h):
-        pass
-
-
-async def test_ping(adapter: MySQLAdapter) -> None:
-    await assert_connect_and_ping(adapter)
-
-
-async def test_crud(adapter: MySQLAdapter) -> None:
-    await assert_create_insert_select(
-        adapter,
-        create_sql="CREATE TABLE teridex_conformance (id INT, name VARCHAR(16))",
-        insert_sql="INSERT INTO teridex_conformance VALUES (1, 'a'), (2, 'b')",
-        select_sql="SELECT id, name FROM teridex_conformance ORDER BY id",
-        expected_rows=[(1, "a"), (2, "b")],
-    )
-
-
-async def test_introspect(adapter: MySQLAdapter) -> None:
-    await _drain(adapter, "CREATE TABLE teridex_conformance (id INT)")
-    await assert_introspect_includes(adapter, "teridex_conformance")
-
-
-async def test_cancel(adapter: MySQLAdapter) -> None:
-    await assert_cancel_raises(adapter, "SELECT 1")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_child")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_parent")
+        await adapter.close()

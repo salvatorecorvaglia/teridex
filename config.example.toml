@@ -10,15 +10,16 @@ theme = "monokai"
 # Keymap. "default" or "vim".
 keymap = "default"
 
-# Status bar visibility.
-show_status_bar = true
-
 # Rows per fetch batch from adapters → DataTable. Larger values trade
 # latency for throughput on big result sets.
 row_batch_size = 1000
 
+# Max rows held in the results grid. 0 means unlimited; a positive cap
+# protects memory on very large result sets.
+max_display_rows = 10000
+
 [engine]
-# Soft default for query execution timeouts (seconds).
+# Queries are aborted after this many seconds, and cancelled server-side.
 default_timeout_seconds = 60.0
 
 # Bounded retention of the local query-history store (~/.teridex/history.db).
@@ -42,10 +43,3 @@ enabled = []
 
 # Block-list.
 disabled = []
-
-# Saved connections. Reference by name from the future
-# `teridex connections use <name>` command. Plain TOML — credentials
-# encryption is on the roadmap.
-[connections]
-# local-duckdb = "duckdb:///:memory:"
-# local-pg     = "postgres://teridex:teridex@localhost:5432/teridex"

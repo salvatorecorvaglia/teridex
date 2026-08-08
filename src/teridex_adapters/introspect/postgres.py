@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from teridex_adapters._introspect import SchemaIntrospector
 from teridex_adapters._typeinfer import infer_column_type
@@ -15,6 +15,53 @@ if TYPE_CHECKING:
     import asyncpg
 
     from teridex_adapters.postgres_adapter import PostgresAdapter
+
+
+# Columns come from pg_catalog rather than information_schema. The
+# information_schema view answered "is this a primary key?" with a correlated
+# EXISTS over table_constraints ⋈ key_column_usage, evaluated once per column —
+# one of the slowest things you can ask the Postgres catalog for, and it ran
+# across the whole database on every connect. The lateral join below reads the
+# same fact straight off pg_index.
+_COLUMNS_SELECT = """
+    SELECT n.nspname                                  AS table_schema,
+           c.relname                                  AS table_name,
+           a.attname                                  AS column_name,
+           format_type(a.atttypid, a.atttypmod)       AS data_type,
+           NOT a.attnotnull                           AS is_nullable,
+           pg_get_expr(d.adbin, d.adrelid)            AS column_default,
+           a.attnum                                   AS ordinal_position,
+           COALESCE(pk.is_primary, false)             AS is_primary
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+    LEFT JOIN LATERAL (
+        SELECT true AS is_primary
+        FROM pg_index i
+        WHERE i.indrelid = a.attrelid
+          AND i.indisprimary
+          AND a.attnum = ANY (i.indkey)
+        LIMIT 1
+    ) pk ON true
+    WHERE a.attnum > 0
+      AND NOT a.attisdropped
+      AND c.relkind IN ('r', 'v', 'm', 'p')
+      AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+"""
+_COLUMNS_ORDER = "ORDER BY n.nspname, c.relname, a.attnum"
+
+
+def _to_column(row: Any) -> TableColumn:
+    return TableColumn(
+        name=row["column_name"],
+        type_native=row["data_type"],
+        type=infer_column_type(row["data_type"]),
+        nullable=bool(row["is_nullable"]),
+        default=row["column_default"],
+        ordinal=row["ordinal_position"] or 0,
+        is_primary_key=bool(row["is_primary"]),
+    )
 
 
 class PostgresIntrospector(SchemaIntrospector):
@@ -46,43 +93,11 @@ class PostgresIntrospector(SchemaIntrospector):
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
         rows = await self._conn.fetch(
-            """
-            SELECT 
-                c.column_name, 
-                c.data_type, 
-                c.is_nullable, 
-                c.column_default, 
-                c.ordinal_position,
-                EXISTS (
-                    SELECT 1 
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.key_column_usage kcu 
-                      ON tc.constraint_name = kcu.constraint_name
-                     AND tc.table_schema = kcu.table_schema
-                    WHERE tc.constraint_type = 'PRIMARY KEY'
-                      AND tc.table_schema = c.table_schema
-                      AND tc.table_name = c.table_name
-                      AND kcu.column_name = c.column_name
-                ) AS is_primary
-            FROM information_schema.columns c
-            WHERE c.table_schema=$1 AND c.table_name=$2
-            ORDER BY c.ordinal_position
-            """,
+            f"{_COLUMNS_SELECT} AND n.nspname = $1 AND c.relname = $2 {_COLUMNS_ORDER}",
             schema,
             name,
         )
-        return [
-            TableColumn(
-                name=c["column_name"],
-                type_native=c["data_type"],
-                type=infer_column_type(c["data_type"]),
-                nullable=c["is_nullable"] == "YES",
-                default=c["column_default"],
-                ordinal=c["ordinal_position"] or 0,
-                is_primary_key=bool(c["is_primary"]),
-            )
-            for c in rows
-        ]
+        return [_to_column(r) for r in rows]
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
         rows = await self._conn.fetch(
@@ -121,16 +136,21 @@ class PostgresIntrospector(SchemaIntrospector):
         ]
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
+        # ``pg_get_indexdef(oid, ord, true)`` renders each index key, including
+        # expression keys. Joining pg_attribute on ``indkey`` instead — as this
+        # used to — silently dropped them, because an expression key is stored
+        # as attnum 0 and matches no column.
         rows = await self._conn.fetch(
             """
             SELECT i.relname AS name, ix.indisunique AS uniq, ix.indisprimary AS pk,
-                   array_agg(a.attname ORDER BY k.ord) AS cols
+                   array_agg(
+                       pg_get_indexdef(ix.indexrelid, k.ord::int, true) ORDER BY k.ord
+                   ) AS cols
             FROM pg_index ix
             JOIN pg_class i ON i.oid = ix.indexrelid
             JOIN pg_class t ON t.oid = ix.indrelid
             JOIN pg_namespace n ON n.oid = t.relnamespace
             JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
             WHERE n.nspname=$1 AND t.relname=$2
             GROUP BY i.relname, ix.indisunique, ix.indisprimary
             """,
@@ -148,46 +168,10 @@ class PostgresIntrospector(SchemaIntrospector):
         ]
 
     async def fetch_all_columns(self) -> dict[tuple[str, str], list[TableColumn]]:
-        rows = await self._conn.fetch(
-            """
-            SELECT 
-                c.table_schema,
-                c.table_name,
-                c.column_name, 
-                c.data_type, 
-                c.is_nullable, 
-                c.column_default, 
-                c.ordinal_position,
-                EXISTS (
-                    SELECT 1 
-                    FROM information_schema.table_constraints tc
-                    JOIN information_schema.key_column_usage kcu 
-                      ON tc.constraint_name = kcu.constraint_name
-                     AND tc.table_schema = kcu.table_schema
-                    WHERE tc.constraint_type = 'PRIMARY KEY'
-                      AND tc.table_schema = c.table_schema
-                      AND tc.table_name = c.table_name
-                      AND kcu.column_name = c.column_name
-                ) AS is_primary
-            FROM information_schema.columns c
-            WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
-            ORDER BY c.table_schema, c.table_name, c.ordinal_position
-            """
-        )
+        rows = await self._conn.fetch(f"{_COLUMNS_SELECT} {_COLUMNS_ORDER}")
         res: dict[tuple[str, str], list[TableColumn]] = {}
         for c in rows:
-            key = (c["table_schema"], c["table_name"])
-            res.setdefault(key, []).append(
-                TableColumn(
-                    name=c["column_name"],
-                    type_native=c["data_type"],
-                    type=infer_column_type(c["data_type"]),
-                    nullable=c["is_nullable"] == "YES",
-                    default=c["column_default"],
-                    ordinal=c["ordinal_position"] or 0,
-                    is_primary_key=bool(c["is_primary"]),
-                )
-            )
+            res.setdefault((c["table_schema"], c["table_name"]), []).append(_to_column(c))
         return res
 
     async def fetch_all_foreign_keys(self) -> dict[tuple[str, str], list[ForeignKey]]:
@@ -233,13 +217,14 @@ class PostgresIntrospector(SchemaIntrospector):
             """
             SELECT n.nspname AS schema, t.relname AS table_name,
                    i.relname AS name, ix.indisunique AS uniq, ix.indisprimary AS pk,
-                   array_agg(a.attname ORDER BY k.ord) AS cols
+                   array_agg(
+                       pg_get_indexdef(ix.indexrelid, k.ord::int, true) ORDER BY k.ord
+                   ) AS cols
             FROM pg_index ix
             JOIN pg_class i ON i.oid = ix.indexrelid
             JOIN pg_class t ON t.oid = ix.indrelid
             JOIN pg_namespace n ON n.oid = t.relnamespace
             JOIN unnest(ix.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
             WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
             GROUP BY n.nspname, t.relname, i.relname, ix.indisunique, ix.indisprimary
             """

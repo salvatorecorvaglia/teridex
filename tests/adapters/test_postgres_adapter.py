@@ -1,74 +1,65 @@
-"""Postgres conformance — gated on the ``TERIDEX_PG_DSN`` env var.
+"""PostgreSQL runs the shared adapter conformance suite.
 
-To run locally: ``docker compose -f docker/docker-compose.yml up -d postgres``
-and ``export TERIDEX_PG_DSN=postgres://teridex:teridex@localhost:5432/teridex``.
+Needs a server: either ``TERIDEX_PG_DSN`` (see ``tests/scripts/test-integration.sh``)
+or a reachable Docker daemon, from which the ``postgres_dsn`` fixture starts a
+container. Marked ``integration`` so the default local run stays fast.
 """
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 import pytest
 
 pytest.importorskip("asyncpg")
 
+from teridex_adapters.postgres_adapter import PostgresAdapter
+from teridex_core.models.connection import Dsn
+from tests.adapters._conformance import AdapterConformance, drain
+
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-from teridex_adapters.postgres_adapter import PostgresAdapter
-from teridex_core.models.connection import Dsn
-from tests.adapters._conformance import (
-    assert_cancel_raises,
-    assert_connect_and_ping,
-    assert_create_insert_select,
-    assert_introspect_includes,
-)
-
-_DSN = os.getenv("TERIDEX_PG_DSN", "")
-
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(not _DSN, reason="TERIDEX_PG_DSN not set"),
-]
+pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-async def adapter() -> AsyncIterator[PostgresAdapter]:
-    a = PostgresAdapter()
-    await a.connect(Dsn.parse(_DSN))
+class TestPostgresConformance(AdapterConformance):
+    create_table_sql = "CREATE TABLE teridex_conformance (id INTEGER, name VARCHAR(32))"
+
+    @pytest.fixture
+    async def adapter(self, postgres_dsn: str) -> AsyncIterator[PostgresAdapter]:
+        a = PostgresAdapter()
+        await a.connect(Dsn.parse(postgres_dsn))
+        try:
+            # The server is shared across the session, so each test starts from
+            # a clean table rather than inheriting the previous one's rows.
+            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            yield a
+        finally:
+            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await a.close()
+
+
+@pytest.mark.asyncio
+async def test_composite_foreign_key_introspection(postgres_dsn: str) -> None:
+    adapter = PostgresAdapter()
+    await adapter.connect(Dsn.parse(postgres_dsn))
     try:
-        await _drain(a, "DROP TABLE IF EXISTS teridex_conformance")
-        yield a
+        await drain(adapter, "DROP TABLE IF EXISTS fk_child")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_parent")
+        await drain(adapter, "CREATE TABLE fk_parent (id1 INT, id2 INT, PRIMARY KEY (id1, id2))")
+        await drain(
+            adapter,
+            "CREATE TABLE fk_child (c1 INT, c2 INT, "
+            "FOREIGN KEY (c1, c2) REFERENCES fk_parent (id1, id2))",
+        )
+
+        fks = await adapter.fetch_foreign_keys("public", "fk_child")
+        assert len(fks) == 1
+        assert fks[0].referenced_table == "fk_parent"
+        assert fks[0].columns == ["c1", "c2"]
+        assert fks[0].referenced_columns == ["id1", "id2"]
     finally:
-        await _drain(a, "DROP TABLE IF EXISTS teridex_conformance")
-        await a.close()
-
-
-async def _drain(a: PostgresAdapter, sql: str) -> None:
-    h = await a.execute(sql)
-    async for _ in await a.stream(h):
-        pass
-
-
-async def test_ping(adapter: PostgresAdapter) -> None:
-    await assert_connect_and_ping(adapter)
-
-
-async def test_crud(adapter: PostgresAdapter) -> None:
-    await assert_create_insert_select(
-        adapter,
-        create_sql="CREATE TABLE teridex_conformance (id INT, name TEXT)",
-        insert_sql="INSERT INTO teridex_conformance VALUES (1, 'a'), (2, 'b')",
-        select_sql="SELECT id, name FROM teridex_conformance ORDER BY id",
-        expected_rows=[(1, "a"), (2, "b")],
-    )
-
-
-async def test_introspect(adapter: PostgresAdapter) -> None:
-    await _drain(adapter, "CREATE TABLE teridex_conformance (id INT)")
-    await assert_introspect_includes(adapter, "teridex_conformance")
-
-
-async def test_cancel(adapter: PostgresAdapter) -> None:
-    await assert_cancel_raises(adapter, "SELECT 1")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_child")
+        await drain(adapter, "DROP TABLE IF EXISTS fk_parent")
+        await adapter.close()

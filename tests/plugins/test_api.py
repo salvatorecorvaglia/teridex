@@ -63,7 +63,18 @@ def test_panel_rejects_non_positive_initial_size() -> None:
         ("0.1.0", "==0.1.0", True),
         ("0.1.0", "!=0.1.0", False),
         ("0.1.0", "", True),
-        ("0.1.0", "~=0.1.0", True),  # unrecognized clause is ignored, not failed
+        # Compatible-release: ``~=0.1.0`` is ``>=0.1.0, ==0.1.*``.
+        ("0.1.0", "~=0.1.0", True),
+        ("0.1.5", "~=0.1.0", True),
+        ("0.2.0", "~=0.1.0", False),
+        # Suffixed versions must compare by PEP 440 rules, not by dropping the
+        # non-numeric part: 1.0.0rc1 precedes 1.0.0.
+        ("1.0.0rc1", ">=1.0.0", False),
+        ("1.0.0", ">=1.0.0rc1", True),
+        # A specifier we cannot parse means "compatibility unproven" — the
+        # plugin is held back rather than loaded on a guess.
+        ("1.0.0", "not-a-specifier", False),
+        ("not-a-version", ">=1.0.0", False),
     ],
 )
 def test_version_satisfies(version: str, specifier: str, expected: bool) -> None:

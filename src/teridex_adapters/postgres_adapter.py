@@ -35,6 +35,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Postgres itself caps a statement at 65535 bound parameters; anything past
+# that is a caller mistake, and the value sizes an allocation.
+_MAX_PLACEHOLDERS = 65535
+
 
 class _PostgresTransaction:
     def __init__(self, conn: asyncpg.Connection) -> None:
@@ -72,6 +76,7 @@ class PostgresAdapter(AbstractAdapter):
         self._conn: asyncpg.Connection | None = None
         self._backend_pid: int | None = None
         self._active_query_id: str | None = None
+        self._statements: dict[str, Any] = {}
         self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
@@ -90,6 +95,7 @@ class PostgresAdapter(AbstractAdapter):
             self._conn = None
         self._backend_pid = None
         self._active_query_id = None
+        self._statements.clear()
 
     async def ping(self) -> bool:
         if self._conn is None:
@@ -110,9 +116,17 @@ class PostgresAdapter(AbstractAdapter):
         )
         handle.mark_running()
         self._active_query_id = handle.query_id
-        # Actual execution is deferred to stream() so we can use a server-side
-        # cursor for SELECTs and ``execute`` for DML. The SQL travels on the
-        # handle itself — no per-adapter bookkeeping dict to leak.
+        # Prepare here rather than in stream(). Preparing validates the SQL
+        # server-side, so a syntax or permission error surfaces from execute()
+        # — the same contract the other adapters offer. Running the statement
+        # is still deferred, so a SELECT can stream from a server-side cursor.
+        try:
+            stmt = await self._conn.prepare(sql)
+        except asyncpg.PostgresError as exc:
+            handle.mark_done(QueryStatus.FAILED)
+            self._active_query_id = None
+            raise QueryError(str(exc), context={"sql": sql}) from exc
+        self._statements[handle.query_id] = stmt
         handle.mark_streaming()
         return handle
 
@@ -126,35 +140,40 @@ class PostgresAdapter(AbstractAdapter):
             raise AdapterError("postgres: stream() called with an empty handle")
         cancel = self._cancel_event(handle)
         conn = self._conn
+        stmt = self._statements.get(handle.query_id)
+        if stmt is None:
+            raise AdapterError("postgres: stream() called with unknown handle")
 
         # Convert dict parameters to positional list for asyncpg.
         # Postgres uses $1, $2... placeholders, so keys must be stringified positive integers.
         # We construct a list where args[i] corresponds to $(i+1).
-        args = []
+        args: list[Any] = []
         if handle.params:
             try:
                 keys = [int(k) for k in handle.params]
                 if any(k <= 0 for k in keys):
                     raise ValueError("Placeholder indices must be positive integers >= 1")
                 max_key = max(keys) if keys else 0
+                if max_key > _MAX_PLACEHOLDERS:
+                    # ``args`` is sized from this value, so an unbounded key
+                    # would let a typo like {"999999999": 1} allocate a list of
+                    # a billion entries.
+                    raise ValueError(
+                        f"Placeholder index {max_key} exceeds the maximum of {_MAX_PLACEHOLDERS}"
+                    )
                 args = [None] * max_key
                 for k, v in handle.params.items():
                     args[int(k) - 1] = v
             except ValueError as exc:
                 raise QueryError(
                     "postgres: invalid parameters. Parameters must be a dictionary "
-                    "with stringified integer keys corresponding to $1, $2, etc.",
-                    context={"sql": sql, "params": handle.params},
+                    f"with stringified integer keys from 1 to {_MAX_PLACEHOLDERS}, "
+                    "corresponding to $1, $2, etc.",
+                    context={"sql": sql, "params": handle.params, "error": str(exc)},
                 ) from exc
 
         async def _gen() -> AsyncIterator[ResultBatch]:
             try:
-                try:
-                    stmt = await conn.prepare(sql)
-                except asyncpg.PostgresError as exc:
-                    handle.mark_done(QueryStatus.FAILED)
-                    raise QueryError(str(exc), context={"sql": sql}) from exc
-
                 attrs = stmt.get_attributes()
                 if not attrs:
                     # DML / DDL (no columns returned) — execute and finalize
@@ -257,12 +276,22 @@ class PostgresAdapter(AbstractAdapter):
 
     def _forget(self, handle: QueryHandle) -> None:
         super()._forget(handle)
+        self._statements.pop(handle.query_id, None)
         if self._active_query_id == handle.query_id:
             self._active_query_id = None
 
     async def reset(self) -> None:
         await super().reset()
         self._active_query_id = None
+        self._statements.clear()
+        if self._conn is None:
+            return
+        # A stream abandoned mid-cursor leaves the connection inside the
+        # transaction that wrapped it. Handing that to the next query would
+        # run it in a foreign — possibly already-aborted — transaction.
+        with contextlib.suppress(Exception):
+            if self._conn.is_in_transaction():
+                await self._conn.execute("ROLLBACK")
 
     async def begin(self) -> Transaction:
         if self._conn is None:

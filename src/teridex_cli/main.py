@@ -13,16 +13,25 @@ Commands:
 from __future__ import annotations
 
 import asyncio
+import csv
+import json
 import sys
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from teridex_adapters import create_adapter_for_dsn, default_registry
 from teridex_core.config import load_config
-from teridex_core.errors import QueryCancelledError, QueryError, TeridexError
+from teridex_core.errors import (
+    QueryCancelledError,
+    QueryError,
+    QueryTimeoutError,
+    TeridexError,
+)
 from teridex_core.events import EventBus
 from teridex_core.logging import clear_context, configure_logging, get_logger
 from teridex_core.models.connection import Dsn
@@ -30,6 +39,38 @@ from teridex_engine.executor import QueryExecutor
 
 logger = get_logger(__name__)
 console = Console()
+
+
+class OutputFormat(StrEnum):
+    TABLE = "table"
+    CSV = "csv"
+    JSON = "json"
+
+
+def _render(fmt: OutputFormat, columns: list[str], rows: list[tuple[Any, ...]]) -> None:
+    """Write *rows* to stdout in the requested format."""
+    if fmt is OutputFormat.CSV:
+        writer = csv.writer(sys.stdout, lineterminator="\n")
+        writer.writerow(columns)
+        writer.writerows(rows)
+        return
+    if fmt is OutputFormat.JSON:
+        payload = [dict(zip(columns, row, strict=False)) for row in rows]
+        # ``default=str`` so dates, Decimals and UUIDs serialize instead of
+        # aborting the whole output on the last row.
+        json.dump(payload, sys.stdout, indent=2, default=str)
+        sys.stdout.write("\n")
+        return
+
+    if not columns:
+        return
+    table = Table(show_lines=False, highlight=True)
+    for name in columns:
+        table.add_column(escape(name), overflow="fold")
+    for row in rows:
+        table.add_row(*(escape(str(v)) if v is not None else "[dim]NULL[/]" for v in row))
+    console.print(table)
+
 
 app = typer.Typer(
     name="teridex",
@@ -83,7 +124,7 @@ def connect(
             finally:
                 await adapter.close()
         except Exception as exc:
-            console.print(f"[bold red]ERROR[/] {exc}")
+            console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
             return 1
         console.print(
             f"[bold green]OK[/] connected to {parsed.scheme}://…/{parsed.database or ''}"
@@ -100,8 +141,29 @@ def run_query(
     sql: Annotated[str, typer.Argument(help="SQL to execute.")],
     dsn: Annotated[str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")],
     limit: Annotated[int, typer.Option("--limit", min=1, help="Max rows to print.")] = 200,
+    timeout: Annotated[
+        float,
+        typer.Option(
+            "--timeout",
+            min=0,
+            help="Abort the query after this many seconds. 0 disables the timeout.",
+        ),
+    ] = 60.0,
+    output: Annotated[
+        OutputFormat,
+        typer.Option(
+            "--format",
+            "-f",
+            help="Output format. 'csv' and 'json' are machine-readable (no styling).",
+        ),
+    ] = OutputFormat.TABLE,
 ) -> None:
-    """Execute one query and render results as a Rich table."""
+    """Execute one query and print its results.
+
+    ``--format csv`` / ``--format json`` write plain data to stdout so the
+    results can be piped into other tools; the row-count summary goes to
+    stderr so it never contaminates them.
+    """
 
     async def _go() -> int:
         try:
@@ -109,42 +171,49 @@ def run_query(
             adapter = create_adapter_for_dsn(parsed)
             await adapter.connect(parsed)
         except Exception as exc:
-            console.print(f"[bold red]CONNECTION ERROR[/] {exc}")
+            console.print(f"[bold red]CONNECTION ERROR[/] {escape(str(exc))}")
             return 1
         bus = EventBus()
         try:
             executor = QueryExecutor(adapter, bus)
-            run_handle = await executor.run(sql)
-            table: Table | None = None
-            shown = 0
-            async for batch in run_handle.rows:
-                if table is None and batch.columns:
-                    table = Table(show_lines=False, highlight=True)
-                    for col in batch.columns:
-                        table.add_column(col.name, overflow="fold")
-                if table is not None:
+            run_handle = await executor.run(sql, timeout=timeout)
+            columns: list[str] = []
+            rows: list[tuple[Any, ...]] = []
+            try:
+                async for batch in run_handle.rows:
+                    if not columns and batch.columns:
+                        columns = [c.name for c in batch.columns]
                     for row in batch.rows:
-                        if shown >= limit:
+                        if len(rows) >= limit:
                             break
-                        table.add_row(*(str(v) if v is not None else "[dim]NULL[/]" for v in row))
-                        shown += 1
-                if shown >= limit:
-                    break
-            if table is not None:
-                console.print(table)
-            console.print(
-                f"[dim]{run_handle.rows_emitted} row(s) in {run_handle.duration_ms or 0:.1f} ms[/]"
-            )
+                        rows.append(row)
+                    if len(rows) >= limit:
+                        break
+            finally:
+                # Release the adapter's cursor/transaction when --limit cut the
+                # stream short, rather than leaving it to the garbage collector.
+                await run_handle.aclose()
+
+            _render(output, columns, rows)
+            summary = f"{run_handle.rows_emitted} row(s) in {run_handle.duration_ms or 0:.1f} ms"
+            if output is OutputFormat.TABLE:
+                console.print(f"[dim]{summary}[/]")
+            else:
+                # stderr: stdout belongs to the data being piped.
+                Console(stderr=True).print(f"[dim]{summary}[/]")
             return 0
+        except QueryTimeoutError as exc:
+            console.print(f"[bold red]TIMEOUT[/] {escape(str(exc))}")
+            return 1
         except QueryCancelledError:
             console.print("[yellow]query cancelled[/]")
             return 1
         except (QueryError, TeridexError) as exc:
-            console.print(f"[bold red]QUERY ERROR[/] {exc}")
+            console.print(f"[bold red]QUERY ERROR[/] {escape(str(exc))}")
             return 1
         except Exception as exc:
             logger.exception("cli_run_unexpected_error")
-            console.print(f"[bold red]ERROR[/] {exc}")
+            console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
             return 1
         finally:
             clear_context()
@@ -179,7 +248,7 @@ def tui(
         cfg = load_config(Path(config_path) if config_path else None, **overrides)
         initial_dsn = Dsn.parse(dsn) if dsn else None
     except Exception as exc:
-        console.print(f"[bold red]ERROR[/] {exc}")
+        console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
         raise typer.Exit(code=1) from exc
     # Ensure the terminal advertises truecolor support so Textual renders
     # the theme's hex colours correctly.  In some environments (IDE embedded

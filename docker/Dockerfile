@@ -1,7 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
+# Debian slim rather than Alpine: the build needs apt/useradd, and the wheels
+# for the database drivers are manylinux, so Alpine (musl) would force a source
+# build of each one. The Python version tracks `requires-python` and mypy.ini.
+ARG PYTHON_VERSION=3.13
+
 # ---- Builder ---------------------------------------------------------
-FROM python:3.15-rc-alpine AS builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
@@ -24,7 +29,7 @@ COPY src ./src
 RUN uv sync --frozen --no-dev --all-extras
 
 # ---- Runtime --------------------------------------------------------
-FROM python:3.15-rc-alpine AS runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -39,5 +44,6 @@ COPY --from=builder /src /app
 WORKDIR /app
 USER teridex
 
+# `teridex tui` needs a terminal: run it with `docker run -it`.
 ENTRYPOINT ["teridex"]
 CMD ["--help"]
