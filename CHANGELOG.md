@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Introduced `TuiSession` model for managing active database connection state and query execution sessions in the TUI.
+- Added adapter helper modules (`_params.py` and `_typeinfer.py`) to standardize parameter bindings and type inference across DuckDB, MySQL, PostgreSQL, and SQLite adapters.
+- Expanded database schema introspection for table types, foreign keys, and indexes across all database adapters.
+- Added comprehensive test suites including adapter conformance tests (`test_conformance_*`), bulk introspection tests (`test_bulk_introspection.py`), DSN parameter parsing tests (`test_dsn_params.py`), TUI markup escaping tests (`test_markup_escaping.py`), and TUI connection pool integration tests (`test_pool_in_app.py`).
+- Added `tests/scripts/test-integration.sh` to run full integration test suites against live Docker containers.
+
+### Changed
+
+- Refactored `DuckDBAdapter`, `MySQLAdapter`, `PostgresAdapter`, and `SQLiteAdapter` for consistent query execution, connection recycling, improved cancellation support, and robust error propagation.
+- Enhanced `QueryExecutor` with explicit query lifecycle transitions, improved row limit enforcement, and detailed error logging.
+- Standardized TUI modal screens (`ConnectionScreen`, `CommandPaletteScreen`, `HistoryScreen`, `RowLimitModal`) using a unified screen base (`_base.py`).
+- Refined multi-stage Dockerfile (`docker/Dockerfile`) to use non-editable installs (`uv sync --no-editable`) and standardized working directories.
+- Updated `testcontainers` fixture imports in `tests/adapters/conftest.py` to support `testcontainers.community.*` package structures with fallback support.
+- Restricted GitHub Actions CI workflow concurrency and cancellation strictly to pull requests.
+
+### Fixed
+
+- Implemented explicit top-level transaction (`_top_xact`) rollback handling in `PostgresAdapter` on connection reset to prevent leaks of unhandled or aborted transaction states.
+- Stabilized async pool connection release test timing in `tests/engine/test_pool.py`.
+- Added warning filter configuration in `pyproject.toml` to suppress `testcontainers` deprecation warnings during test execution.
+
+### Removed
+
+- Removed unused legacy dependency injection container (`src/teridex_core/di.py`).
+
 ## [1.0.0] - 2026-08-06
 
 ### Chore

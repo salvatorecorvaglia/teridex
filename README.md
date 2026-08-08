@@ -103,7 +103,6 @@ Here is an example config file (see [config.example.toml](config.example.toml)):
 [ui]
 theme = "monokai"               # Theme: "monokai" (warm) | "nord" (cool)
 keymap = "default"              # Keymap: "default" | "vim"
-show_status_bar = true          # Toggle bottom status bar
 row_batch_size = 1000           # Query result batch loading size
 max_display_rows = 10000        # Caps rows stored in results view
 
@@ -111,6 +110,9 @@ max_display_rows = 10000        # Caps rows stored in results view
 default_timeout_seconds = 60.0  # Soft limit for query runs
 max_history_entries = 1000      # Max CLI query history entries
 pool_size = 5                   # Connection pool size
+
+[logging]
+level = "INFO"                  # Log level: DEBUG | INFO | WARNING | ERROR
 
 [plugins]
 enabled = []                    # Allowlist (empty loads all discovered)

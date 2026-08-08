@@ -79,9 +79,13 @@ We use **Pytest** for running our test suite.
   uv run pytest -m "integration" --cov=src
   ```
 
-Alternatively, you can use the test developer script:
+Alternatively, you can use the test developer scripts:
 ```bash
-./scripts/test.sh
+# Offline unit test suite
+./tests/scripts/test.sh
+
+# Integration test suite with PostgreSQL and MySQL Docker containers
+./tests/scripts/test-integration.sh
 ```
 
 ### The Ultimate Quality Gate
