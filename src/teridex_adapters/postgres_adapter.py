@@ -290,8 +290,13 @@ class PostgresAdapter(AbstractAdapter):
         # transaction that wrapped it. Handing that to the next query would
         # run it in a foreign — possibly already-aborted — transaction.
         with contextlib.suppress(Exception):
-            if self._conn.is_in_transaction():
+            top_xact = getattr(self._conn, "_top_xact", None)
+            if top_xact is not None:
+                await top_xact.rollback()
+            elif self._conn.is_in_transaction():
                 await self._conn.execute("ROLLBACK")
+        if hasattr(self._conn, "_top_xact"):
+            self._conn._top_xact = None
 
     async def begin(self) -> Transaction:
         if self._conn is None:
