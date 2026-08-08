@@ -52,7 +52,10 @@ def postgres_dsn() -> Iterator[str]:
         return
     if not _docker_available():
         pytest.skip("no TERIDEX_PG_DSN and no Docker daemon for testcontainers")
-    from testcontainers.postgres import PostgresContainer  # noqa: PLC0415
+    try:
+        from testcontainers.community.postgres import PostgresContainer  # noqa: PLC0415
+    except ImportError:
+        from testcontainers.postgres import PostgresContainer  # noqa: PLC0415
 
     with PostgresContainer(_PG_IMAGE) as container:
         yield _normalize(container.get_connection_url())
@@ -66,7 +69,10 @@ def mysql_dsn() -> Iterator[str]:
         return
     if not _docker_available():
         pytest.skip("no TERIDEX_MYSQL_DSN and no Docker daemon for testcontainers")
-    from testcontainers.mysql import MySqlContainer  # noqa: PLC0415
+    try:
+        from testcontainers.community.mysql import MySqlContainer  # noqa: PLC0415
+    except ImportError:
+        from testcontainers.mysql import MySqlContainer  # noqa: PLC0415
 
     with MySqlContainer(_MYSQL_IMAGE) as container:
         yield _normalize(container.get_connection_url())

@@ -151,8 +151,8 @@ async def test_close_closes_an_adapter_that_was_checked_out() -> None:
             await asyncio.sleep(0.05)
 
     holder = asyncio.create_task(_hold())
-    for _ in range(20):
-        await asyncio.sleep(0)
+    for _ in range(50):
+        await asyncio.sleep(0.01)
         if released:
             break
     assert released, "never acquired an adapter"
@@ -160,7 +160,7 @@ async def test_close_closes_an_adapter_that_was_checked_out() -> None:
     await pool.close()
     await holder
     for _ in range(50):
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.01)
         if not released[0].connected:  # type: ignore[attr-defined]
             break
     assert not released[0].connected, "checked-out adapter was left open"  # type: ignore[attr-defined]

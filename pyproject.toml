@@ -80,6 +80,7 @@ markers = [
 ]
 filterwarnings = [
     "error",
+    "ignore::DeprecationWarning:testcontainers.*",
     "ignore::DeprecationWarning:aiosqlite.*",
     # aiosqlite's Connection.__del__ logs a ResourceWarning when finalized
     # without explicit close — Textual's pilot teardown can race this on app

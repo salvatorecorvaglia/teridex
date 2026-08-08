@@ -20,13 +20,13 @@ RUN apt-get update \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
  && ln -s /root/.local/bin/uv /usr/local/bin/uv
 
-WORKDIR /src
+WORKDIR /app
 COPY pyproject.toml uv.lock* README.md ./
 COPY src ./src
 
 # Fail loud if uv.lock is stale rather than silently regenerating it — the
 # lock file is committed and the image must build from exactly those pins.
-RUN uv sync --frozen --no-dev --all-extras
+RUN uv sync --frozen --no-dev --all-extras --no-editable
 
 # ---- Runtime --------------------------------------------------------
 FROM python:${PYTHON_VERSION}-slim AS runtime
@@ -39,7 +39,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
 RUN useradd -ms /bin/false -u 10001 teridex
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --from=builder /src /app
+COPY --from=builder /app /app
 
 WORKDIR /app
 USER teridex
