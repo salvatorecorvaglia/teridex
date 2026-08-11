@@ -32,7 +32,7 @@ jobs:
         run: ./scripts/lint.sh
 
       - name: Test
-        run: ./scripts/test.sh
+        run: ./tests/scripts/test.sh
 
       # ── Build Packages ────────────────────────────────────────────────
       - name: Build packages
