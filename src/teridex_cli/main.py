@@ -74,7 +74,7 @@ def _render(fmt: OutputFormat, columns: list[str], rows: list[tuple[Any, ...]]) 
 
 app = typer.Typer(
     name="teridex",
-    help="Terminal-native, keyboard-first async database IDE",
+    help="A terminal-first database workspace for modern engineers",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )

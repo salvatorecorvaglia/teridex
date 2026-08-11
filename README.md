@@ -1,6 +1,6 @@
 # Teridex 📟
 
-**Terminal-native, keyboard-first async database IDE**
+**A terminal-first database workspace for modern engineers**
 
 **Teridex** is a TUI database client built on a clean async core and a plugin-first architecture. It combines a rich query editor, lazy schema browser, virtualized result tables, and a fuzzy command palette — all inside your terminal.
 
