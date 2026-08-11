@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refined multi-stage Dockerfile (`docker/Dockerfile`) to use non-editable installs (`uv sync --no-editable`) and standardized working directories.
 - Updated `testcontainers` fixture imports in `tests/adapters/conftest.py` to support `testcontainers.community.*` package structures with fallback support.
 - Restricted GitHub Actions CI workflow concurrency and cancellation strictly to pull requests.
+- Upgraded `cryptography` dependency to `>=50.0.0`.
 
 ### Fixed
 
