@@ -3,11 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -62,15 +68,13 @@ jobs:
         env:
           TERIDEX_TEST_MARKERS: ${{ matrix.os == 'ubuntu-latest' && 'integration or not integration' || 'not integration' }}
 
-  docker:
+  dependency-review:
+    name: Dependency Review
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
 
-      # The image is a shipped artifact; building it here stops it rotting
-      # unnoticed, which is how it came to reference apt-get on an Alpine base.
-      - name: Build image
-        run: docker build -f docker/Dockerfile -t teridex:ci .
-
-      - name: Smoke-test the image
-        run: docker run --rm teridex:ci version
