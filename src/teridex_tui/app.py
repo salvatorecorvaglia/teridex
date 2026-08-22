@@ -192,13 +192,20 @@ class TeridexApp(App[None]):
         self._loader = loader
 
     def _publish_connection_services(self) -> None:
-        """Push connect-time services into every loaded plugin's context."""
+        """Push connect-time services into every loaded plugin's context.
+
+        Deliberately excludes the raw ``adapter``/``pool``: those hold the
+        live DB credentials and let a plugin run arbitrary SQL or exhaust the
+        pool outside the executor's event bus/history/cancellation machinery,
+        which would defeat ``PluginContext``'s "intentionally narrow" surface
+        (see ``teridex_plugins.context``). ``introspector`` and ``history``
+        are safe to share: they only expose schema metadata and past query
+        records, not live connections.
+        """
         loader = getattr(self, "_loader", None)
         if loader is None:
             return
         late = {
-            "adapter": self.state.adapter,
-            "pool": self.state.pool,
             "introspector": self.state.introspector,
             "history": self.state.history,
         }

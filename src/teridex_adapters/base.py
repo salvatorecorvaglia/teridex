@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TypeVar
 
-from teridex_core.errors import AdapterError
+from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 
@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from teridex_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
+
+_ConnT = TypeVar("_ConnT")
 
 
 def connection_id(conn: object) -> str:
@@ -129,6 +131,47 @@ class AbstractAdapter(ABC):
         self._cancel_event(handle).set()
         handle.mark_done(QueryStatus.CANCELLED)
         logger.info("adapter_cancel_requested", adapter=self.name, query_id=handle.query_id)
+
+    def _require_conn(self, conn: _ConnT | None) -> _ConnT:
+        """Narrow a nullable driver-connection attribute to non-None.
+
+        Every adapter method needs its live connection before doing
+        anything; centralizing the check keeps the "not connected" message
+        and error type consistent across all adapters instead of each
+        subclass repeating ``if self._conn is None: raise AdapterError(...)``.
+        """
+        if conn is None:
+            raise AdapterError(f"{self.name}: not connected")
+        return conn
+
+    def _wrap_driver_error(
+        self,
+        exc: Exception,
+        handle: QueryHandle,
+        *,
+        sql: str | None = None,
+        mark_failed: bool = True,
+    ) -> NoReturn:
+        """Translate a driver-native error into the Teridex error hierarchy.
+
+        Checks the handle's cancel flag first: a query cancelled mid-flight
+        surfaces as :class:`QueryCancelledError` regardless of which
+        exception the driver happened to raise to unblock the cancelled
+        call — from the caller's perspective, the cancellation is what
+        matters, not the driver's internal plumbing.
+
+        ``mark_failed=False`` matches the streaming loops, which leave the
+        handle's status alone on a non-cancel error (only the initial
+        ``execute()`` call transitions it to ``FAILED``).
+        """
+        if self._cancel_event(handle).is_set():
+            handle.mark_done(QueryStatus.CANCELLED)
+            raise QueryCancelledError(
+                "query cancelled", context={"query_id": handle.query_id}
+            ) from exc
+        if mark_failed:
+            handle.mark_done(QueryStatus.FAILED)
+        raise QueryError(str(exc), context={"sql": sql if sql is not None else handle.sql}) from exc
 
     def _cancel_event(self, handle: QueryHandle) -> asyncio.Event:
         flag = self._cancel_flags.get(handle.query_id)

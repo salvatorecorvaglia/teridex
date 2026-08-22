@@ -16,3 +16,13 @@ DEFAULT_BINDINGS: list[tuple[str, str, str]] = [
     ("question_mark", "help", "Help"),
     ("ctrl+q", "quit", "Quit"),
 ]
+
+# One key per action, so callers (e.g. ``BUILTIN_COMMANDS``) can look up a
+# binding's display string instead of hand-duplicating it — a duplicated
+# literal is what let the palette's hint strings drift from the real keymap.
+# ``setdefault`` keeps the *first* key listed above for an action (e.g.
+# ``run_query``'s primary binding is ``ctrl+enter``, not the ``ctrl+j`` alias).
+ACTION_TO_KEY: dict[str, str] = {}
+for _key, _action, _desc in DEFAULT_BINDINGS:
+    ACTION_TO_KEY.setdefault(_action, _key)
+del _key, _action, _desc

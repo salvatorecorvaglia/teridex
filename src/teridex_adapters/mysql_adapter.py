@@ -261,8 +261,7 @@ class MySQLAdapter(AbstractAdapter):
             return False
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
+        conn = self._require_conn(self._conn)
         if params:
             for k in params:
                 if not isinstance(k, str) or not _PARAM_NAME_RE.match(k):
@@ -273,27 +272,20 @@ class MySQLAdapter(AbstractAdapter):
                         context={"sql": sql, "param_name": str(k)},
                     )
         handle = QueryHandle(
-            connection_id=connection_id(self._conn),
+            connection_id=connection_id(conn),
             sql=sql,
             params=dict(params) if params else None,
         )
         handle.mark_running()
         self._active_query_id = handle.query_id
-        cur = self._conn.cursor()
+        cur = conn.cursor()
         try:
             # asyncmy uses the ``pyformat`` paramstyle: pass the mapping
             # directly so ``%(name)s`` placeholders bind by name.
             await cur.execute(sql, dict(params) if params else None)
         except asyncmy_errors.Error as exc:
-            if self._cancel_event(handle).is_set():
-                handle.mark_done(QueryStatus.CANCELLED)
-                await cur.close()
-                raise QueryCancelledError(
-                    "query cancelled", context={"query_id": handle.query_id}
-                ) from exc
-            handle.mark_done(QueryStatus.FAILED)
             await cur.close()
-            raise QueryError(str(exc), context={"sql": sql}) from exc
+            self._wrap_driver_error(exc, handle, sql=sql)
         self._cursors[handle.query_id] = cur
         handle.mark_streaming()
         return handle
@@ -342,12 +334,7 @@ class MySQLAdapter(AbstractAdapter):
                     try:
                         rows = await cur.fetchmany(batch_size)
                     except asyncmy_errors.Error as exc:
-                        if cancel.is_set():
-                            handle.mark_done(QueryStatus.CANCELLED)
-                            raise QueryCancelledError(
-                                "query cancelled", context={"query_id": handle.query_id}
-                            ) from exc
-                        raise QueryError(str(exc), context={"sql": handle.sql}) from exc
+                        self._wrap_driver_error(exc, handle, mark_failed=False)
                     if not rows:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)
@@ -361,30 +348,24 @@ class MySQLAdapter(AbstractAdapter):
         return _gen()
 
     async def begin(self) -> Transaction:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
-        return _MySQLTransaction(self._conn)
+        return _MySQLTransaction(self._require_conn(self._conn))
 
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
+        conn = self._require_conn(self._conn)
         async with self._lock:
-            return await MySQLIntrospector(self, self._conn).build(lazy=lazy)
+            return await MySQLIntrospector(self, conn).build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
+        conn = self._require_conn(self._conn)
         async with self._lock:
-            return await MySQLIntrospector(self, self._conn).fetch_columns(schema, name)
+            return await MySQLIntrospector(self, conn).fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
+        conn = self._require_conn(self._conn)
         async with self._lock:
-            return await MySQLIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+            return await MySQLIntrospector(self, conn).fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        if self._conn is None:
-            raise AdapterError("mysql: not connected")
+        conn = self._require_conn(self._conn)
         async with self._lock:
-            return await MySQLIntrospector(self, self._conn).fetch_indexes(schema, name)
+            return await MySQLIntrospector(self, conn).fetch_indexes(schema, name)

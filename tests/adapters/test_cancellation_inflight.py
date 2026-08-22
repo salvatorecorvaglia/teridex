@@ -4,8 +4,6 @@ import asyncio
 
 import pytest
 
-from teridex_adapters.mysql_adapter import MySQLAdapter
-from teridex_adapters.postgres_adapter import PostgresAdapter
 from teridex_adapters.sqlite_adapter import SQLiteAdapter
 from teridex_core.errors import QueryCancelledError
 from teridex_core.models.connection import Dsn
@@ -43,6 +41,9 @@ async def test_sqlite_cancel_inflight() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_postgres_cancel_inflight(postgres_dsn: str) -> None:
+    pytest.importorskip("asyncpg")
+    from teridex_adapters.postgres_adapter import PostgresAdapter  # noqa: PLC0415
+
     a = PostgresAdapter()
     await a.connect(Dsn.parse(postgres_dsn))
     try:
@@ -68,6 +69,9 @@ async def test_postgres_cancel_inflight(postgres_dsn: str) -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_mysql_cancel_inflight(mysql_dsn: str) -> None:
+    pytest.importorskip("asyncmy")
+    from teridex_adapters.mysql_adapter import MySQLAdapter  # noqa: PLC0415
+
     a = MySQLAdapter()
     await a.connect(Dsn.parse(mysql_dsn))
     try:

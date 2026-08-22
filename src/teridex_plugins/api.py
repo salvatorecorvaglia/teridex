@@ -21,16 +21,26 @@ _HOOK_ATTR = "__teridex_hook__"
 
 
 def hook(event: str) -> Callable[[F], F]:
-    """Mark a function as a hook for a Teridex internal event.
+    """Tag a method with the name of the event it's meant to handle.
 
-    The plugin's ``on_load`` is responsible for registering hook-decorated
-    methods with the runtime via :meth:`PluginContext.subscribe`. The
-    decorator simply tags the function so the runtime can discover it.
+    This is a bookkeeping aid only: nothing in the loader auto-registers
+    tagged methods. A plugin's ``on_load`` must still explicitly subscribe
+    each handler via :meth:`PluginContext.subscribe` with the corresponding
+    :class:`~teridex_core.events.Event` subclass — ``hook``/:func:`is_hook`/
+    :func:`hook_event` just let ``on_load`` discover its own tagged methods
+    (e.g. by iterating ``dir(self)``) instead of listing them by hand.
 
     Example::
 
-        @hook("query.before_execute")
-        async def warn_on_drop(self, ctx, sql: str) -> None: ...
+        @hook("query.started")
+        async def warn_on_drop(self, ctx, ev: QueryStarted) -> None: ...
+
+
+        # in on_load:
+        for name in dir(self):
+            fn = getattr(self, name)
+            if is_hook(fn) and hook_event(fn) == "query.started":
+                ctx.subscribe(QueryStarted, fn)
     """
 
     def _wrap(fn: F) -> F:

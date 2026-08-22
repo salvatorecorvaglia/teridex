@@ -78,7 +78,13 @@ def _get_env_config() -> dict[str, Any]:
     import os  # noqa: PLC0415
 
     env_data: dict[str, Any] = {}
-    for key, val in os.environ.items():
+    # Sort so the result never depends on the OS/shell's environment
+    # iteration order: a scalar (``TERIDEX_ENGINE``) and a nested field
+    # (``TERIDEX_ENGINE__POOL_SIZE``) can both target the same top-level key,
+    # and whichever is applied last wins. Sorting makes the shorter, less
+    # specific key always precede the longer, more specific one, so a nested
+    # override always and consistently wins over a same-section scalar.
+    for key, val in sorted(os.environ.items()):
         if key.startswith("TERIDEX_"):
             name = key[len("TERIDEX_") :]
             if not name:

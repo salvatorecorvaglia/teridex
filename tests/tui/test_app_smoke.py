@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -16,6 +17,10 @@ from teridex_core.protocols.plugin import PluginManifest  # noqa: E402
 from teridex_plugins.api import Command  # noqa: E402
 from teridex_tui.app import TeridexApp  # noqa: E402
 from teridex_tui.screens.command_palette import CommandPaletteScreen  # noqa: E402
+
+_RECURSIVE_BUSY_SQL = (
+    "WITH RECURSIVE t(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM t LIMIT 200000) SELECT * FROM t"
+)
 
 
 @pytest.mark.asyncio
@@ -146,3 +151,124 @@ async def test_action_bar_unlimited_limit_label() -> None:
         await pilot.pause()
         limit_label = app.query_one("#limit-label", Static)
         assert "Limit Unlimited" in str(limit_label.render())
+
+
+@pytest.mark.asyncio
+async def test_copy_cell_with_nothing_selected_gives_feedback() -> None:
+    app = TeridexApp(config=TeridexConfig())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.action_copy_cell()
+        assert "nothing to copy" in app._status().message
+
+
+@pytest.mark.asyncio
+async def test_cancel_query_stops_an_in_flight_run() -> None:
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+
+        editor = app._tabs().current_editor
+        assert editor is not None
+        editor.text = _RECURSIVE_BUSY_SQL
+
+        run_task = asyncio.create_task(app.action_run_query())
+        for _ in range(200):
+            if app._current_run is not None:
+                break
+            await asyncio.sleep(0.005)
+        assert app._current_run is not None
+
+        await app.action_cancel_query()
+        await asyncio.wait_for(run_task, timeout=5)
+
+        assert app._status().message == "[yellow]cancelled[/]"
+        assert not app._query_in_flight
+
+
+@pytest.mark.asyncio
+async def test_unmount_cancels_an_in_flight_run() -> None:
+    # Exercises the `on_unmount` branch directly: a query in flight must be
+    # signalled to cancel during teardown, not left to run past it. A fake
+    # stand-in for `action_cancel_query` avoids racing the real query stream
+    # against the widget tree being torn down by the same `run_test()` exit.
+    app = TeridexApp(config=TeridexConfig())
+    cancelled = asyncio.Event()
+
+    async def _fake_cancel_query() -> None:
+        cancelled.set()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._current_run = object()  # type: ignore[assignment]
+        app.action_cancel_query = _fake_cancel_query  # type: ignore[method-assign]
+
+    assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+async def test_unmount_does_not_cancel_when_no_run_is_in_flight() -> None:
+    app = TeridexApp(config=TeridexConfig())
+    cancel_called = asyncio.Event()
+
+    async def _fake_cancel_query() -> None:
+        cancel_called.set()
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        assert app._current_run is None
+        app.action_cancel_query = _fake_cancel_query  # type: ignore[method-assign]
+
+    assert not cancel_called.is_set()
+
+
+@pytest.mark.asyncio
+async def test_unmount_cancels_an_in_flight_palette_task() -> None:
+    app = TeridexApp(config=TeridexConfig())
+    started = asyncio.Event()
+    task_holder: dict[str, asyncio.Task[None]] = {}
+
+    class SlowCommandPlugin:
+        manifest = PluginManifest(id="slow_cmd_plugin", name="SlowCmd", version="1.0.0")
+
+        def on_load(self, ctx: Any) -> None:
+            async def _handler(_ctx: Any) -> None:
+                started.set()
+                await asyncio.sleep(60)
+
+            ctx.register_command(Command(id="slow.cmd", title="Slow", handler=_handler))
+
+        def on_unload(self, ctx: Any) -> None:
+            pass
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._loader.load_instance(SlowCommandPlugin())
+
+        await app.action_command_palette()
+        await pilot.pause()
+
+        screen = app.screen
+        assert isinstance(screen, CommandPaletteScreen)
+        lst = screen.query_one("#palette-list", ListView)
+        for i, child in enumerate(lst.children):
+            cmd = getattr(child, "cmd", None)
+            if cmd is not None and cmd.id == "slow.cmd":
+                lst.index = i
+                break
+        else:
+            pytest.fail("Slow command option not found in command palette")
+
+        await pilot.press("enter")
+        await pilot.pause()
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        task = app._palette_task
+        assert task is not None
+        assert not task.done()
+        task_holder["task"] = task
+
+    # Exiting run_test() triggers on_unmount, which must cancel the
+    # still-running palette task rather than leave it dangling.
+    assert task_holder["task"].cancelled()

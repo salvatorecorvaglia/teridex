@@ -16,7 +16,6 @@ from teridex_core.errors import (
     AdapterConnectionError,
     AdapterError,
     QueryCancelledError,
-    QueryError,
 )
 from teridex_core.logging import get_logger
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
@@ -138,24 +137,17 @@ class SQLiteAdapter(AbstractAdapter):
             return False
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
+        conn = self._require_conn(self._conn)
         handle = QueryHandle(
-            connection_id=connection_id(self._conn),
+            connection_id=connection_id(conn),
             sql=sql,
             params=dict(params) if params else None,
         )
         handle.mark_running()
         try:
-            cur = await self._conn.execute(sql, params or {})
+            cur = await conn.execute(sql, params or {})
         except aiosqlite.Error as exc:
-            if self._cancel_event(handle).is_set():
-                handle.mark_done(QueryStatus.CANCELLED)
-                raise QueryCancelledError(
-                    "query cancelled", context={"query_id": handle.query_id}
-                ) from exc
-            handle.mark_done(QueryStatus.FAILED)
-            raise QueryError(str(exc), context={"sql": sql}) from exc
+            self._wrap_driver_error(exc, handle, sql=sql)
         self._cursors[handle.query_id] = cur
         handle.mark_streaming()
         return handle
@@ -208,12 +200,7 @@ class SQLiteAdapter(AbstractAdapter):
                     try:
                         rows = await cur.fetchmany(batch_size)
                     except aiosqlite.Error as exc:
-                        if cancel.is_set():
-                            handle.mark_done(QueryStatus.CANCELLED)
-                            raise QueryCancelledError(
-                                "query cancelled", context={"query_id": handle.query_id}
-                            ) from exc
-                        raise QueryError(str(exc), context={"sql": handle.sql}) from exc
+                        self._wrap_driver_error(exc, handle, mark_failed=False)
                     materialized = [tuple(r) for r in rows]
                     if not materialized:
                         handle.mark_done(QueryStatus.SUCCEEDED)
@@ -273,26 +260,20 @@ class SQLiteAdapter(AbstractAdapter):
                 await self._conn.execute("ROLLBACK")
 
     async def begin(self) -> Transaction:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
-        return _SQLiteTransaction(self._conn)
+        return _SQLiteTransaction(self._require_conn(self._conn))
 
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
-        return await SQLiteIntrospector(self, self._conn).build(lazy=lazy)
+        conn = self._require_conn(self._conn)
+        return await SQLiteIntrospector(self, conn).build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
-        return await SQLiteIntrospector(self, self._conn).fetch_columns(schema, name)
+        conn = self._require_conn(self._conn)
+        return await SQLiteIntrospector(self, conn).fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
-        return await SQLiteIntrospector(self, self._conn).fetch_foreign_keys(schema, name)
+        conn = self._require_conn(self._conn)
+        return await SQLiteIntrospector(self, conn).fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        if self._conn is None:
-            raise AdapterError("sqlite: not connected")
-        return await SQLiteIntrospector(self, self._conn).fetch_indexes(schema, name)
+        conn = self._require_conn(self._conn)
+        return await SQLiteIntrospector(self, conn).fetch_indexes(schema, name)

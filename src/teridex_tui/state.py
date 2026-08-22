@@ -34,4 +34,4 @@ class AppState:
 
     @property
     def connected(self) -> bool:
-        return self.adapter is not None and self.adapter.connected  # type: ignore[attr-defined]
+        return self.adapter is not None and self.adapter.connected

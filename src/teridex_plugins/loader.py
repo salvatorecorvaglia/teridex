@@ -101,7 +101,13 @@ class PluginLoader:
         self._register(plugin)
 
     def _register(self, plugin: Any) -> None:
-        manifest = getattr(plugin, "manifest", None)
+        try:
+            manifest = getattr(plugin, "manifest", None)
+        except Exception as exc:
+            raise PluginLoadError(
+                "plugin `.manifest` access raised an exception",
+                context={"plugin_repr": repr(plugin), "error": str(exc)},
+            ) from exc
         if not isinstance(manifest, PluginManifest):
             raise PluginLoadError(
                 "plugin missing PluginManifest at `.manifest`",

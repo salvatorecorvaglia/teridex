@@ -20,7 +20,6 @@ from teridex_core.errors import (
     AdapterConnectionError,
     AdapterError,
     QueryCancelledError,
-    QueryError,
 )
 from teridex_core.logging import get_logger
 from teridex_core.models.connection import Dsn
@@ -130,9 +129,7 @@ class DuckDBAdapter(AbstractAdapter):
             return False
 
     async def _exec_sync(self, sql: str, params: Mapping[str, Any] | None = None) -> Any:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
-        conn = self._conn
+        conn = self._require_conn(self._conn)
         async with self._lock:
 
             def _run() -> Any:
@@ -146,10 +143,9 @@ class DuckDBAdapter(AbstractAdapter):
             return await asyncio.to_thread(_run)
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         handle = QueryHandle(
-            connection_id=connection_id(self._conn),
+            connection_id=connection_id(conn),
             sql=sql,
             params=dict(params) if params else None,
         )
@@ -158,13 +154,7 @@ class DuckDBAdapter(AbstractAdapter):
         try:
             await self._exec_sync(sql, params)
         except duckdb.Error as exc:
-            if self._cancel_event(handle).is_set():
-                handle.mark_done(QueryStatus.CANCELLED)
-                raise QueryCancelledError(
-                    "query cancelled", context={"query_id": handle.query_id}
-                ) from exc
-            handle.mark_done(QueryStatus.FAILED)
-            raise QueryError(str(exc), context={"sql": sql}) from exc
+            self._wrap_driver_error(exc, handle, sql=sql)
         handle.mark_streaming()
         self._streaming = handle.query_id
         return handle
@@ -172,10 +162,8 @@ class DuckDBAdapter(AbstractAdapter):
     async def stream(
         self, handle: QueryHandle, *, batch_size: int = 1000
     ) -> AsyncIterator[ResultBatch]:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         cancel = self._cancel_event(handle)
-        conn = self._conn
 
         async def _gen() -> AsyncIterator[ResultBatch]:
             async with self._lock:
@@ -214,12 +202,7 @@ class DuckDBAdapter(AbstractAdapter):
                         async with self._lock:
                             rows = await asyncio.to_thread(conn.fetchmany, batch_size)
                     except duckdb.Error as exc:
-                        if cancel.is_set():
-                            handle.mark_done(QueryStatus.CANCELLED)
-                            raise QueryCancelledError(
-                                "query cancelled", context={"query_id": handle.query_id}
-                            ) from exc
-                        raise QueryError(str(exc), context={"sql": handle.sql}) from exc
+                        self._wrap_driver_error(exc, handle, mark_failed=False)
                     if not rows:
                         handle.mark_done(QueryStatus.SUCCEEDED)
                         yield ResultBatch(columns=columns, rows=[], is_last=True)
@@ -262,29 +245,25 @@ class DuckDBAdapter(AbstractAdapter):
         return _DuckDBTransaction(self)
 
     async def introspect(self, *, lazy: bool = False) -> SchemaSnapshot:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         self._claim_result_set(_INTROSPECTION)
-        introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        introspector = DuckDBIntrospector(conn, self._dsn, self._lock)
         return await introspector.build(lazy=lazy)
 
     async def fetch_columns(self, schema: str, name: str) -> list[TableColumn]:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         self._claim_result_set(_INTROSPECTION)
-        introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        introspector = DuckDBIntrospector(conn, self._dsn, self._lock)
         return await introspector.fetch_columns(schema, name)
 
     async def fetch_foreign_keys(self, schema: str, name: str) -> list[ForeignKey]:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         self._claim_result_set(_INTROSPECTION)
-        introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        introspector = DuckDBIntrospector(conn, self._dsn, self._lock)
         return await introspector.fetch_foreign_keys(schema, name)
 
     async def fetch_indexes(self, schema: str, name: str) -> list[Index]:
-        if self._conn is None:
-            raise AdapterError("duckdb: not connected")
+        conn = self._require_conn(self._conn)
         self._claim_result_set(_INTROSPECTION)
-        introspector = DuckDBIntrospector(self._conn, self._dsn, self._lock)
+        introspector = DuckDBIntrospector(conn, self._dsn, self._lock)
         return await introspector.fetch_indexes(schema, name)

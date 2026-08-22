@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 
 from teridex_tui.events import RunActionRequested
+from teridex_tui.keymaps.default import ACTION_TO_KEY
 
 
 def _wrap(action: str) -> Callable[[PluginContext], Awaitable[None]]:
@@ -32,42 +33,42 @@ BUILTIN_COMMANDS: list[Command] = [
         id="builtin.run_query",
         title="Run query",
         description="Execute the SQL in the active tab.",
-        default_binding="ctrl+enter",
+        default_binding=ACTION_TO_KEY.get("run_query"),
         handler=_wrap("run_query"),
         category="Query",
     ),
     Command(
         id="builtin.cancel_query",
         title="Cancel running query",
-        default_binding="ctrl+c",
+        default_binding=ACTION_TO_KEY.get("cancel_query"),
         handler=_wrap("cancel_query"),
         category="Query",
     ),
     Command(
         id="builtin.refresh_schema",
         title="Refresh schema",
-        default_binding="ctrl+r",
+        default_binding=ACTION_TO_KEY.get("refresh_schema"),
         handler=_wrap("refresh_schema"),
         category="Schema",
     ),
     Command(
         id="builtin.show_history",
         title="Show query history",
-        default_binding="ctrl+h",
+        default_binding=ACTION_TO_KEY.get("show_history"),
         handler=_wrap("show_history"),
         category="Query",
     ),
     Command(
         id="builtin.new_tab",
         title="New query tab",
-        default_binding="ctrl+t",
+        default_binding=ACTION_TO_KEY.get("new_tab"),
         handler=_wrap("new_tab"),
         category="Tabs",
     ),
     Command(
         id="builtin.close_tab",
         title="Close current tab",
-        default_binding="ctrl+w",
+        default_binding=ACTION_TO_KEY.get("close_tab"),
         handler=_wrap("close_tab"),
         category="Tabs",
     ),
@@ -75,7 +76,7 @@ BUILTIN_COMMANDS: list[Command] = [
         id="builtin.copy_cell",
         title="Copy current cell",
         description="Copy the focused result cell to the system clipboard.",
-        default_binding="ctrl+y",
+        default_binding=ACTION_TO_KEY.get("copy_cell"),
         handler=_wrap("copy_cell"),
         category="Results",
     ),
@@ -83,7 +84,7 @@ BUILTIN_COMMANDS: list[Command] = [
         id="builtin.export_csv",
         title="Export results as CSV",
         description="Write the current result set to ~/.teridex/exports/.",
-        default_binding="ctrl+e",
+        default_binding=ACTION_TO_KEY.get("export_csv"),
         handler=_wrap("export_csv"),
         category="Results",
     ),
@@ -102,9 +103,17 @@ BUILTIN_COMMANDS: list[Command] = [
         category="Results",
     ),
     Command(
+        id="builtin.help",
+        title="Show help",
+        description="List the currently active keybindings.",
+        default_binding=ACTION_TO_KEY.get("help"),
+        handler=_wrap("help"),
+        category="App",
+    ),
+    Command(
         id="builtin.quit",
         title="Quit Teridex",
-        default_binding="ctrl+q",
+        default_binding=ACTION_TO_KEY.get("quit"),
         handler=_wrap("quit"),
         category="App",
     ),

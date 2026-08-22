@@ -1,6 +1,6 @@
 """Yellow footer bar showing keyboard shortcuts.
 
-Layout:  ^q Quit  f1 Help  ^↵ Run Query  ^r Refresh  ...  Database Connected.
+Layout:  ^q Quit  ? Help  ^↵ Run Query  ^r Refresh  ...  Database Connected.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ _VIM_FOOTER_BINDINGS: list[tuple[str, str]] = [
     ("^t", "New Tab"),
     ("^w", "Close Tab"),
     ("^y", "Copy"),
+    ("^e", "Export"),
     ("^p", "Palette"),
 ]
 

@@ -9,7 +9,7 @@
  *   │                     │├──── Query Results ────────────────┤
  *   │                     ││  data table                       │
  *   └─────────────────────┘└───────────────────────────────────┘
- *   ^q Quit  f1 Help  ^↵ Run Query  ^r Refresh  ... (footer)
+ *   ^q Quit  ? Help  ^↵ Run Query  ^r Refresh  ... (footer)
  */
 
 Screen {
