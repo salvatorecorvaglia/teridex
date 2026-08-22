@@ -37,7 +37,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     steps:
-      # ── checkout & toolchain ──────────────────────────────────────────
       - uses: actions/checkout@v6
 
       - name: Install uv
@@ -46,7 +45,6 @@ jobs:
           enable-cache: true
           python-version: "3.13"
 
-      # ── Build Packages ────────────────────────────────────────────────
       - name: Sync workspace
         run: uv sync --all-extras --dev --frozen
 
@@ -86,7 +84,6 @@ jobs:
                   f.write(f"body<<{delimiter}\n{notes}\n{delimiter}\n")
           '
 
-      # ── GitHub Release ────────────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -98,6 +95,5 @@ jobs:
             SHA256SUMS
           generate_release_notes: false
 
-      # ── PyPI Publish ──────────────────────────────────────────────────
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

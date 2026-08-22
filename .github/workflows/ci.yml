@@ -60,9 +60,6 @@ jobs:
       - name: Sync workspace
         run: uv sync --all-extras --dev --frozen
 
-      # On ubuntu the runner has a Docker daemon, so the Postgres/MySQL
-      # conformance fixtures start real containers. On macOS there is no
-      # daemon, so those tests are excluded rather than silently skipped.
       - name: Test (pytest + coverage gate)
         run: ./tests/scripts/test.sh
         env:
@@ -77,4 +74,3 @@ jobs:
         uses: actions/checkout@v6
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
-
