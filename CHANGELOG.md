@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-25
+
+### Added
+
+- Added a "Show help" builtin command to the TUI command palette.
+- Added `resources/teridex.svg` project logo.
+
+### Changed
+
+- Centralized adapter connection and error handling in `AbstractAdapter` (`_require_conn`, `_wrap_driver_error`), standardizing "not connected" errors and driver-error translation into `QueryError`/`QueryCancelledError` across the DuckDB, MySQL, PostgreSQL, and SQLite adapters.
+- Added a `connected` property to the `DatabaseAdapter` protocol.
+- Environment variable configuration overrides now process `os.environ` in sorted order, so a nested field override (e.g. `TERIDEX_ENGINE__POOL_SIZE`) deterministically wins over a same-section scalar override (e.g. `TERIDEX_ENGINE`), regardless of the OS/shell's environment iteration order.
+- Command palette default keybindings are now derived from the active keymap's bindings instead of separately hardcoded literals, preventing displayed hints from drifting out of sync with the real keymap.
+- Updated CI and release GitHub Actions workflows.
+
+### Fixed
+
+- `PluginLoader` now raises a structured `PluginLoadError` instead of an unhandled exception when a plugin's `.manifest` property access itself raises.
+
+### Chore
+
+- Pinned `ruff` dev dependency to `==0.16.4` (previously `>=0.15`).
+
 ## [1.1.0] - 2026-08-12
 
 ### Added

@@ -109,15 +109,24 @@ Plugins can subscribe to events published on the async `EventBus`. Key events de
 - `SchemaRefreshed`
 - `PluginLoaded` / `PluginUnloaded`
 
-Example usage in a plugin:
+`@hook` only tags a method with the event name it handles; your plugin's `on_load` must still explicitly subscribe each tagged method to the corresponding `Event` subclass via `PluginContext.subscribe`:
+
 ```python
-from teridex_plugins.api import hook
+from teridex_core.events import QueryStarted
+from teridex_plugins.api import hook, is_hook, hook_event
 
 
-@hook("query.before_execute")
-async def log_query(self, ctx, sql: str) -> None:
-    # Do something async before query runs
-    ...
+class LoggingPlugin:
+    @hook("query.started")
+    async def log_query(self, ctx, ev: QueryStarted) -> None:
+        # Do something async when a query starts
+        ...
+
+    def on_load(self, ctx) -> None:
+        for name in dir(self):
+            fn = getattr(self, name)
+            if is_hook(fn) and hook_event(fn) == "query.started":
+                ctx.subscribe(QueryStarted, fn)
 ```
 
 ---
