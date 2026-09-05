@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import asyncpg
 
+from teridex_adapters._params import coerce_params
 from teridex_adapters._typeinfer import infer_column_type
 from teridex_adapters.base import AbstractAdapter, connection_id
 from teridex_adapters.introspect.postgres import PostgresIntrospector
@@ -38,6 +39,23 @@ logger = get_logger(__name__)
 # Postgres itself caps a statement at 65535 bound parameters; anything past
 # that is a caller mistake, and the value sizes an allocation.
 _MAX_PLACEHOLDERS = 65535
+
+# DSN parameters a Postgres URL may carry. asyncpg parses these out of the URL
+# itself, which is exactly why they need gating: without an allowlist the query
+# string is an open door to every libpq setting — ``options=-c ...`` can change
+# server behaviour mid-connection. The other three adapters have applied this
+# discipline since ``_params.py`` was introduced; Postgres was the gap.
+_ALLOWED_PARAMS = frozenset(
+    {
+        "sslmode",
+        "sslrootcert",
+        "sslcert",
+        "sslkey",
+        "application_name",
+        "connect_timeout",
+        "target_session_attrs",
+    }
+)
 
 
 class _PostgresTransaction:
@@ -80,6 +98,12 @@ class PostgresAdapter(AbstractAdapter):
         self._lock = asyncio.Lock()
 
     async def _do_connect(self, dsn: Dsn) -> None:
+        # Validate before connecting. The parameters travel inside the URL that
+        # asyncpg parses, so this is the only point at which an unknown one can
+        # be refused by name rather than silently reaching libpq. The coerced
+        # values are unused — asyncpg does its own parsing — but routing through
+        # ``coerce_params`` keeps the rejection message identical across adapters.
+        coerce_params(dsn.params, _ALLOWED_PARAMS, adapter="postgres")
         try:
             self._conn = await asyncpg.connect(dsn.render(mask_password=False))
             self._backend_pid = await self._conn.fetchval("SELECT pg_backend_pid()")

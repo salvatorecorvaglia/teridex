@@ -16,6 +16,8 @@ from rich.markup import escape
 from textual.widgets import DataTable
 from textual.widgets.data_table import CellDoesNotExist
 
+from teridex_core.export import csv_safe_row
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -142,7 +144,9 @@ class ResultsTable(DataTable[str]):
                     p.chmod(0o600)
                 w = csv.writer(f)
                 w.writerow(cols)
-                w.writerows(data_rows)
+                # Defused so a value like ``=1+1`` is text in the spreadsheet
+                # rather than a formula it evaluates on open.
+                w.writerows(csv_safe_row(r) for r in data_rows)
 
         await asyncio.to_thread(_write, path, columns, data)
         return len(data)

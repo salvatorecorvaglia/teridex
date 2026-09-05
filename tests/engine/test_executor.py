@@ -328,3 +328,57 @@ async def test_a_fast_query_finishes_well_inside_its_timeout() -> None:
 
     await bus.close()
     await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_aclose_finalizes_the_adapters_stream() -> None:
+    """``QueryRun.aclose()`` must close the adapter's generator, not just the wrapper.
+
+    The executor wraps the adapter's stream in ``_wrap()``. Closing only the
+    wrapper left the adapter's generator suspended at its own ``yield``, so the
+    driver cursor (and, on Postgres, the transaction around the server-side
+    cursor) outlived the run — and the pool had already handed the connection
+    to the next query by then.
+    """
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    try:
+        await _drain(adapter, "CREATE TABLE t (id INTEGER)")
+        for i in range(20):
+            await _drain(adapter, f"INSERT INTO t VALUES ({i})")
+
+        executor = QueryExecutor(adapter, bus)
+        run = await executor.run("SELECT id FROM t", batch_size=5)
+        async for _ in run.rows:
+            break  # abandon the stream early, exactly as the docstring allows
+        assert adapter._cursors, "precondition: the cursor is still open mid-stream"
+
+        await run.aclose()
+
+        assert adapter._cursors == {}, "aclose() left the adapter's cursor open"
+        assert adapter._cancel_flags == {}, "aclose() left the handle's cancel flag behind"
+    finally:
+        await bus.close()
+        await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_aclose_is_idempotent() -> None:
+    adapter = SQLiteAdapter()
+    await adapter.connect(Dsn.parse("sqlite:///:memory:"))
+    bus = EventBus()
+    try:
+        executor = QueryExecutor(adapter, bus)
+        run = await executor.run("SELECT 1 AS a")
+        await run.aclose()
+        await run.aclose()  # must not raise
+    finally:
+        await bus.close()
+        await adapter.close()
+
+
+async def _drain(adapter: SQLiteAdapter, sql: str) -> None:
+    handle = await adapter.execute(sql)
+    async for _ in await adapter.stream(handle):
+        pass

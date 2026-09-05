@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 jobs:
   validate:
@@ -32,10 +31,16 @@ jobs:
             fi
           fi
 
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   release:
-    needs: validate
+    needs: [validate, checks]
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
 

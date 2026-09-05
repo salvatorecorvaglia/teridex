@@ -10,7 +10,9 @@ DEFAULT_BINDINGS: list[tuple[str, str, str]] = [
     ("ctrl+t", "new_tab", "New tab"),
     ("ctrl+w", "close_tab", "Close tab"),
     ("ctrl+r", "refresh_schema", "Refresh schema"),
-    ("ctrl+h", "show_history", "Show history"),
+    # Not ``ctrl+h``: terminals send that for Backspace (it is ASCII BS), so an
+    # app-level binding there fires on an ordinary edit keystroke.
+    ("ctrl+g", "show_history", "Show history"),
     ("ctrl+y", "copy_cell", "Copy cell"),
     ("ctrl+e", "export_csv", "Export CSV"),
     ("question_mark", "help", "Help"),

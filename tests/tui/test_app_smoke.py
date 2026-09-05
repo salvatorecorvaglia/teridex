@@ -150,7 +150,7 @@ async def test_action_bar_unlimited_limit_label() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         limit_label = app.query_one("#limit-label", Static)
-        assert "Limit Unlimited" in str(limit_label.render())
+        assert "Display cap Unlimited" in str(limit_label.render())
 
 
 @pytest.mark.asyncio

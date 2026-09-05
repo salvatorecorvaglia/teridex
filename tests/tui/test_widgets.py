@@ -6,9 +6,12 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
+from rich.cells import cell_len  # noqa: E402
+from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.widgets import Static  # noqa: E402
 
+from teridex_tui.keymaps import ACTION_TO_KEY, key_label  # noqa: E402
 from teridex_tui.widgets.action_bar import ActionBar  # noqa: E402
 from teridex_tui.widgets.status_bar import StatusBar  # noqa: E402
 
@@ -82,3 +85,55 @@ async def test_action_bar_watch_tx_mode_updates_label() -> None:
         await pilot.pause()
         label = bar.query_one("#tx-label", Static)
         assert "Manual" in str(label.render())
+
+
+# ---- footer is derived, not restated ------------------------------------
+
+
+def test_footer_keys_follow_the_keymap() -> None:
+    """The footer must render the keymap's real key, not a hardcoded copy.
+
+    The footer used to hardcode both the key and the label, so moving a binding
+    (``show_history`` off ``ctrl+h``, which terminals send for Backspace) left
+    the footer advertising a key that no longer did anything.
+    """
+    out = Text.from_markup(StatusBar().render()).plain
+
+    assert f"{key_label(ACTION_TO_KEY['show_history'])} History" in out
+    assert f"{key_label(ACTION_TO_KEY['quit'])} Quit" in out
+    assert "^h History" not in out, "footer still advertises the retired Backspace binding"
+
+
+def test_footer_uses_the_vim_keymap_in_vim_mode() -> None:
+    bar = StatusBar()
+    bar.mode = "VIM"
+    out = Text.from_markup(bar.render()).plain
+
+    assert "gg Top" in out
+    assert "G Bottom" in out
+
+
+@pytest.mark.asyncio
+async def test_footer_pads_using_cell_width_not_character_count() -> None:
+    """``^↵`` is one character but the padding must reckon in terminal cells.
+
+    Measuring with ``len()`` over-counted the available room, so the status
+    line was padded a cell too wide and wrapped on a full-width terminal.
+    """
+
+    bar = StatusBar()
+    bar.connection = "sqlite:///:memory:"
+    async with _Harness(bar).run_test(size=(200, 10)):
+        rendered = Text.from_markup(bar.render()).plain
+        # Padded to exactly the widget's width less its 1-cell padding a side.
+        assert cell_len(rendered) == bar.size.width - 2
+        assert "^↵ Run Query" in rendered
+
+
+def test_key_label_renders_bindings_the_way_users_type_them() -> None:
+    assert key_label("ctrl+q") == "^q"
+    assert key_label("ctrl+enter") == "^↵"
+    assert key_label("question_mark") == "?"
+    assert key_label("shift+g") == "G"
+    assert key_label("g,g") == "gg"
+    assert key_label("colon") == ":"

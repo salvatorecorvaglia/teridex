@@ -63,6 +63,13 @@ _ALLOWED_PARAMS = frozenset(
 # MySQL's wire protocol reports a numeric field type per column. Mapping it is
 # the only way to type a result set: ``information_schema`` describes stored
 # tables, not the shape of an arbitrary SELECT.
+#
+# Mind the aliases in the driver's constants module: ``FIELD_TYPE.CHAR`` *is*
+# ``FIELD_TYPE.TINY`` (both 1) and ``FIELD_TYPE.INTERVAL`` *is* ``FIELD_TYPE.YEAR``
+# (both 13). Keying anything off an alias silently overwrites the canonical
+# entry — which is how code 1 came to say STRING, mistyping every TINYINT and,
+# since MySQL stores BOOLEAN as TINYINT(1), every boolean column with it. Only
+# canonical names appear below.
 _FIELD_TYPE_TO_COLUMN_TYPE: dict[int, ColumnType] = {
     FIELD_TYPE.DECIMAL: ColumnType.DECIMAL,
     FIELD_TYPE.NEWDECIMAL: ColumnType.DECIMAL,
@@ -85,7 +92,6 @@ _FIELD_TYPE_TO_COLUMN_TYPE: dict[int, ColumnType] = {
     FIELD_TYPE.TINY_BLOB: ColumnType.BINARY,
     FIELD_TYPE.MEDIUM_BLOB: ColumnType.BINARY,
     FIELD_TYPE.LONG_BLOB: ColumnType.BINARY,
-    FIELD_TYPE.CHAR: ColumnType.STRING,
     FIELD_TYPE.VARCHAR: ColumnType.STRING,
     FIELD_TYPE.VAR_STRING: ColumnType.STRING,
     FIELD_TYPE.STRING: ColumnType.STRING,
@@ -95,12 +101,52 @@ _FIELD_TYPE_TO_COLUMN_TYPE: dict[int, ColumnType] = {
 }
 
 # Human-readable native names for the same codes, so the UI can show something
-# more useful than a number.
-_FIELD_TYPE_NAMES: dict[int, str] = {
-    code: name
-    for name, code in vars(FIELD_TYPE).items()
-    if not name.startswith("_") and isinstance(code, int)
-}
+# more useful than a number. Built from an explicit list of canonical names
+# rather than ``vars(FIELD_TYPE)``, whose iteration order would otherwise decide
+# which of two aliased names wins.
+_CANONICAL_FIELD_TYPE_NAMES: tuple[str, ...] = (
+    "DECIMAL",
+    "TINY",
+    "SHORT",
+    "LONG",
+    "FLOAT",
+    "DOUBLE",
+    "NULL",
+    "TIMESTAMP",
+    "LONGLONG",
+    "INT24",
+    "DATE",
+    "TIME",
+    "DATETIME",
+    "YEAR",
+    "NEWDATE",
+    "VARCHAR",
+    "BIT",
+    "JSON",
+    "NEWDECIMAL",
+    "ENUM",
+    "SET",
+    "TINY_BLOB",
+    "MEDIUM_BLOB",
+    "LONG_BLOB",
+    "BLOB",
+    "VAR_STRING",
+    "STRING",
+    "GEOMETRY",
+)
+
+
+def _canonical_field_type_names() -> dict[int, str]:
+    """Map each field-type code to its canonical driver name."""
+    names: dict[int, str] = {}
+    for name in _CANONICAL_FIELD_TYPE_NAMES:
+        code = getattr(FIELD_TYPE, name, None)
+        if isinstance(code, int):
+            names.setdefault(code, name)
+    return names
+
+
+_FIELD_TYPE_NAMES: dict[int, str] = _canonical_field_type_names()
 
 
 def _describe_columns(description: Sequence[Any]) -> list[Column]:
@@ -295,36 +341,32 @@ class MySQLAdapter(AbstractAdapter):
     ) -> AsyncIterator[ResultBatch]:
         cancel = self._cancel_event(handle)
         if cancel.is_set():
-
-            async def _gen_cancelled() -> AsyncIterator[ResultBatch]:
-                handle.mark_done(QueryStatus.CANCELLED)
-                if handle.query_id:
-                    raise QueryCancelledError(
-                        "query cancelled", context={"query_id": handle.query_id}
-                    )
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-
-            return _gen_cancelled()
+            return self._cancelled_stream(handle)
 
         cur = self._cursors.get(handle.query_id)
         if cur is None:
             raise AdapterError("mysql: stream() called with unknown handle")
 
         async def _gen() -> AsyncIterator[ResultBatch]:
-            columns = _describe_columns(cur.description or [])
-            self._set_metadata(
-                handle,
-                QueryMetadata(
-                    column_names=[c.name for c in columns],
-                    column_types=[c.type_native or "" for c in columns],
-                    affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
-                ),
-            )
-            if not columns:
-                handle.mark_done(QueryStatus.SUCCEEDED)
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-                return
+            # Everything below runs inside the ``try`` so that *every* exit path
+            # reaches the ``finally``. A statement with no result columns
+            # (DDL/DML) used to ``return`` above the ``try``, stranding its
+            # cursor and cancel flag on the adapter for the life of the
+            # connection — one leaked pair per INSERT/UPDATE/CREATE.
             try:
+                columns = _describe_columns(cur.description or [])
+                self._set_metadata(
+                    handle,
+                    QueryMetadata(
+                        column_names=[c.name for c in columns],
+                        column_types=[c.type_native or "" for c in columns],
+                        affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
+                    ),
+                )
+                if not columns:
+                    handle.mark_done(QueryStatus.SUCCEEDED)
+                    yield ResultBatch(columns=[], rows=[], is_last=True)
+                    return
                 while True:
                     if cancel.is_set():
                         handle.mark_done(QueryStatus.CANCELLED)

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import datetime
+import decimal
+import uuid
+
 from teridex_core.models.result import ColumnType
 
 _INTEGER = {
@@ -48,10 +52,6 @@ def infer_column_type_from_value(value: object) -> ColumnType:
     ``None`` yields ``UNKNOWN`` rather than ``NULL``: a NULL in the first row
     says nothing about the column.
     """
-    import datetime  # noqa: PLC0415
-    import decimal  # noqa: PLC0415
-    import uuid  # noqa: PLC0415
-
     if value is None:
         return ColumnType.UNKNOWN
     if isinstance(value, bool):

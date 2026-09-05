@@ -136,3 +136,28 @@ async def test_sqlite_dml_persistence(tmp_path: pathlib.Path) -> None:
         assert rows == [(1, "Alice")]
     finally:
         await a2.close()
+
+
+@pytest.mark.asyncio
+async def test_failed_do_connect_closes_the_driver_connection() -> None:
+    """A connection that half-opens must not be stranded.
+
+    ``connect()`` only sets ``_connected`` after ``_do_connect`` returns, and
+    ``close()`` is a no-op while that flag is False. Since ``_do_connect``
+    opens the aiosqlite connection and *then* runs PRAGMAs, a failure in the
+    second half used to leak the connection and its worker thread.
+    """
+    a = SQLiteAdapter()
+    original = a._do_connect
+
+    async def _boom(dsn: Dsn) -> None:
+        await original(dsn)  # the real driver connection is opened here
+        raise RuntimeError("PRAGMA failed")
+
+    a._do_connect = _boom  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="PRAGMA failed"):
+        await a.connect(Dsn.parse("sqlite:///:memory:"))
+
+    assert a._connected is False
+    assert a._conn is None, "the half-open driver connection was not released"

@@ -6,16 +6,20 @@ from typing import TYPE_CHECKING
 
 from textual.binding import Binding
 from textual.containers import Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Static
+
+from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
-    from textual.events import Key
 
 
-class HelpModal(ModalScreen[None]):
-    """Press ``?`` to view, ``escape`` to dismiss."""
+class HelpModal(BaseModal[None]):
+    """Press ``?`` to view, ``escape`` or ``enter`` to dismiss.
+
+    Uses :class:`BaseModal` like every other modal: help has nothing to submit,
+    so ``enter`` simply closes it too.
+    """
 
     def compose(self) -> ComposeResult:
         with Vertical(id="HelpModal"):
@@ -28,6 +32,13 @@ class HelpModal(ModalScreen[None]):
                     "remains in standard insert mode.[/]\n",
                     id="help-vim-note",
                 )
+            # ^c is rebound away from Textual's default quit, so say so: a user
+            # who reaches for it to escape needs to know ^q is the way out.
+            yield Static(
+                "[yellow]Note: ^c cancels the running query — it does not quit. "
+                "Use ^q to quit Teridex.[/]\n",
+                id="help-cancel-note",
+            )
             yield Static(self._render_bindings(), id="help-bindings")
             yield Static("\n[dim](press escape to close)[/]", id="help-hint")
 
@@ -84,6 +95,6 @@ class HelpModal(ModalScreen[None]):
             return "[dim]no bindings registered[/]"
         return "\n".join(lines)
 
-    def on_key(self, event: Key) -> None:
-        if event.key == "escape":
-            self.dismiss(None)
+    def submit(self) -> None:
+        # Nothing to submit — enter is just another way to close the help.
+        self.dismiss(None)

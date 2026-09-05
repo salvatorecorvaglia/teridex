@@ -188,6 +188,27 @@ class AdapterConformance:
 
         assert len(await drain(adapter, f"SELECT id FROM {_TABLE}")) == 10
 
+    @pytest.mark.asyncio
+    async def test_drained_statements_release_per_query_state(
+        self, adapter: DatabaseAdapter
+    ) -> None:
+        """Per-query bookkeeping must not survive a fully drained statement.
+
+        Every statement allocates a cursor and a cancel flag. A statement that
+        returns no columns (DDL/DML) is the trap: SQLite and MySQL used to
+        ``return`` from ``stream()`` *above* the ``finally`` that releases
+        them, leaking one of each per INSERT — unbounded over the life of a
+        pooled connection.
+        """
+        await drain(adapter, self.create_table_sql)
+        for i in range(5):
+            await drain(adapter, f"INSERT INTO {_TABLE} VALUES ({i}, 'x')")
+        await drain(adapter, f"SELECT id FROM {_TABLE}")
+
+        assert getattr(adapter, "_cancel_flags", {}) == {}, "cancel flags accumulated"
+        assert getattr(adapter, "_cursors", {}) == {}, "driver cursors accumulated"
+        assert getattr(adapter, "_statements", {}) == {}, "prepared statements accumulated"
+
     # --- introspection --------------------------------------------------
 
     @pytest.mark.asyncio

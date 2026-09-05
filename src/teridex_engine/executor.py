@@ -46,6 +46,7 @@ class QueryRun:
     rows: AsyncIterator[ResultBatch]
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     rows_emitted: int = 0
+    _closed: bool = False
 
     @property
     def query_id(self) -> str:
@@ -67,6 +68,9 @@ class QueryRun:
         finalization to the garbage collector can hand a connection back to the
         pool while it is still inside a transaction.
         """
+        if self._closed:
+            return
+        self._closed = True
         aclose = getattr(self.rows, "aclose", None)
         if aclose is not None:
             await aclose()
@@ -231,6 +235,22 @@ class QueryExecutor:
                 )
                 raise
             finally:
+                # Finalize the adapter's generator too. Closing ``_wrap`` alone
+                # leaves ``source`` suspended at its own ``yield``, so the
+                # driver cursor — and, on Postgres, the transaction wrapping the
+                # server-side cursor — would survive until the garbage collector
+                # got round to it, which is after the pool has already handed the
+                # connection to the next query.
+                # ``DatabaseAdapter.stream`` is typed as a bare AsyncIterator,
+                # so probe for ``aclose`` the same way ``QueryRun.aclose`` does.
+                source_aclose = getattr(source, "aclose", None)
+                if source_aclose is not None:
+                    try:
+                        await source_aclose()
+                    except Exception:
+                        logger.warning(
+                            "adapter_stream_close_failed", query_id=handle.query_id, exc_info=True
+                        )
                 reset_context(token)
 
         run.rows = _wrap()

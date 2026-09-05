@@ -9,7 +9,8 @@ pytest.importorskip("asyncpg")
 import asyncpg
 
 from teridex_adapters.postgres_adapter import PostgresAdapter
-from teridex_core.errors import AdapterError, QueryError
+from teridex_core.errors import AdapterConnectionError, AdapterError, QueryError
+from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryStatus
 
 
@@ -145,3 +146,47 @@ async def test_streaming_a_result_forgets_its_prepared_statement() -> None:
         pass
     assert adapter._statements == {}, "prepared statements accumulate per query"
     assert handle.status is QueryStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_unknown_dsn_parameters_are_refused_before_connecting() -> None:
+    """Postgres must gate DSN parameters like every other adapter.
+
+    The query string rides into asyncpg's own URL parser, so without an
+    allowlist a DSN could reach any libpq setting — ``options=-c ...`` changes
+    server behaviour. The refusal happens before any network access.
+    """
+    adapter = PostgresAdapter()
+    dsn = Dsn.parse("postgres://u:p@localhost:5432/db?options=-c%20statement_timeout%3D1")
+
+    with pytest.raises(AdapterConnectionError, match="unsupported DSN parameter"):
+        await adapter.connect(dsn)
+
+    assert adapter._conn is None
+    assert adapter.connected is False
+
+
+@pytest.mark.asyncio
+async def test_known_dsn_parameters_pass_validation() -> None:
+    """An allowlisted parameter must reach the driver, not be rejected here."""
+    adapter = PostgresAdapter()
+    dsn = Dsn.parse("postgres://u:p@localhost:5432/db?sslmode=require&application_name=teridex")
+
+    # Validation passes, so the failure comes from the connection attempt.
+    with pytest.raises(AdapterConnectionError, match="connection failed"):
+        await adapter.connect(dsn)
+
+
+def test_asyncpg_still_exposes_the_private_transaction_attribute() -> None:
+    """``reset()`` depends on ``Connection._top_xact``, an asyncpg internal.
+
+    A stream abandoned mid-cursor leaves the connection inside the transaction
+    that wrapped it, and unwinding that is what stops the next query in the pool
+    from running inside someone else's — possibly already-aborted — transaction.
+    There is no public API for it, so this test is the tripwire: if an asyncpg
+    upgrade renames or drops the attribute, fail here loudly rather than let
+    ``reset()`` silently stop rolling anything back.
+    """
+    assert "_top_xact" in asyncpg.Connection.__slots__, (
+        "asyncpg.Connection._top_xact is gone — PostgresAdapter.reset() needs rewriting"
+    )

@@ -22,7 +22,6 @@ from teridex_core.errors import (
     QueryCancelledError,
 )
 from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 from teridex_core.models.result import Column, ResultBatch
 

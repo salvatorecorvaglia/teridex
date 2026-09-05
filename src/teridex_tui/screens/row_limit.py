@@ -31,6 +31,7 @@ class RowLimitModal(BaseModal[int]):
                 placeholder="Enter limit (0 for unlimited)",
                 id="limit-input",
             )
+            yield Static("", id="limit-error", classes="modal-error")
             yield Button("Set Limit", id="limit-submit-btn", variant="primary")
             yield Static(
                 "\n[dim](enter to save · escape to cancel)[/]",
@@ -46,12 +47,22 @@ class RowLimitModal(BaseModal[int]):
         if event.button.id == "limit-submit-btn":
             self.submit()
 
+    def _show_error(self, message: str) -> None:
+        """Report invalid input in place, keeping the modal open.
+
+        Rejecting input with a bare ``return`` made enter look like a dead key:
+        no dismissal, no message, no clue what the field wanted.
+        """
+        self.query_one("#limit-error", Static).update(message)
+
     def submit(self) -> None:
         value_str = self.query_one("#limit-input", Input).value.strip()
         try:
             val = int(value_str)
-            if val < 0:
-                raise ValueError()
         except ValueError:
+            self._show_error("Enter a whole number — 0 means unlimited.")
+            return
+        if val < 0:
+            self._show_error("The limit cannot be negative — 0 means unlimited.")
             return
         self.dismiss(val)

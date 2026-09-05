@@ -157,40 +157,37 @@ class SQLiteAdapter(AbstractAdapter):
     ) -> AsyncIterator[ResultBatch]:
         cancel = self._cancel_event(handle)
         if cancel.is_set():
-
-            async def _gen_cancelled() -> AsyncIterator[ResultBatch]:
-                handle.mark_done(QueryStatus.CANCELLED)
-                if handle.query_id:
-                    raise QueryCancelledError(
-                        "query cancelled", context={"query_id": handle.query_id}
-                    )
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-
-            return _gen_cancelled()
+            return self._cancelled_stream(handle)
 
         cur = self._cursors.get(handle.query_id)
         if cur is None:
             raise AdapterError("sqlite: stream() called with unknown handle")
 
         async def _gen() -> AsyncIterator[ResultBatch]:
-            description: list[Any] = list(cur.description or [])
-            columns = [
-                Column(name=d[0], type=ColumnType.UNKNOWN, type_native=None) for d in description
-            ]
-            self._set_metadata(
-                handle,
-                QueryMetadata(
-                    column_names=[c.name for c in columns],
-                    column_types=[],
-                    affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
-                ),
-            )
-            if not columns:
-                handle.mark_done(QueryStatus.SUCCEEDED)
-                yield ResultBatch(columns=[], rows=[], is_last=True)
-                return
-            typed = False
+            # Everything below runs inside the ``try`` so that *every* exit path
+            # reaches the ``finally``. A statement with no result columns
+            # (DDL/DML) used to ``return`` above the ``try``, stranding its
+            # cursor and cancel flag on the adapter for the life of the
+            # connection — one leaked pair per INSERT/UPDATE/CREATE.
             try:
+                description: list[Any] = list(cur.description or [])
+                columns = [
+                    Column(name=d[0], type=ColumnType.UNKNOWN, type_native=None)
+                    for d in description
+                ]
+                self._set_metadata(
+                    handle,
+                    QueryMetadata(
+                        column_names=[c.name for c in columns],
+                        column_types=[],
+                        affected_rows=cur.rowcount if cur.rowcount >= 0 else None,
+                    ),
+                )
+                if not columns:
+                    handle.mark_done(QueryStatus.SUCCEEDED)
+                    yield ResultBatch(columns=[], rows=[], is_last=True)
+                    return
+                typed = False
                 while True:
                     if cancel.is_set():
                         handle.mark_done(QueryStatus.CANCELLED)

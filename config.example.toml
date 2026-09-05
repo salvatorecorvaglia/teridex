@@ -29,6 +29,9 @@ max_history_entries = 1000
 # ConnectionPool.
 pool_size = 5
 
+# Where the query-history store lives. Unset uses ~/.teridex/history.db.
+# history_path = "~/.local/share/teridex/history.db"
+
 [logging]
 # DEBUG | INFO | WARNING | ERROR
 level = "INFO"

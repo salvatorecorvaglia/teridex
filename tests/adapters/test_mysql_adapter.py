@@ -15,7 +15,8 @@ pytest.importorskip("asyncmy")
 
 from teridex_adapters.mysql_adapter import MySQLAdapter
 from teridex_core.models.connection import Dsn
-from tests.adapters._conformance import AdapterConformance, drain
+from teridex_core.models.result import ColumnType
+from tests.adapters._conformance import AdapterConformance, collect, drain
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -61,4 +62,37 @@ async def test_composite_foreign_key_introspection(mysql_dsn: str) -> None:
     finally:
         await drain(adapter, "DROP TABLE IF EXISTS fk_child")
         await drain(adapter, "DROP TABLE IF EXISTS fk_parent")
+        await adapter.close()
+
+
+@pytest.mark.asyncio
+async def test_tinyint_and_boolean_columns_are_typed_as_integer(mysql_dsn: str) -> None:
+    """End-to-end guard for the ``FIELD_TYPE.CHAR``/``TINY`` alias collision.
+
+    MySQL spells ``BOOLEAN`` as ``TINYINT(1)`` and reports both over the wire as
+    field type 1 — the same constant the driver also exposes as ``CHAR``. That
+    code was mapped to STRING, so every boolean and tinyint column reached the
+    results grid, CSV and JSON export as text. The ``CHAR(8)`` column is here to
+    prove that fixing it did not untype genuine text.
+    """
+    adapter = MySQLAdapter()
+    await adapter.connect(Dsn.parse(mysql_dsn))
+    try:
+        await drain(adapter, "DROP TABLE IF EXISTS tinyint_typing")
+        await drain(
+            adapter,
+            "CREATE TABLE tinyint_typing (flag BOOLEAN, small TINYINT, txt CHAR(8))",
+        )
+        await drain(adapter, "INSERT INTO tinyint_typing VALUES (TRUE, 7, 'hi')")
+
+        batches = await collect(adapter, "SELECT flag, small, txt FROM tinyint_typing")
+        columns = next(b.columns for b in batches if b.columns)
+
+        assert [c.type for c in columns] == [
+            ColumnType.INTEGER,
+            ColumnType.INTEGER,
+            ColumnType.STRING,
+        ]
+    finally:
+        await drain(adapter, "DROP TABLE IF EXISTS tinyint_typing")
         await adapter.close()

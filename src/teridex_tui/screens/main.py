@@ -5,7 +5,7 @@ Layout:
     │ schema tree       ││  Tab 1  Tab 2                        │
     │                   ││  SQL editor                          │
     │                   │├──────────────────────────────────────┤
-    │                   ││ Tx: Auto   Limit 500   [Run Query]  │
+    │                   ││ Tx: Auto  Display cap 10000  [Run]  │
     │                   │├──── Query Results ───────────────────┤
     │                   ││  results data table                  │
     └──────────────────┘└──────────────────────────────────────┘

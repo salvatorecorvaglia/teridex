@@ -31,6 +31,18 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def default_history_path(cfg: TeridexConfig) -> Path:
+    """Resolve where the query-history store lives.
+
+    ``engine.history_path`` wins when set; otherwise the store sits alongside
+    the log file under ``~/.teridex``.
+    """
+    configured = cfg.engine.history_path
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".teridex" / "history.db"
+
+
 def is_in_memory(dsn: Dsn) -> bool:
     return dsn.scheme in {"sqlite", "duckdb"} and (not dsn.database or dsn.database == ":memory:")
 
@@ -125,7 +137,7 @@ async def open_session(dsn: Dsn, cfg: TeridexConfig, bus: EventBus) -> Session:
             pool = ConnectionPool(dsn, _factory, size=cfg.engine.pool_size)
 
         history = QueryHistory(
-            Path.home() / ".teridex" / "history.db",
+            default_history_path(cfg),
             max_entries=cfg.engine.max_history_entries,
         )
         await history.open()

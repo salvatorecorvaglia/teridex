@@ -140,6 +140,9 @@ async def test_introspection_retry_on_failure() -> None:
         await pilot.pause()
 
         assert len(lazy_node.children) == 0
+        # The widget posts IntrospectionFailed rather than writing to the status
+        # bar itself; the app's handler is what surfaces it.
+        assert "lazy_table" in app._status().message
 
         # 2. Collapse and expand again - succeeds
         lazy_node.collapse()

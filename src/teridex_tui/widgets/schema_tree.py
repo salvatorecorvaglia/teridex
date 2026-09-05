@@ -9,10 +9,10 @@ wide schemas instead of O(objects * columns).
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
+from textual.message import Message
 from textual.widgets import Tree
 
 from teridex_core.models.schema import SchemaObject
@@ -25,6 +25,19 @@ if TYPE_CHECKING:
 
 class SchemaTree(Tree[object]):
     DEFAULT_CSS = ""
+
+    class IntrospectionFailed(Message):
+        """Lazily loading an object's columns/indexes/foreign keys failed.
+
+        Posted rather than written straight to the status bar: reaching into
+        ``App._status`` bound this widget to one specific host application —
+        and to a private method of it — for what is really just "tell the user".
+        """
+
+        def __init__(self, object_name: str, error: str) -> None:
+            super().__init__()
+            self.object_name = object_name
+            self.error = error
 
     def __init__(self) -> None:
         super().__init__("Schema", id="schema-tree", data=None)
@@ -83,13 +96,7 @@ class SchemaTree(Tree[object]):
                     introspector.update_object(schema_name, obj.name, cols, fks, indexes)
                     node.data = obj
                 except Exception as exc:
-                    status = getattr(self.app, "_status", None)
-                    if status is not None:
-                        with contextlib.suppress(Exception):
-                            status().message = (
-                                f"[red]Failed to introspect "
-                                f"{escape(obj.name)}: {escape(str(exc))}[/]"
-                            )
+                    self.post_message(self.IntrospectionFailed(obj.name, str(exc)))
                     return
 
         self._fill_object_node(node, obj)

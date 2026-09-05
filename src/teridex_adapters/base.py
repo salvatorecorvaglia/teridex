@@ -9,6 +9,7 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TypeVar
 
@@ -42,6 +43,30 @@ def connection_id(conn: object) -> str:
     distinct between live connections — ``id()`` satisfies both.
     """
     return hex(id(conn))
+
+
+class _CancelledStream:
+    """Async iterator that reports a cancelled query on its first iteration.
+
+    ``stream()`` has to hand back an iterator, so a query cancelled *before*
+    streaming began cannot simply raise from ``stream()`` itself without
+    changing the contract every caller is written against. Adapters previously
+    each hand-rolled a generator with an always-true ``if`` guarding an
+    unreachable ``yield`` — the ``yield`` existing only to make the function a
+    generator. This says the same thing without the dead branch.
+    """
+
+    __slots__ = ("_handle",)
+
+    def __init__(self, handle: QueryHandle) -> None:
+        self._handle = handle
+
+    def __aiter__(self) -> _CancelledStream:
+        return self
+
+    async def __anext__(self) -> ResultBatch:
+        self._handle.mark_done(QueryStatus.CANCELLED)
+        raise QueryCancelledError("query cancelled", context={"query_id": self._handle.query_id})
 
 
 class AbstractAdapter(ABC):
@@ -81,7 +106,18 @@ class AbstractAdapter(ABC):
 
     async def connect(self, dsn: Dsn) -> None:
         self._dsn = dsn
-        await self._do_connect(dsn)
+        try:
+            await self._do_connect(dsn)
+        except BaseException:
+            # Every adapter opens the driver connection and *then* does more
+            # work that can fail: PRAGMAs on SQLite, ``pg_backend_pid()`` on
+            # Postgres, ``CONNECTION_ID()`` on MySQL. ``close()`` is a no-op
+            # while ``_connected`` is False, so without this unwind the
+            # half-open connection — and, for aiosqlite, its worker thread —
+            # would never be released.
+            with contextlib.suppress(Exception):
+                await self._do_close()
+            raise
         self._connected = True
         logger.info("adapter_connected", adapter=self.name, scheme=dsn.scheme)
 
@@ -172,6 +208,10 @@ class AbstractAdapter(ABC):
         if mark_failed:
             handle.mark_done(QueryStatus.FAILED)
         raise QueryError(str(exc), context={"sql": sql if sql is not None else handle.sql}) from exc
+
+    def _cancelled_stream(self, handle: QueryHandle) -> AsyncIterator[ResultBatch]:
+        """Return a stream that raises :class:`QueryCancelledError` when iterated."""
+        return _CancelledStream(handle)
 
     def _cancel_event(self, handle: QueryHandle) -> asyncio.Event:
         flag = self._cancel_flags.get(handle.query_id)

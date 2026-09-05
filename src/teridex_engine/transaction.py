@@ -15,9 +15,7 @@ if TYPE_CHECKING:
 async def transaction(adapter: DatabaseAdapter) -> AsyncIterator[Transaction]:
     """Open a transaction, commit on success, roll back on exception."""
     tx = await adapter.begin()
-    try:
-        async with tx as active:
-            yield active
-    except Exception:
-        # ``__aexit__`` rolls back if it received an exception; re-raise.
-        raise
+    # ``__aexit__`` commits on a clean exit and rolls back when it is handed an
+    # exception, so the context manager is the whole implementation.
+    async with tx as active:
+        yield active

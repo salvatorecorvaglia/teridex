@@ -28,6 +28,10 @@ class EngineConfig(BaseModel):
     default_timeout_seconds: float = Field(default=60.0, gt=0)
     max_history_entries: int = Field(default=1000, ge=10)
     pool_size: int = Field(default=5, ge=1, le=64)
+    # Where the local query-history store lives. ``None`` uses
+    # ``~/.teridex/history.db``. Every other path in the app is configurable;
+    # this one was hardcoded at the single call site.
+    history_path: str | None = None
 
 
 class LoggingConfig(BaseModel):
@@ -104,8 +108,6 @@ def _get_env_config() -> dict[str, Any]:
             if (val_stripped.startswith("[") and val_stripped.endswith("]")) or (
                 val_stripped.startswith("{") and val_stripped.endswith("}")
             ):
-                import contextlib  # noqa: PLC0415
-
                 with contextlib.suppress(json.JSONDecodeError):
                     parsed_val = json.loads(val_stripped)
             curr[parts[-1]] = parsed_val

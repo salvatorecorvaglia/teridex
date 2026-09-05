@@ -25,7 +25,10 @@ CREATE TABLE IF NOT EXISTS history (
     error TEXT,
     started_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_history_started ON history(started_at DESC);
+-- Dropped, not created: both readers (``recent`` and ``_trim``) order by ``id``,
+-- so this index was never used for a lookup and only cost a write per insert.
+-- The DROP keeps databases created by earlier versions from paying for it.
+DROP INDEX IF EXISTS idx_history_started;
 """
 
 

@@ -74,23 +74,8 @@ class TeridexApp(App[None]):
     ) -> None:
         super().__init__()
         self.cfg = config or load_config()
-        log_dir = Path.home() / ".teridex"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        with contextlib.suppress(Exception):
-            log_dir.chmod(0o700)
-        log_file = log_dir / "teridex.log"
-        if not log_file.exists():
-            with contextlib.suppress(Exception):
-                log_file.touch()
-        with contextlib.suppress(Exception):
-            log_file.chmod(0o600)
-        configure_logging(
-            level=self.cfg.logging.level,
-            json=self.cfg.logging.json_lines,
-            log_file=log_file,
-            force=True,
-        )
         self.state = AppState(bus=EventBus(), plugins=PluginRegistry())
+        self._loader: PluginLoader | None = None
         self._initial_dsn = initial_dsn
         self._current_run: QueryRun | None = None
         self._run_executor: QueryExecutor | None = None
@@ -106,10 +91,40 @@ class TeridexApp(App[None]):
 
     # ---- lifecycle -----------------------------------------------------
 
+    def _setup_logging(self) -> None:
+        """Point structured logging at ``~/.teridex/teridex.log``.
+
+        Done on mount rather than in ``__init__``: a constructor that touches
+        the filesystem cannot be built where ``$HOME`` is read-only, and it made
+        the app awkward to instantiate in a test. A home we cannot write to
+        falls back to stderr instead of refusing to start.
+        """
+        log_file: Path | None = None
+        try:
+            log_dir = Path.home() / ".teridex"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            with contextlib.suppress(OSError):
+                log_dir.chmod(0o700)
+            candidate = log_dir / "teridex.log"
+            if not candidate.exists():
+                candidate.touch()
+            with contextlib.suppress(OSError):
+                candidate.chmod(0o600)
+            log_file = candidate
+        except OSError:
+            logger.warning("log_file_unavailable", fallback="stderr")
+        configure_logging(
+            level=self.cfg.logging.level,
+            json=self.cfg.logging.json_lines,
+            log_file=log_file,
+            force=True,
+        )
+
     def compose(self) -> ComposeResult:
         yield MainScreen()
 
     async def on_mount(self) -> None:
+        self._setup_logging()
         self._apply_theme()
         self._apply_border_titles()
         await self._load_plugins()
@@ -133,7 +148,7 @@ class TeridexApp(App[None]):
             self._palette_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._palette_task
-        loader = getattr(self, "_loader", None)
+        loader = self._loader
         if loader is not None:
             with contextlib.suppress(Exception):
                 loader.unload_all()
@@ -202,7 +217,7 @@ class TeridexApp(App[None]):
         are safe to share: they only expose schema metadata and past query
         records, not live connections.
         """
-        loader = getattr(self, "_loader", None)
+        loader = self._loader
         if loader is None:
             return
         late = {
@@ -215,7 +230,7 @@ class TeridexApp(App[None]):
     async def _mount_plugin_panels(self) -> None:
         from textual.containers import Vertical  # noqa: PLC0415
 
-        loader = getattr(self, "_loader", None)
+        loader = self._loader
         if loader is None:
             return
         rails: dict[str, list[Widget]] = {
@@ -361,6 +376,10 @@ class TeridexApp(App[None]):
         detail = str(exc)
         self._status().message = f"[red]{escape(headline)}: {escape(detail)}[/]"
         self.notify(detail, title=headline, severity="error", timeout=10)
+
+    def on_schema_tree_introspection_failed(self, event: SchemaTree.IntrospectionFailed) -> None:
+        """Surface a failed lazy schema load the same way every other error is."""
+        self._report_error(f"Failed to introspect {event.object_name}", event.error)
 
     # ---- actions ------------------------------------------------------
 
@@ -539,8 +558,10 @@ class TeridexApp(App[None]):
                     event_bus=self.state.bus,
                     registry=self.state.plugins,
                 )
-            else:
+            elif self._loader is not None:
                 ctx = self._loader.context_for(plugin_id)
+            else:
+                return
             task = asyncio.ensure_future(result.handler(ctx))
             self._palette_task = task
 

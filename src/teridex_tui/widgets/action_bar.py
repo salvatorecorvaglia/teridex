@@ -27,13 +27,15 @@ class ActionBar(Static):
 
     def compose(self) -> ComposeResult:
         yield Static(f"Tx: {self.tx_mode}", classes="action-label", id="tx-label")
-        yield Static(f"Limit {self.limit}", classes="action-label", id="limit-label")
+        yield Static(f"Display cap {self.limit}", classes="action-label", id="limit-label")
         yield Button("Run Query", id="run-query-btn", variant="primary")
 
     def watch_limit(self, value: int) -> None:
         with contextlib.suppress(Exception):
             limit_str = "Unlimited" if value == 0 else str(value)
-            self.query_one("#limit-label", Static).update(f"Limit {limit_str}")
+            # "Limit" alone reads as a SQL LIMIT clause; this is the number of
+            # rows the grid will hold, which is a different promise entirely.
+            self.query_one("#limit-label", Static).update(f"Display cap {limit_str}")
 
     def watch_tx_mode(self, value: str) -> None:
         with contextlib.suppress(Exception):

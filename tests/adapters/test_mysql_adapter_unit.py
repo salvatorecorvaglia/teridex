@@ -10,10 +10,15 @@ import asyncmy
 from asyncmy import errors as asyncmy_errors
 from asyncmy.constants import FIELD_TYPE
 
-from teridex_adapters.mysql_adapter import MySQLAdapter
+from teridex_adapters.mysql_adapter import (
+    _FIELD_TYPE_NAMES,
+    MySQLAdapter,
+    _describe_columns,
+)
 from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
 from teridex_core.models.connection import Dsn
 from teridex_core.models.query import QueryHandle, QueryStatus
+from teridex_core.models.result import ColumnType
 
 
 def _adapter_with_cursor(cursor: MagicMock) -> MySQLAdapter:
@@ -175,3 +180,36 @@ async def test_reset_rolls_back_and_clears_in_flight_cursors() -> None:
     adapter._conn.rollback.assert_called_once()
     assert adapter._cursors == {}
     assert adapter._active_query_id is None
+
+
+def test_tinyint_is_typed_as_integer_not_string() -> None:
+    """``FIELD_TYPE.CHAR`` aliases ``FIELD_TYPE.TINY`` — the map must not confuse them.
+
+    Both constants are ``1``. A ``CHAR: STRING`` entry written after
+    ``TINY: INTEGER`` silently overwrote it, so every TINYINT column — and
+    therefore every BOOLEAN, which MySQL stores as TINYINT(1) — was reported to
+    the UI and to CSV/JSON export as a string.
+    """
+    assert FIELD_TYPE.CHAR == FIELD_TYPE.TINY, "precondition: the driver still aliases these"
+
+    columns = _describe_columns([("flag", FIELD_TYPE.TINY, None, None, None, None, None)])
+
+    assert columns[0].type is ColumnType.INTEGER
+    assert columns[0].type_native == "TINY"
+
+
+def test_real_string_columns_are_still_typed_as_string() -> None:
+    """Dropping the aliased CHAR entry must not untype genuine text columns."""
+    description = [
+        ("a", FIELD_TYPE.STRING, None, None, None, None, None),
+        ("b", FIELD_TYPE.VAR_STRING, None, None, None, None, None),
+        ("c", FIELD_TYPE.VARCHAR, None, None, None, None, None),
+    ]
+
+    assert [c.type for c in _describe_columns(description)] == [ColumnType.STRING] * 3
+
+
+def test_aliased_field_type_names_resolve_canonically() -> None:
+    """``INTERVAL`` aliases ``YEAR`` (both 13); the canonical name must win."""
+    assert _FIELD_TYPE_NAMES[FIELD_TYPE.YEAR] == "YEAR"
+    assert _FIELD_TYPE_NAMES[FIELD_TYPE.TINY] == "TINY"

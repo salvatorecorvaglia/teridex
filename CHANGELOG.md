@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-05
+
+### Changed
+
+- **Breaking (keybinding):** "Show history" moved from `Ctrl+H` to `Ctrl+G`. Terminals send `Ctrl+H` for Backspace (it is ASCII BS), so an app-level binding there fired on an ordinary editing keystroke.
+- **Breaking (DSN):** PostgreSQL DSN query parameters are now validated against an allowlist (`sslmode`, `sslrootcert`, `sslcert`, `sslkey`, `application_name`, `connect_timeout`, `target_session_attrs`), matching the DuckDB, MySQL, and SQLite adapters. Previously the query string was passed straight to libpq, so a DSN could reach any server setting (`options=-c ...`). An unrecognized parameter is now refused by name at connect time.
+- The status bar footer now derives its keys from the active keymap rather than restating them, so a binding change can no longer leave the footer advertising a key that does nothing.
+- The action bar's row-count label reads "Display cap" instead of "Limit", which read as a SQL `LIMIT` clause rather than the size of the results grid.
+- `RowLimitModal` and `ConnectionScreen` report invalid input inline and stay open, instead of rejecting it with a silent `return` that made Enter look like a dead key. `ConnectionScreen` also parses the DSN before dismissing, so a typo is corrected in the field that holds it.
+- `HelpModal` now extends `BaseModal` like every other modal, and notes that `Ctrl+C` cancels the running query rather than quitting (`Ctrl+Q` quits).
+- The query-history store location is configurable via `engine.history_path`; it was the only path in the application still hardcoded.
+- The release workflow now runs the full CI gate (ruff, mypy, and the test matrix) before publishing. Tag validation alone let a tagged commit reach PyPI without a single test having run against it. Workflow permissions are scoped to the publishing job.
+- Raised the offline coverage gate from 73% to 79%.
+
+### Fixed
+
+- **Resource leak:** the SQLite and MySQL adapters leaked one open driver cursor and one `asyncio.Event` per statement that returns no columns (every `INSERT`/`UPDATE`/`CREATE`). `stream()`'s no-columns early return sat above the `try/finally` that releases them, so the leak was unbounded over the life of a pooled connection.
+- **Resource leak:** `QueryRun.aclose()` closed only the executor's wrapper, leaving the adapter's own generator suspended at its `yield` — so the driver cursor, and on PostgreSQL the transaction wrapping the server-side cursor, outlived the run and survived the connection's return to the pool. Both documented early-exit paths (the TUI's display cap and the CLI's `--limit`) were affected. `aclose()` is now idempotent.
+- **Data correctness:** the MySQL adapter typed every `TINYINT` column — and therefore every `BOOLEAN`, which MySQL stores as `TINYINT(1)` — as a string. The driver aliases `FIELD_TYPE.CHAR` onto `FIELD_TYPE.TINY` (both `1`), and the `CHAR` entry silently overwrote the `TINY` one. Native type names are no longer derived from `vars(FIELD_TYPE)`, whose iteration order decided which of two aliased names won.
+- A failed `_do_connect` no longer strands the driver connection. Every adapter opens its connection and *then* runs a follow-up statement (PRAGMAs, `pg_backend_pid()`, `CONNECTION_ID()`); because `close()` is a no-op until `connect()` completes, a failure in that second half leaked the connection and, for aiosqlite, its worker thread.
+- `Introspector` no longer answers a request for a full schema snapshot with a cached lazy one, which held no columns and so silently returned an empty schema.
+- Plugin bottom rails are now laid out: the app applied a `with-bottom` class that the stylesheet defined no rules for, leaving the rail an unplaced third child of a two-column grid.
+- CSV export (both `teridex run --format csv` and the TUI exporter) now defuses values a spreadsheet would evaluate as formulas.
+
+### Removed
+
+- Dropped the unused `idx_history_started` index: both readers order by `id`, so it was never used for a lookup and only cost a write per insert. Existing history databases drop it on next open.
+
+### Chore
+
+- Factored the duplicated "already cancelled" stream in the SQLite and MySQL adapters into a shared `_CancelledStream`, removing an always-true `if` that guarded an unreachable `yield`.
+- Removed a no-op `except Exception: raise` in `teridex_engine.transaction`, a duplicate `Dsn` import, and a redundant function-local `contextlib` import.
+- Hoisted `datetime`/`decimal`/`uuid` imports in `_typeinfer` to module scope; they were re-imported per column, per result set.
+- `SchemaTree` posts an `IntrospectionFailed` message instead of reaching into the app's private `_status` method.
+- `TeridexApp.__init__` no longer touches the filesystem; log setup moved to `on_mount` and falls back to stderr when `$HOME` is not writable.
+
 ## [1.2.0] - 2026-08-25
 
 ### Added

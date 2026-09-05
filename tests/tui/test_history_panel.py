@@ -21,7 +21,7 @@ async def test_history_modal_opens_empty() -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
-        await pilot.press("ctrl+h")
+        await pilot.press("ctrl+g")
         await pilot.pause()
         modals = [s for s in app.screen_stack if isinstance(s, HistoryModal)]
         assert modals, "history modal did not appear"
@@ -47,7 +47,7 @@ async def test_history_modal_lists_entry_after_insert() -> None:
                 rows=1,
             )
         )
-        await pilot.press("ctrl+h")
+        await pilot.press("ctrl+g")
         await pilot.pause()
         modal = next(s for s in app.screen_stack if isinstance(s, HistoryModal))
         listing = modal.query_one("#history-list", ListView)

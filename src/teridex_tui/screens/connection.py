@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from textual.containers import Vertical
 from textual.widgets import Button, Input, ListItem, ListView, Static
 
+from teridex_core.models.connection import Dsn
 from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
@@ -42,6 +43,7 @@ class ConnectionScreen(BaseModal[str]):
                         Static(f"[bold]{label}[/]  [dim]{dsn}[/]"),
                         id=f"preset-{i}",
                     )
+            yield Static("", id="conn-error", classes="modal-error")
             yield Button("Connect", id="conn-submit-btn", variant="primary")
             yield Static(
                 "\n[dim](tab to select presets · click a preset to populate · "
@@ -85,8 +87,24 @@ class ConnectionScreen(BaseModal[str]):
         if event.button.id == "conn-submit-btn":
             self.submit()
 
+    def _show_error(self, message: str) -> None:
+        """Report a bad DSN in place, keeping the modal open.
+
+        Returning silently made enter look like a dead key. Parsing here rather
+        than after dismissal also means a typo is corrected in the field that
+        holds it, instead of reopening the dialog and retyping the whole DSN.
+        """
+        self.query_one("#conn-error", Static).update(message)
+
     def submit(self) -> None:
         value = self.query_one("#conn-input", Input).value.strip()
         if not value:
+            self._show_error("Enter a DSN, or choose one of the presets below.")
+            return
+        try:
+            Dsn.parse(value)
+        except Exception as exc:
+            # Any parse failure is user-facing: show it, do not dismiss.
+            self._show_error(str(exc))
             return
         self.dismiss(value)

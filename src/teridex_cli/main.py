@@ -33,6 +33,7 @@ from teridex_core.errors import (
     TeridexError,
 )
 from teridex_core.events import EventBus
+from teridex_core.export import csv_safe_row
 from teridex_core.logging import clear_context, configure_logging, get_logger
 from teridex_core.models.connection import Dsn
 from teridex_engine.executor import QueryExecutor
@@ -52,7 +53,9 @@ def _render(fmt: OutputFormat, columns: list[str], rows: list[tuple[Any, ...]]) 
     if fmt is OutputFormat.CSV:
         writer = csv.writer(sys.stdout, lineterminator="\n")
         writer.writerow(columns)
-        writer.writerows(rows)
+        # Defused so a value like ``=1+1`` is text in the spreadsheet rather
+        # than a formula it evaluates on open.
+        writer.writerows(csv_safe_row(r) for r in rows)
         return
     if fmt is OutputFormat.JSON:
         payload = [dict(zip(columns, row, strict=False)) for row in rows]
