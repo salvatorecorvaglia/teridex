@@ -382,3 +382,36 @@ async def _drain(adapter: SQLiteAdapter, sql: str) -> None:
     handle = await adapter.execute(sql)
     async for _ in await adapter.stream(handle):
         pass
+
+
+async def test_driver_timeout_error_survives_when_no_deadline_is_set() -> None:
+    """A driver's own ``TimeoutError`` must not be reported as our timeout.
+
+    ``_next_batch`` only arms ``asyncio.timeout`` when a deadline exists, but a
+    driver can raise ``TimeoutError`` on its own (asyncpg/asyncmy read timeouts;
+    ``asyncio.TimeoutError`` *is* ``TimeoutError``). That landed in the handler
+    that formats ``f"{timeout:.1f}"``, so with the timeout disabled it raised
+    ``TypeError: unsupported format string passed to NoneType.__format__`` and
+    replaced the real failure with a formatting bug.
+    """
+
+    class _TimingOutAdapter(_SlowAdapter):
+        async def stream(self, handle, *, batch_size: int = 1000):  # type: ignore[no-untyped-def]
+            async def _gen():  # type: ignore[no-untyped-def]
+                raise TimeoutError("connection read timed out")
+                yield  # pragma: no cover - generator marker
+
+            return _gen()
+
+    adapter = _TimingOutAdapter()
+    bus = EventBus()
+    try:
+        executor = QueryExecutor(adapter, bus)
+        run = await executor.run("SELECT 1", timeout=None)
+        with pytest.raises(TimeoutError) as excinfo:
+            async for _ in run.rows:
+                pass
+        assert not isinstance(excinfo.value, QueryTimeoutError)
+        assert "read timed out" in str(excinfo.value)
+    finally:
+        await bus.close()

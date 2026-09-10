@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
 from textual.containers import Vertical
 from textual.widgets import Button, Input, ListItem, ListView, Static
 
@@ -94,7 +95,10 @@ class ConnectionScreen(BaseModal[str]):
         than after dismissal also means a typo is corrected in the field that
         holds it, instead of reopening the dialog and retyping the whole DSN.
         """
-        self.query_one("#conn-error", Static).update(message)
+        # ``Static.update`` parses markup, and this renders exception text that
+        # embeds the user's own DSN — typing ``[/]`` into the field would
+        # otherwise raise MarkupError from inside the modal's render.
+        self.query_one("#conn-error", Static).update(escape(message))
 
     def submit(self) -> None:
         value = self.query_one("#conn-input", Input).value.strip()

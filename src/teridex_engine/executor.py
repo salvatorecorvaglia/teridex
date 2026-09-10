@@ -175,6 +175,14 @@ class QueryExecutor:
                     try:
                         batch = await _next_batch(source)
                     except TimeoutError as exc:
+                        if deadline is None:
+                            # No deadline of ours expired: this ``TimeoutError``
+                            # came from the driver itself (asyncpg/asyncmy read
+                            # timeouts, and ``asyncio.TimeoutError`` *is*
+                            # ``TimeoutError``). Reporting it as our timeout
+                            # formatted a ``None`` and raised TypeError, which
+                            # then masked the real failure.
+                            raise
                         # Ask the server to stop too — walking away client-side
                         # would leave the query burning resources over there.
                         with contextlib.suppress(Exception):

@@ -207,3 +207,36 @@ async def test_release_rolls_back_a_transaction_left_open() -> None:
         )
     finally:
         await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_close_returns_the_permit_of_a_cancelled_connection_task() -> None:
+    """``close()`` cancelling an in-flight connect must not consume a permit.
+
+    ``_acquire`` takes the semaphore, then delegates the release to a background
+    ``_cleanup`` task when the acquirer is cancelled. That task awaited the
+    connection task and caught only ``Exception`` — but ``close()`` *cancels*
+    that connection task, and ``CancelledError`` is a ``BaseException``, so the
+    release was skipped and the permit was lost for the life of the pool.
+    """
+    connecting = asyncio.Event()
+
+    async def never_completes(dsn: Dsn) -> DatabaseAdapter:
+        connecting.set()
+        await asyncio.Event().wait()  # never resolves
+        raise AssertionError("unreachable")
+
+    pool = ConnectionPool(Dsn.parse(_MEM), never_completes, size=1)
+    acquiring = asyncio.create_task(pool._acquire())
+    await asyncio.wait_for(connecting.wait(), timeout=1)
+
+    await pool.close()
+    acquiring.cancel()
+    with pytest.raises((asyncio.CancelledError, RuntimeError)):
+        await acquiring
+
+    # Let the background cleanup task run to completion.
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert pool._sem._value == 1, "pool permit was not returned after close()"

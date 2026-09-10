@@ -375,7 +375,12 @@ class TeridexApp(App[None]):
         """
         detail = str(exc)
         self._status().message = f"[red]{escape(headline)}: {escape(detail)}[/]"
-        self.notify(detail, title=headline, severity="error", timeout=10)
+        # ``markup=False`` rather than ``escape(detail)``: a toast is plain error
+        # text, and a driver message routinely contains brackets — ``TEXT[]``, a
+        # bracket-quoted identifier, a Python repr. Parsed as markup, ``[/]``
+        # raised MarkupError mid-render and ``near [col]`` silently deleted the
+        # one identifier the user needed to see.
+        self.notify(detail, title=headline, severity="error", timeout=10, markup=False)
 
     def on_schema_tree_introspection_failed(self, event: SchemaTree.IntrospectionFailed) -> None:
         """Surface a failed lazy schema load the same way every other error is."""

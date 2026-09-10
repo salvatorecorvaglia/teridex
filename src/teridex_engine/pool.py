@@ -115,8 +115,13 @@ class ConnectionPool:
                             async with self._lock:
                                 self._all.append(a)
                             await self._release(a)
-                        except Exception:
+                        except BaseException:
+                            # ``BaseException``, not ``Exception``: ``close()``
+                            # cancels this very task, and the resulting
+                            # ``CancelledError`` used to skip the release,
+                            # losing the permit for the life of the pool.
                             self._sem.release()
+                            raise
 
                     cleanup_task = asyncio.create_task(_cleanup())
                     self._cleanup_tasks.add(cleanup_task)

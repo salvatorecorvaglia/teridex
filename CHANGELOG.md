@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- DSN query parameters carrying credentials (`?password=`, `?auth_token=`, anything whose name contains `password`/`passwd`/`pwd`/`secret`/`token`/`credential`) are now redacted by `mask_dsn_password` and by `Dsn.render(mask_password=True)`. Only the userinfo segment (`scheme://user:pw@host`) was masked before, so a secret passed as a query parameter was written verbatim to `~/.teridex/teridex.log`, shown in the status bar, and persisted as the `connection_label` of every query in `~/.teridex/history.db`. File-path parameters (`sslkey`, `sslcert`, `sslrootcert`) are deliberately left legible — they are not secrets, and redacting them makes a TLS misconfiguration unreadable.
+
+### Fixed
+
+- **Crash:** an error toast rendered driver text as Rich markup, so a message containing an unbalanced bracket raised `MarkupError` from inside the toast's render, and one containing a bracketed identifier (`syntax error near [col]`) silently dropped it from the message. Toasts are now plain text. This affected every error path, since `_report_error` is the single funnel for connection, query, export, schema-refresh and plugin failures.
+- **Crash:** typing a DSN containing `[/]` into the connection dialog raised `MarkupError` — the parse error embeds the offending input and the modal renders it as markup.
+- `Dsn.parse` now raises `ConfigError` for an unsupported scheme or an unparseable port, instead of letting pydantic's `ValidationError` escape. Callers render the message straight to the user, so the leak put a multi-line pydantic dump on screen. The "valid schemes" list no longer uses square brackets, which Rich would eat.
+- **Data correctness:** absolute database paths no longer degrade to relative ones across a DSN round-trip. `sqlite:////abs/foo.db` parses to `/abs/foo.db` but re-rendered as `sqlite:///abs/foo.db`, which reparses as the relative `abs/foo.db` — a different database. The rendered form is what the status bar shows and what query history stores, so re-running a history entry could open the wrong file.
+- A driver-raised `TimeoutError` (asyncpg/asyncmy read timeouts) with the query timeout disabled no longer produces `TypeError: unsupported format string passed to NoneType.__format__`, which masked the real failure. The driver's error now propagates unchanged.
+- **Resource leak:** closing a `ConnectionPool` while a connection was still being established permanently consumed a pool permit. The background cleanup that returns the permit caught only `Exception`, but `close()` cancels the connection task and `CancelledError` is a `BaseException`.
+
 ## [1.3.0] - 2026-09-05
 
 ### Changed

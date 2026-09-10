@@ -122,3 +122,63 @@ async def test_schema_identifiers_render_markup_literally() -> None:
             str(leaf.label) for group in object_node.children for leaf in group.children
         ]
         assert any(_UNBALANCED in label for label in column_labels)
+
+
+# ---- error-reporting paths ----
+#
+# The widget layer escapes thoroughly, but the *error* paths did not: they are
+# the one surface that renders driver text, and driver text is full of brackets.
+
+
+async def test_connection_modal_survives_a_bracket_bearing_dsn() -> None:
+    """Typing ``[/]`` into the DSN field must show an error, not raise.
+
+    ``Dsn.parse`` embeds the offending input in its message and the modal feeds
+    that to ``Static.update()``, which parses markup — so an unbalanced tag
+    raised ``MarkupError`` from inside the modal's own render.
+    """
+    from textual.widgets import Input, Static  # noqa: PLC0415
+
+    from teridex_tui.screens.connection import ConnectionScreen  # noqa: PLC0415
+
+    class _Harness(App[None]):
+        pass
+
+    app = _Harness()
+    async with app.run_test() as pilot:
+        await app.push_screen(ConnectionScreen())
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ConnectionScreen)
+        screen.query_one("#conn-input", Input).value = _UNBALANCED
+        screen.submit()
+        await pilot.pause()
+
+        # Still open (submit was rejected) and the error is rendered as text.
+        assert isinstance(app.screen, ConnectionScreen)
+        # ``.content`` holds the markup source. Parsing it is what the render
+        # does, so this both proves it will not raise and shows what the user
+        # actually reads: the escaped brackets, restored.
+        content = screen.query_one("#conn-error", Static).content
+        assert _UNBALANCED in Text.from_markup(content).plain
+
+
+async def test_error_toast_preserves_bracketed_driver_text() -> None:
+    """``_report_error`` must not let a driver message be parsed as markup.
+
+    ``syntax error near [col]`` rendered as ``syntax error near `` — Rich ate
+    the one identifier that mattered — and ``[/]`` raised MarkupError inside the
+    toast's render.
+    """
+    from teridex_tui.app import TeridexApp  # noqa: PLC0415
+
+    detail = f"syntax error near [col] {_UNBALANCED}"
+    app = TeridexApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        app._report_error("Query failed", detail)
+        await pilot.pause()
+
+        notification = next(iter(app._notifications))
+        assert notification.message == detail
+        assert notification.markup is False
