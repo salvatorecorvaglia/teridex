@@ -15,8 +15,26 @@ from teridex_core.logging import get_logger
 logger = get_logger(__name__)
 
 
-class UIConfig(BaseModel):
-    theme: str = "monokai"
+class _Section(BaseModel):
+    """Base for the config sections.
+
+    ``validate_assignment`` has to live on the section that owns the field:
+    settings are mutated at runtime (the row-limit modal writes
+    ``ui.max_display_rows``), and that assignment is validated by *UIConfig*,
+    not by the enclosing ``TeridexConfig``. Setting it only on the parent left
+    every nested write unchecked, so a value the schema would have rejected
+    from a config file was accepted at runtime.
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
+
+
+class UIConfig(_Section):
+    # ``Literal``, matching ``keymap``: an unknown theme name used to fall back
+    # to monokai silently, so a typo looked like the theme setting being
+    # ignored. Keep in step with ``teridex_tui.themes.THEMES``, which
+    # ``tests/core/test_config.py`` asserts.
+    theme: Literal["monokai", "nord"] = "monokai"
     keymap: Literal["default", "vim"] = "default"
     row_batch_size: int = Field(default=1000, ge=10, le=100_000)
     # Max rows held in the results grid. ``0`` means unlimited; a positive
@@ -24,7 +42,7 @@ class UIConfig(BaseModel):
     max_display_rows: int = Field(default=10_000, ge=0)
 
 
-class EngineConfig(BaseModel):
+class EngineConfig(_Section):
     default_timeout_seconds: float = Field(default=60.0, gt=0)
     max_history_entries: int = Field(default=1000, ge=10)
     pool_size: int = Field(default=5, ge=1, le=64)
@@ -34,14 +52,14 @@ class EngineConfig(BaseModel):
     history_path: str | None = None
 
 
-class LoggingConfig(BaseModel):
+class LoggingConfig(_Section):
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     # ``json_lines`` — emit one JSON object per line (CI/Docker). ``None``
     # auto-detects based on whether stderr is a TTY.
     json_lines: bool | None = None
 
 
-class PluginsConfig(BaseModel):
+class PluginsConfig(_Section):
     enabled: list[str] = Field(default_factory=list)
     disabled: list[str] = Field(default_factory=list)
 
@@ -55,6 +73,7 @@ class TeridexConfig(BaseModel):
     model_config = ConfigDict(
         extra="ignore",
         frozen=False,
+        validate_assignment=True,
     )
 
     ui: UIConfig = Field(default_factory=UIConfig)

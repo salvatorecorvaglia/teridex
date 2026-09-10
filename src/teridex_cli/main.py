@@ -17,6 +17,7 @@ import csv
 import json
 import sys
 from enum import StrEnum
+from pathlib import Path
 from typing import Annotated, Any
 
 import typer
@@ -25,7 +26,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from teridex_adapters import create_adapter_for_dsn, default_registry
-from teridex_core.config import load_config
+from teridex_core.config import TeridexConfig, load_config
 from teridex_core.errors import (
     QueryCancelledError,
     QueryError,
@@ -91,8 +92,40 @@ def _root(
         str | None, typer.Option("--log-level", help="Log level.", envvar="TERIDEX_LOG_LEVEL")
     ] = None,
 ) -> None:
-    level = log_level or "WARNING"
-    configure_logging(level=level)
+    # A conservative default so anything logged before a command has resolved
+    # its config still goes somewhere sensible. Commands re-configure with
+    # ``force=True`` once the config file and env overrides are known.
+    configure_logging(level=log_level or "WARNING")
+
+
+# Shared ``--config`` option. Every command that reads configuration accepts it,
+# so ``run`` and ``connect`` are configurable the same way ``tui`` is.
+_ConfigOption = Annotated[str, typer.Option("--config", help="Path to config TOML.")]
+
+
+def _resolve_config(config_path: str, log_level: str | None) -> TeridexConfig:
+    """Load layered config and point logging at the level it resolves to.
+
+    ``run`` and ``connect`` used to skip this entirely: they never called
+    ``load_config``, so the config file, every ``TERIDEX_<section>__<field>``
+    env override, and the configured log level applied to the TUI only — while
+    the README documented the layering unconditionally.
+
+    An explicit ``--log-level`` still wins over the file, matching the
+    documented precedence (defaults -> TOML -> env -> CLI).
+    """
+    cfg = load_config(Path(config_path) if config_path else None)
+    configure_logging(level=log_level or cfg.logging.level, json=cfg.logging.json_lines, force=True)
+    return cfg
+
+
+def _cli_log_level(ctx: typer.Context) -> str | None:
+    """The ``--log-level`` the user passed to the root callback, if any."""
+    parent = ctx.parent
+    if parent is None:
+        return None
+    value = parent.params.get("log_level")
+    return str(value) if value is not None else None
 
 
 @app.command()
@@ -106,6 +139,7 @@ def version() -> None:
 
 @app.command()
 def connect(
+    ctx: typer.Context,
     dsn: Annotated[
         str,
         typer.Option(
@@ -114,8 +148,14 @@ def connect(
             help="Database URL, e.g. duckdb:///:memory:",
         ),
     ],
+    config_path: _ConfigOption = "",
 ) -> None:
     """Open a connection to verify the DSN is reachable."""
+    try:
+        _resolve_config(config_path, _cli_log_level(ctx))
+    except TeridexError as exc:
+        console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
+        raise typer.Exit(code=1) from exc
 
     async def _go() -> int:
         try:
@@ -129,29 +169,37 @@ def connect(
         except Exception as exc:
             console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
             return 1
+        if not ok:
+            console.print("[bold red]FAIL[/] ping failed")
+            return 1
+        # ``escape``: a database name is user-supplied and this line is markup.
         console.print(
-            f"[bold green]OK[/] connected to {parsed.scheme}://…/{parsed.database or ''}"
-            if ok
-            else "[bold red]FAIL[/] ping failed"
+            f"[bold green]OK[/] connected to "
+            f"{escape(parsed.scheme)}://…/{escape(parsed.database or '')}"
         )
-        return 0 if ok else 1
+        return 0
 
     raise typer.Exit(code=asyncio.run(_go()))
 
 
 @app.command("run")
 def run_query(
+    ctx: typer.Context,
     sql: Annotated[str, typer.Argument(help="SQL to execute.")],
     dsn: Annotated[str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")],
     limit: Annotated[int, typer.Option("--limit", min=1, help="Max rows to print.")] = 200,
     timeout: Annotated[
-        float,
+        float | None,
         typer.Option(
             "--timeout",
             min=0,
-            help="Abort the query after this many seconds. 0 disables the timeout.",
+            help=(
+                "Abort the query after this many seconds. 0 disables the timeout. "
+                "Defaults to engine.default_timeout_seconds from the config."
+            ),
         ),
-    ] = 60.0,
+    ] = None,
+    config_path: _ConfigOption = "",
     output: Annotated[
         OutputFormat,
         typer.Option(
@@ -168,6 +216,15 @@ def run_query(
     stderr so it never contaminates them.
     """
 
+    try:
+        cfg = _resolve_config(config_path, _cli_log_level(ctx))
+    except TeridexError as exc:
+        console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
+        raise typer.Exit(code=1) from exc
+    # ``is not None`` rather than ``or``: ``--timeout 0`` is a deliberate
+    # "no timeout", not an absent value to fill in from the config.
+    effective_timeout = timeout if timeout is not None else cfg.engine.default_timeout_seconds
+
     async def _go() -> int:
         try:
             parsed = Dsn.parse(dsn)
@@ -179,7 +236,7 @@ def run_query(
         bus = EventBus()
         try:
             executor = QueryExecutor(adapter, bus)
-            run_handle = await executor.run(sql, timeout=timeout)
+            run_handle = await executor.run(sql, timeout=effective_timeout)
             columns: list[str] = []
             rows: list[tuple[Any, ...]] = []
             try:
@@ -198,7 +255,17 @@ def run_query(
                 await run_handle.aclose()
 
             _render(output, columns, rows)
-            summary = f"{run_handle.rows_emitted} row(s) in {run_handle.duration_ms or 0:.1f} ms"
+            # Rows *printed* and rows *read* diverge whenever ``--limit`` cuts
+            # the stream short. Reporting only the latter meant printing 200
+            # rows under a line that claimed 1000.
+            elapsed = f"{run_handle.duration_ms or 0:.1f} ms"
+            if run_handle.rows_emitted > len(rows):
+                summary = (
+                    f"{len(rows)} of {run_handle.rows_emitted} row(s) in {elapsed} "
+                    f"(--limit {limit} reached)"
+                )
+            else:
+                summary = f"{len(rows)} row(s) in {elapsed}"
             if output is OutputFormat.TABLE:
                 console.print(f"[dim]{summary}[/]")
             else:

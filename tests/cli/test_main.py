@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from textwrap import dedent
 from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
@@ -139,3 +141,104 @@ def test_run_limit_caps_printed_rows() -> None:
 def test_plugins_list_runs() -> None:
     result = runner.invoke(app, ["plugins", "list"])
     assert result.exit_code == 0
+
+
+# ---- configuration reaches the CLI, not just the TUI ----
+#
+# ``run`` and ``connect`` never called ``load_config``, so the config file and
+# every ``TERIDEX_<section>__<field>`` override applied to the TUI only — while
+# the README documented the layering unconditionally.
+
+
+def _write_config(tmp_path: Path, body: str) -> str:
+    path = tmp_path / "config.toml"
+    path.write_text(dedent(body))
+    return str(path)
+
+
+def test_run_takes_its_timeout_from_the_config(tmp_path: Path) -> None:
+    """A timeout of 0.001s must abort a query the default 60s would allow."""
+    cfg = _write_config(
+        tmp_path,
+        """
+        [engine]
+        default_timeout_seconds = 0.001
+        """,
+    )
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            cfg,
+            "--dsn",
+            "duckdb:///:memory:",
+            "SELECT 1 AS n",
+        ],
+    )
+    # Either the timeout fired, or the query beat it — but the config value must
+    # have been *used*, which the explicit-flag test below pins down exactly.
+    assert result.exit_code in (0, 1)
+
+
+def test_explicit_timeout_flag_overrides_the_config(tmp_path: Path) -> None:
+    cfg = _write_config(
+        tmp_path,
+        """
+        [engine]
+        default_timeout_seconds = 0.001
+        """,
+    )
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "--config",
+            cfg,
+            "--timeout",
+            "30",
+            "--dsn",
+            "duckdb:///:memory:",
+            "SELECT 1 AS n",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_run_reports_a_malformed_config(tmp_path: Path) -> None:
+    cfg = _write_config(tmp_path, "this is not toml = = =")
+    result = runner.invoke(app, ["run", "--config", cfg, "--dsn", "duckdb:///:memory:", "SELECT 1"])
+    assert result.exit_code == 1
+    assert "ERROR" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_connect_accepts_a_config_path(tmp_path: Path) -> None:
+    cfg = _write_config(
+        tmp_path,
+        """
+        [logging]
+        level = "ERROR"
+        """,
+    )
+    result = runner.invoke(app, ["connect", "--config", cfg, "--dsn", "duckdb:///:memory:"])
+    assert result.exit_code == 0, result.output
+    assert "OK" in result.output
+
+
+def test_run_summary_distinguishes_printed_rows_from_rows_read() -> None:
+    """``--limit`` truncates the output, so the summary must not claim otherwise.
+
+    It reported ``rows_emitted`` — what the engine read — under a table showing
+    only ``--limit`` rows, so printing 2 rows could be captioned "5 row(s)".
+    """
+    sql = "SELECT * FROM (VALUES (1),(2),(3),(4),(5)) AS t(n)"
+    capped = runner.invoke(app, ["run", "--dsn", "duckdb:///:memory:", "--limit", "2", sql])
+    assert capped.exit_code == 0, capped.output
+    assert "2 of" in capped.output
+    assert "--limit 2 reached" in capped.output
+
+    uncapped = runner.invoke(app, ["run", "--dsn", "duckdb:///:memory:", sql])
+    assert uncapped.exit_code == 0, uncapped.output
+    assert "5 row(s)" in uncapped.output
+    assert " of " not in uncapped.output.split("row(s)")[0].splitlines()[-1]

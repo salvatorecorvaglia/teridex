@@ -4,8 +4,10 @@ from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import pytest
+from pydantic import ValidationError
 
 from teridex_core.config import load_config
+from teridex_core.errors import ConfigError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -71,3 +73,46 @@ def test_env_config_scalar_and_nested_conflict_is_order_independent(
     out = load_config(tmp_path / "absent.toml")
 
     assert out.engine.pool_size == 8
+
+
+def test_unknown_theme_is_rejected() -> None:
+    """A typo in ``ui.theme`` must fail loudly.
+
+    ``theme`` was a bare ``str`` while ``keymap`` next to it was a ``Literal``,
+    so an unrecognized name fell through to monokai at render time and looked
+    like the setting being ignored.
+    """
+    with pytest.raises(ConfigError):
+        load_config(None, ui={"theme": "dracula"})
+
+
+def test_known_themes_are_accepted() -> None:
+    # Imported locally: tests/core must not pull in Textual at module scope.
+    from teridex_tui.themes import THEMES  # noqa: PLC0415
+
+    for name in THEMES:
+        assert load_config(None, ui={"theme": name}).ui.theme == name
+
+
+def test_theme_literal_matches_the_registered_themes() -> None:
+    """The ``Literal`` and the theme registry must not drift apart."""
+    import typing  # noqa: PLC0415
+
+    from teridex_core.config import UIConfig  # noqa: PLC0415
+    from teridex_tui.themes import THEMES  # noqa: PLC0415
+
+    allowed = set(typing.get_args(UIConfig.model_fields["theme"].annotation))
+    assert allowed == set(THEMES)
+
+
+def test_settings_are_validated_on_assignment() -> None:
+    """Runtime writes must honour the same constraints as the config file.
+
+    The row-limit modal writes ``ui.max_display_rows`` directly; without
+    ``validate_assignment`` those writes bypassed the field bounds entirely.
+    """
+    cfg = load_config(None)
+    with pytest.raises(ValidationError):
+        cfg.ui.max_display_rows = -1
+    cfg.ui.max_display_rows = 42
+    assert cfg.ui.max_display_rows == 42

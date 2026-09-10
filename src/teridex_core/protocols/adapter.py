@@ -47,7 +47,28 @@ class DatabaseAdapter(Protocol):
     async def __aenter__(self) -> DatabaseAdapter: ...
     async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None: ...
 
-    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle: ...
+    async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
+        """Start *sql* and return a handle to stream from.
+
+        .. warning:: ``params`` is **not** portable across adapters. Each one
+           binds using its driver's native paramstyle, and the shape of the
+           mapping differs accordingly:
+
+           * ``postgres`` — keys are stringified 1-based indices matching
+             ``$1``, ``$2``: ``{"1": value}``.
+           * ``mysql`` — keys are identifiers matching ``%(name)s``:
+             ``{"name": value}``.
+           * ``duckdb`` — keys are identifiers matching ``$name``.
+           * ``sqlite`` — whatever :mod:`sqlite3` accepts, i.e. named
+             (``:name``) binding via a mapping.
+
+           Portable SQL therefore cannot use bound parameters through this
+           interface today. Unifying the styles would be a breaking change to
+           every caller and adapter, so it is documented rather than papered
+           over.
+        """
+        ...
+
     async def stream(
         self, handle: QueryHandle, *, batch_size: int = 1000
     ) -> AsyncIterator[ResultBatch]: ...

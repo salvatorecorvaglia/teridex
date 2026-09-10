@@ -85,6 +85,9 @@ teridex version
 # Sanity check database connection
 teridex connect --dsn "mysql://root:secret@127.0.0.1/test"
 
+# Use a specific config file (also available on `run` and `tui`)
+teridex run --config ./teridex.toml --dsn "duckdb:///:memory:" "SELECT 42"
+
 # List discovered plugins
 teridex plugins list
 ```
@@ -94,6 +97,8 @@ teridex plugins list
 ## ⚙️ Configuration
 
 Teridex configuration is loaded in layers: **Defaults ➡️ TOML Configuration ➡️ Environment Variables ➡️ CLI Flags**.
+
+This applies to `teridex tui`, `teridex run` and `teridex connect` alike — each accepts `--config` to point at a specific file.
 
 The default configuration file is searched at `~/.config/teridex/config.toml`. The configuration file must have secure permissions (e.g., `0600`) if it contains credentials.
 
@@ -130,6 +135,9 @@ export TERIDEX_UI__THEME="nord"
 
 # Override keymap to vim
 export TERIDEX_UI__KEYMAP="vim"
+
+# Cap every query at 10 seconds, in the TUI and the CLI alike
+export TERIDEX_ENGINE__DEFAULT_TIMEOUT_SECONDS=10
 ```
 
 ---

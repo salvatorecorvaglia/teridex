@@ -38,6 +38,40 @@ _configured = False
 _log_file_streams: dict[str, Any] = {}
 
 
+class _LiveStderr:
+    """A stderr handle that resolves ``sys.stderr`` at write time.
+
+    ``configure_logging`` used to hand structlog ``sys.stderr`` *by value*, and
+    structlog caches bound loggers on first use — so once anything swapped the
+    real stream (pytest's per-test capture, a reconfiguration, a TUI taking over
+    the terminal), those cached loggers kept writing to a handle that had since
+    been closed and every subsequent log call raised
+    ``ValueError: I/O operation on closed file``. Resolving the attribute per
+    call costs nothing and makes reconfiguration safe from any host.
+    """
+
+    # ``__weakref__`` is required: ``logging`` registers stream handlers in a
+    # weak set, so a slotted class without it fails with "cannot create weak
+    # reference" the first time this is handed to ``basicConfig``.
+    __slots__ = ("__weakref__",)
+
+    def write(self, data: str) -> int:
+        return sys.stderr.write(data)
+
+    def flush(self) -> None:
+        with contextlib.suppress(ValueError, OSError):
+            sys.stderr.flush()
+
+    def isatty(self) -> bool:
+        try:
+            return bool(sys.stderr.isatty())
+        except (ValueError, AttributeError, OSError):
+            return False
+
+
+_LIVE_STDERR = _LiveStderr()
+
+
 def _merge_request_context(_logger: Any, _method_name: str, event_dict: EventDict) -> EventDict:
     ctx = _request_context.get()
     if ctx:
@@ -82,9 +116,9 @@ def configure_logging(
     if _configured and not force:
         return
 
-    stream: Any = sys.stderr
+    stream: Any = _LIVE_STDERR
     if log_file is not None:
-        stream = _open_log_stream(log_file) or sys.stderr
+        stream = _open_log_stream(log_file) or _LIVE_STDERR
 
     if json is None:
         json = not stream.isatty() if hasattr(stream, "isatty") else True

@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from pydantic import ValidationError
 from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -541,7 +542,14 @@ class TeridexApp(App[None]):
         def _on_limit(new_limit: int | None) -> None:
             if new_limit is None:
                 return
-            self.cfg.ui.max_display_rows = new_limit
+            try:
+                # ``TeridexConfig`` validates on assignment now, so a value the
+                # modal let through but the schema rejects surfaces here rather
+                # than silently installing an out-of-range cap.
+                self.cfg.ui.max_display_rows = new_limit
+            except ValidationError as exc:
+                self._report_error("Invalid row limit", exc)
+                return
             with contextlib.suppress(Exception):
                 self._results().max_rows = new_limit
             with contextlib.suppress(Exception):

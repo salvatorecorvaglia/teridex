@@ -189,7 +189,7 @@ class QueryExecutor:
                             await self._adapter.cancel(handle)
                         handle.mark_done(QueryStatus.FAILED)
                         raise QueryTimeoutError(
-                            f"query exceeded its {timeout:.1f}s timeout",
+                            f"query exceeded its {timeout:g}s timeout",
                             context={"query_id": handle.query_id, "timeout_seconds": timeout},
                         ) from exc
                     if batch is None:
