@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import asyncmy
 from asyncmy import errors as asyncmy_errors
 from asyncmy.constants import FIELD_TYPE
+from asyncmy.cursors import SSCursor
 
 from teridex_adapters._params import coerce_params
 from teridex_adapters.base import AbstractAdapter, connection_id
@@ -298,13 +299,18 @@ class MySQLAdapter(AbstractAdapter):
     async def ping(self) -> bool:
         if self._conn is None:
             return False
+        cur = self._conn.cursor()
         try:
-            cur = self._conn.cursor()
             await cur.execute("SELECT 1")
-            await cur.close()
             return True
         except asyncmy_errors.Error:
             return False
+        finally:
+            # ``close`` in a ``finally``: a failed ``SELECT 1`` used to leave the
+            # cursor open, which is the same leak the 1.3.0 notes record fixing
+            # in ``stream()``.
+            with contextlib.suppress(Exception):
+                await cur.close()
 
     async def execute(self, sql: str, params: Mapping[str, Any] | None = None) -> QueryHandle:
         conn = self._require_conn(self._conn)
@@ -324,7 +330,15 @@ class MySQLAdapter(AbstractAdapter):
         )
         handle.mark_running()
         self._active_query_id = handle.query_id
-        cur = conn.cursor()
+        # ``SSCursor``, not the default ``Cursor``. asyncmy's default cursor is
+        # *buffered*: it reads the entire result set into Python during
+        # ``execute()``, so ``fetchmany`` below was slicing a list that was
+        # already fully in memory. That defeated the whole streaming path —
+        # ``batch_size`` and the UI's display cap bounded nothing, peak memory
+        # was the size of the result set, the first row could not reach the
+        # screen until the last one had arrived, and cancelling mid-stream had
+        # nothing left to cancel. The other three adapters all stream.
+        cur = conn.cursor(cursor=SSCursor)
         try:
             # asyncmy uses the ``pyformat`` paramstyle: pass the mapping
             # directly so ``%(name)s`` placeholders bind by name.
@@ -355,6 +369,10 @@ class MySQLAdapter(AbstractAdapter):
             # connection — one leaked pair per INSERT/UPDATE/CREATE.
             try:
                 columns = _describe_columns(cur.description or [])
+                # An unbuffered cursor does not know a SELECT's row count until
+                # the result set has been read, so ``rowcount`` is negative here
+                # and reports as ``None``. It stays meaningful for DML, where the
+                # server sends affected-rows in the OK packet before any fetch.
                 self._set_metadata(
                     handle,
                     QueryMetadata(
@@ -383,7 +401,13 @@ class MySQLAdapter(AbstractAdapter):
                         return
                     yield ResultBatch(columns=columns, rows=[tuple(r) for r in rows], is_last=False)
             finally:
-                await cur.close()
+                # Closing an unbuffered cursor drains whatever is still on the
+                # wire, which is what leaves the connection reusable when the
+                # consumer stops early (the UI's display cap, the CLI's
+                # ``--limit``). Suppressed because a killed or broken query has
+                # nothing left to drain and raises here.
+                with contextlib.suppress(Exception):
+                    await cur.close()
                 self._cursors.pop(handle.query_id, None)
                 self._forget(handle)
 

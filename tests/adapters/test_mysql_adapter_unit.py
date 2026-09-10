@@ -213,3 +213,46 @@ def test_aliased_field_type_names_resolve_canonically() -> None:
     """``INTERVAL`` aliases ``YEAR`` (both 13); the canonical name must win."""
     assert _FIELD_TYPE_NAMES[FIELD_TYPE.YEAR] == "YEAR"
     assert _FIELD_TYPE_NAMES[FIELD_TYPE.TINY] == "TINY"
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_an_unbuffered_cursor() -> None:
+    """Query execution must use ``SSCursor``, not asyncmy's default ``Cursor``.
+
+    The default cursor is *buffered*: ``execute()`` reads the whole result set
+    into Python, so the adapter's ``fetchmany`` loop was slicing a list that had
+    already been fully materialized. Nothing about the streaming path actually
+    streamed — ``batch_size`` and the UI's display cap bounded no memory, the
+    first row could not reach the screen before the last had arrived, and a
+    mid-stream cancel had nothing left to cancel. The other three adapters
+    stream, so this was also a silent conformance divergence.
+
+    Asserted on the cursor *class* rather than on observable streaming: whether
+    rows arrive incrementally is a property of the wire, not of anything an
+    offline test can watch.
+    """
+    from asyncmy.cursors import SSCursor  # noqa: PLC0415
+
+    cursor = MagicMock()
+    cursor.execute = AsyncMock()
+    adapter = _adapter_with_cursor(cursor)
+
+    await adapter.execute("SELECT 1")
+
+    adapter._conn.cursor.assert_called_once_with(cursor=SSCursor)
+
+
+@pytest.mark.asyncio
+async def test_introspection_keeps_the_buffered_cursor() -> None:
+    """Catalog queries are small and drained immediately; they stay buffered.
+
+    An unbuffered cursor holds the connection until it is drained, which is the
+    wrong trade for a handful of ``information_schema`` rows.
+    """
+    import inspect  # noqa: PLC0415
+
+    from teridex_adapters.introspect.mysql import MySQLIntrospector  # noqa: PLC0415
+
+    source = inspect.getsource(MySQLIntrospector._fetch)
+    assert "self._conn.cursor()" in source
+    assert "SSCursor" not in source
