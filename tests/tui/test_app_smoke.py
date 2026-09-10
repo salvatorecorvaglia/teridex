@@ -43,6 +43,7 @@ async def test_run_query_rejects_reentry_while_in_flight() -> None:
         await pilot.pause()
         app._query_in_flight = True
         await app.action_run_query()
+        await app.workers.wait_for_complete()
         assert "already running" in app._status().message
 
 
@@ -54,6 +55,7 @@ async def test_run_query_empty_sql_gives_feedback() -> None:
         await pilot.pause()
         await app.workers.wait_for_complete()
         await app.action_run_query()
+        await app.workers.wait_for_complete()
         assert "nothing to run" in app._status().message
 
 
@@ -173,7 +175,10 @@ async def test_cancel_query_stops_an_in_flight_run() -> None:
         assert editor is not None
         editor.text = _RECURSIVE_BUSY_SQL
 
-        run_task = asyncio.create_task(app.action_run_query())
+        # Starting the run no longer blocks: it hands the stream to a worker so
+        # the message pump stays free (that is what makes the cancel key work at
+        # all — see tests/tui/test_keymap_conflicts.py).
+        await app.action_run_query()
         for _ in range(200):
             if app._current_run is not None:
                 break
@@ -181,7 +186,7 @@ async def test_cancel_query_stops_an_in_flight_run() -> None:
         assert app._current_run is not None
 
         await app.action_cancel_query()
-        await asyncio.wait_for(run_task, timeout=5)
+        await asyncio.wait_for(app.workers.wait_for_complete(), timeout=5)
 
         assert app._status().message == "[yellow]cancelled[/]"
         assert not app._query_in_flight

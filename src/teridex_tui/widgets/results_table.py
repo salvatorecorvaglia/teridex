@@ -10,13 +10,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import csv
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from rich.markup import escape
+from textual.binding import Binding
 from textual.widgets import DataTable
 from textual.widgets.data_table import CellDoesNotExist
 
 from teridex_core.export import csv_safe_row
+from teridex_tui.keymaps.default import RESULTS_BINDINGS
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,6 +43,16 @@ def _format_rows(rows: list[tuple[Any, ...]]) -> list[tuple[str, ...]]:
 class ResultsTable(DataTable[str]):
     DEFAULT_CSS = ""
 
+    # Declared here rather than on the app so they cannot be shadowed by the
+    # SQL editor. ``ctrl+e``/``ctrl+y`` are TextArea's line-end and redo; as
+    # app-level bindings they never fired while the editor had focus. The
+    # editor is not on this widget's focus chain, so here they are unambiguous —
+    # and they are only meaningful when the grid is focused anyway. The actions
+    # themselves live on the app and are reached by bubbling.
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        Binding(k, a, d) for (k, a, d) in RESULTS_BINDINGS
+    ]
+
     def __init__(self) -> None:
         super().__init__(id="results-table", zebra_stripes=True, header_height=1)
         self.cursor_type = "cell"
@@ -50,6 +62,19 @@ class ResultsTable(DataTable[str]):
         self._rows: list[tuple[Any, ...]] = []
         self._row_count = 0
         self._truncated = False
+
+    # Textual resolves a widget binding's action against the *declaring* node
+    # only — ``_dispatch_action`` looks up ``action_<name>`` on that node and
+    # does not bubble. These forwarders are what let the binding live here (out
+    # of the SQL editor's reach) while the behaviour stays on the app, next to
+    # the status-bar and notification handling it needs. Same ``run_action``
+    # idiom as ``ActionBar.on_button_pressed``.
+
+    async def action_copy_cell(self) -> None:
+        await self.app.run_action("copy_cell")
+
+    async def action_export_csv(self) -> None:
+        await self.app.run_action("export_csv")
 
     def reset(self) -> None:
         self.clear(columns=True)

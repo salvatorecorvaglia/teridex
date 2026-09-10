@@ -23,6 +23,10 @@ async def test_query_with_rows_sets_count_subtitle(tmp_path) -> None:  # type: i
         assert editor is not None
         editor.text = "SELECT 1 AS a UNION ALL SELECT 2"
         await app.action_run_query()
+        # ``action_run_query`` now starts a worker and returns, so the pump
+        # stays free for the cancel key. Wait on the worker rather than
+        # hoping a single ``pause()`` outlasts the query.
+        await app.workers.wait_for_complete()
         await pilot.pause()
         results = app._results()
         assert results.loading is False
@@ -40,6 +44,10 @@ async def test_query_with_no_rows_sets_empty_subtitle() -> None:
         assert editor is not None
         editor.text = "SELECT 1 WHERE 0"
         await app.action_run_query()
+        # ``action_run_query`` now starts a worker and returns, so the pump
+        # stays free for the cancel key. Wait on the worker rather than
+        # hoping a single ``pause()`` outlasts the query.
+        await app.workers.wait_for_complete()
         await pilot.pause()
         results = app._results()
         assert results.loading is False
@@ -58,6 +66,10 @@ async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: i
         assert editor is not None
         editor.text = "SELECT 1 AS a, 'hi' AS b UNION ALL SELECT 2, 'bye'"
         await app.action_run_query()
+        # ``action_run_query`` now starts a worker and returns, so the pump
+        # stays free for the cancel key. Wait on the worker rather than
+        # hoping a single ``pause()`` outlasts the query.
+        await app.workers.wait_for_complete()
         await pilot.pause()
         await app.action_export_csv()
         exports = list((tmp_path / ".teridex" / "exports").glob("export-*.csv"))
@@ -78,6 +90,10 @@ async def test_query_with_duplicate_columns() -> None:
         assert editor is not None
         editor.text = "SELECT 1 AS a, 2 AS a"
         await app.action_run_query()
+        # ``action_run_query`` now starts a worker and returns, so the pump
+        # stays free for the cancel key. Wait on the worker rather than
+        # hoping a single ``pause()`` outlasts the query.
+        await app.workers.wait_for_complete()
         await pilot.pause()
         results = app._results()
         assert results.loading is False

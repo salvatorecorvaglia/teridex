@@ -50,9 +50,14 @@ from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
+    from teridex_engine.pool import ConnectionPool
     from teridex_plugins.api import Command
 
 logger = get_logger(__name__)
+
+# Worker name/group for the query stream. Named so ``on_unmount`` and the
+# tests can find it, and so a stray second run is visible in the worker list.
+_QUERY_WORKER = "teridex-query"
 
 
 class TeridexApp(App[None]):
@@ -389,27 +394,53 @@ class TeridexApp(App[None]):
     # ---- actions ------------------------------------------------------
 
     async def action_run_query(self) -> None:
+        """Validate the request, then stream it on a worker.
+
+        The stream used to be drained inline, in the action itself. A binding's
+        action is awaited *by the App's own message pump*, so that occupied the
+        pump for the entire query and no further key could be dispatched until
+        it finished — leaving the cancel key inert during exactly the long query
+        it exists to abort. (Queries started from the Run button did not have
+        this problem: a Button.Pressed handler runs on the button's pump, not
+        the app's, so the two entry points behaved differently.)
+
+        Validation stays here so the feedback is immediate and so
+        ``_query_in_flight`` is set before any ``await`` — the re-entrancy guard
+        has to be synchronous to be a guard at all.
+        """
         if self._query_in_flight:
             self._status().message = "[yellow]a query is already running[/]"
             return
-        if self.state.pool is None:
+        pool = self.state.pool
+        if pool is None:
             self._status().message = "[yellow]not connected[/]"
             return
         editor = self._tabs().current_editor
         if editor is None or not editor.sql.strip():
             self._status().message = "[yellow]nothing to run[/]"
             return
-        sql = editor.sql
+        self._query_in_flight = True
+        self.run_worker(
+            self._stream_query(pool, editor.sql),
+            name=_QUERY_WORKER,
+            group=_QUERY_WORKER,
+        )
+
+    async def _stream_query(self, pool: ConnectionPool, sql: str) -> None:
+        """Run *sql* and feed its batches into the results grid.
+
+        Always reached via :meth:`action_run_query`, which owns the validation
+        and the ``_query_in_flight`` handshake.
+        """
         results = self._results()
         results.reset()
         results.loading = True
         self._status().truncated = False
-        self._query_in_flight = True
 
         # Acquire a dedicated adapter from the pool for this run; release
         # it in ``finally`` so a cancellation never leaks the slot.
         try:
-            async with self.state.pool.acquire() as adapter:
+            async with pool.acquire() as adapter:
                 executor = QueryExecutor(adapter, self.state.bus)
                 self._run_executor = executor
                 try:

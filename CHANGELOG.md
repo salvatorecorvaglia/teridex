@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (keybindings):** four bindings sat on keys Textual's `TextArea` already claims, and the focused widget wins — so with the SQL editor focused, which is the normal state while working, those keys did the editor's thing and the app's action never fired. `Ctrl+C` in particular did nothing to cancel a query while the help modal explicitly promised it did.
+  - `Cancel query` moved from `Ctrl+C` to `Ctrl+B` (`Ctrl+C` is copy in the editor, and Textual's own `Screen`/`App` bind it too).
+  - `Close tab` moved from `Ctrl+W` to `Ctrl+O` (`Ctrl+W` is delete-word-left).
+  - `Copy cell` (`Ctrl+Y`) and `Export CSV` (`Ctrl+E`) keep their keys but are now declared on the results grid instead of app-wide. They fire only when that grid has focus — which is the only time they mean anything — and the editor is not on its focus chain, so the collision is gone without spending a key.
+  - `tests/tui/test_keymap_conflicts.py` now asserts this property against the installed Textual, so a future release that claims another key fails CI rather than silently disabling a binding.
+- The help modal renders keys the way the footer does (`^↵`, not `ctrl+enter`), collapses aliased bindings onto one row instead of listing "Run query" twice, and separates global from results-pane bindings. The stale note claiming `^c` cancels the query is gone.
+
 ### Security
+
+
 
 - DSN query parameters carrying credentials (`?password=`, `?auth_token=`, anything whose name contains `password`/`passwd`/`pwd`/`secret`/`token`/`credential`) are now redacted by `mask_dsn_password` and by `Dsn.render(mask_password=True)`. Only the userinfo segment (`scheme://user:pw@host`) was masked before, so a secret passed as a query parameter was written verbatim to `~/.teridex/teridex.log`, shown in the status bar, and persisted as the `connection_label` of every query in `~/.teridex/history.db`. File-path parameters (`sslkey`, `sslcert`, `sslrootcert`) are deliberately left legible — they are not secrets, and redacting them makes a TLS misconfiguration unreadable.
 
 ### Fixed
 
+- **The cancel key could not interrupt a running query.** A binding's action is awaited by the App's own message pump, and `action_run_query` drained the entire result stream inline — so the pump was occupied for the whole query and no further key was dispatched until it finished. The cancel key was inert during exactly the long query it exists to abort. Queries started from the Run *button* were unaffected (a `Button.Pressed` handler runs on the button's own pump), so the two entry points behaved differently. Streaming now runs on a worker; validation and the re-entrancy guard stay synchronous in the action.
 - **Crash:** an error toast rendered driver text as Rich markup, so a message containing an unbalanced bracket raised `MarkupError` from inside the toast's render, and one containing a bracketed identifier (`syntax error near [col]`) silently dropped it from the message. Toasts are now plain text. This affected every error path, since `_report_error` is the single funnel for connection, query, export, schema-refresh and plugin failures.
 - **Crash:** typing a DSN containing `[/]` into the connection dialog raised `MarkupError` — the parse error embeds the offending input and the modal renders it as markup.
 - `Dsn.parse` now raises `ConfigError` for an unsupported scheme or an unparseable port, instead of letting pydantic's `ValidationError` escape. Callers render the message straight to the user, so the leak put a multi-line pydantic dump on screen. The "valid schemes" list no longer uses square brackets, which Rich would eat.

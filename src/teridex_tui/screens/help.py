@@ -4,14 +4,44 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from textual.binding import Binding
 from textual.containers import Vertical
 from textual.widgets import Static
 
+from teridex_tui.keymaps import GLOBAL_BINDINGS, RESULTS_BINDINGS, key_label
+from teridex_tui.keymaps.vim import VIM_BINDINGS
 from teridex_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+
+
+def _rows(bindings: list[tuple[str, str, str]]) -> list[tuple[str, str]]:
+    """Collapse ``(key, action, description)`` triples into display rows.
+
+    Several keys can drive one action (``run_query`` answers both ``ctrl+enter``
+    and ``ctrl+j``), which used to render as two identical "Run query" lines.
+    Aliases are joined onto one row instead, and every key goes through
+    :func:`key_label` so the modal spells a binding the way the footer does —
+    ``^↵``, not ``ctrl+enter``.
+    """
+    by_action: dict[str, tuple[list[str], str]] = {}
+    for key, action, desc in bindings:
+        keys, existing_desc = by_action.setdefault(action, ([], desc or action))
+        label = key_label(key)
+        if label not in keys:
+            keys.append(label)
+        by_action[action] = (keys, existing_desc)
+    return [(" / ".join(keys), desc) for keys, desc in by_action.values()]
+
+
+def _section(title: str, rows: list[tuple[str, str]]) -> list[str]:
+    if not rows:
+        return []
+    width = max(len(k) for k, _ in rows)
+    return [
+        f"[bold yellow]{title}[/]",
+        *(f"  [bold cyan]{k.ljust(width)}[/]  {d}" for k, d in rows),
+    ]
 
 
 class HelpModal(BaseModal[None]):
@@ -24,72 +54,44 @@ class HelpModal(BaseModal[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="HelpModal"):
             yield Static("[b]Teridex — Keybindings[/]\n", id="help-title")
-            cfg = getattr(self.app, "cfg", None)
-            if cfg is not None and getattr(cfg.ui, "keymap", "default") == "vim":
+            if self._is_vim():
                 yield Static(
                     "[yellow]Note: Vim mode applies to global/panel navigation controls "
                     "(e.g., j/k in list views, G/gg in panels). The query editor itself "
                     "remains in standard insert mode.[/]\n",
                     id="help-vim-note",
                 )
-            # ^c is rebound away from Textual's default quit, so say so: a user
-            # who reaches for it to escape needs to know ^q is the way out.
+            # ``?`` is a printable character, so a focused editor or input
+            # consumes it before the app sees it — correct Textual behaviour,
+            # but worth saying out loud since the footer advertises the key.
             yield Static(
-                "[yellow]Note: ^c cancels the running query — it does not quit. "
-                "Use ^q to quit Teridex.[/]\n",
-                id="help-cancel-note",
+                "[yellow]Note: while the editor has focus, ``?`` types a question mark. "
+                "Use the command palette to reach this help from there.[/]\n",
+                id="help-focus-note",
             )
             yield Static(self._render_bindings(), id="help-bindings")
             yield Static("\n[dim](press escape to close)[/]", id="help-hint")
 
-    def _render_bindings(self) -> str:
+    def _is_vim(self) -> bool:
         cfg = getattr(self.app, "cfg", None)
-        is_vim = cfg is not None and getattr(cfg.ui, "keymap", "default") == "vim"
+        return cfg is not None and getattr(cfg.ui, "keymap", "default") == "vim"
 
-        # Categorize keys
-        global_rows: list[tuple[str, str]] = []
-        vim_rows: list[tuple[str, str]] = []
+    def _render_bindings(self) -> str:
+        lines = _section("Global", _rows(GLOBAL_BINDINGS))
 
-        from teridex_tui.keymaps.default import DEFAULT_BINDINGS  # noqa: PLC0415
+        results = _section("Results pane", _rows(RESULTS_BINDINGS))
+        if results:
+            # Called out separately because these only fire when the results
+            # grid has focus — which is also why they can hold keys the SQL
+            # editor would otherwise claim.
+            lines.extend(["", *results])
 
-        default_keys = {k for k, _, _ in DEFAULT_BINDINGS}
-
-        # Process all bindings from app.BINDINGS first
-        for item in self.app.BINDINGS:
-            key: str
-            desc: str
-            if isinstance(item, Binding):
-                key = item.key
-                desc = item.description or item.action
-            elif isinstance(item, tuple) and len(item) == 3:
-                key, action, d = item
-                desc = d or action
-            else:
-                key, action = item
-                desc = action
-            global_rows.append((key, desc))
-
-        if is_vim:
-            from teridex_tui.keymaps.vim import VIM_BINDINGS  # noqa: PLC0415
-
-            for vimb in VIM_BINDINGS:
-                key, action, d = vimb
-                desc = d or action
-                if key not in default_keys and not any(k == key for k, _ in vim_rows):
-                    vim_rows.append((key, desc))
-
-        lines: list[str] = []
-        if global_rows:
-            lines.append("[bold yellow]Global Bindings[/]")
-            width = max(len(k) for (k, _) in global_rows)
-            for key, desc in global_rows:
-                lines.append(f"  [bold cyan]{key.ljust(width)}[/]  {desc}")
-
-        if is_vim and vim_rows:
-            lines.append("\n[bold yellow]Vim Navigation Bindings[/]")
-            width = max(len(k) for (k, _) in vim_rows)
-            for key, desc in vim_rows:
-                lines.append(f"  [bold cyan]{key.ljust(width)}[/]  {desc}")
+        if self._is_vim():
+            global_keys = {k for k, _, _ in GLOBAL_BINDINGS}
+            extra = [b for b in VIM_BINDINGS if b[0] not in global_keys]
+            vim = _section("Vim navigation", _rows(extra))
+            if vim:
+                lines.extend(["", *vim])
 
         if not lines:
             return "[dim]no bindings registered[/]"
