@@ -14,6 +14,7 @@ textual = pytest.importorskip("textual")
 
 from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
+from textual.content import Content  # noqa: E402
 
 from teridex_core.models.result import Column, ResultBatch  # noqa: E402
 from teridex_core.models.schema import (  # noqa: E402
@@ -182,3 +183,80 @@ async def test_error_toast_preserves_bracketed_driver_text() -> None:
         notification = next(iter(app._notifications))
         assert notification.message == detail
         assert notification.markup is False
+
+
+# ---- theme variables vs. the two markup parsers ----
+#
+# Textual's markup understands ``[$error]``; rich's does not — it treats the
+# tag as literal text and then raises MarkupError on the unmatched ``[/]``. Which
+# parser a widget uses is therefore load-bearing, and it is not obvious from the
+# calling code: Static renders Textual Content, but Tree labels are rich Text.
+
+
+def test_rich_and_textual_markup_disagree_about_theme_variables() -> None:
+    """Documents the trap these tests exist to catch."""
+    from rich.errors import MarkupError as RichMarkupError  # noqa: PLC0415
+    from textual.content import Content  # noqa: PLC0415
+
+    assert Content.from_markup("[$error]boom[/]").plain == "boom"
+    with pytest.raises(RichMarkupError):
+        Text.from_markup("[$error]boom[/]")
+
+
+async def test_status_bar_renders_themed_severity_messages() -> None:
+    """The footer measures its own width, so it must parse what it renders.
+
+    It measured with rich's ``Text`` while rendering through Textual, so the
+    first ``[$error]`` message would have raised MarkupError mid-render.
+    """
+    from teridex_tui.widgets.status_bar import StatusBar  # noqa: PLC0415
+
+    class _Harness(App[None]):
+        def compose(self) -> ComposeResult:
+            yield StatusBar()
+
+    app = _Harness()
+    async with app.run_test() as pilot:
+        bar = app.query_one(StatusBar)
+        bar.message = "[$error]Query failed: boom[/]"
+        await pilot.pause()
+        rendered = bar.render()
+        assert "Query failed: boom" in Content.from_markup(str(rendered)).plain
+
+
+async def test_schema_tree_labels_stay_parseable_by_rich() -> None:
+    """Tree labels go through rich, so they must not carry ``$variable`` tags."""
+    from teridex_core.models.schema import SchemaSnapshot, Table, TableColumn  # noqa: PLC0415
+
+    snapshot = SchemaSnapshot(
+        connection_id="c",
+        database="db",
+        schemas={
+            "main": [
+                Table(
+                    name="t",
+                    schema_name="main",
+                    columns=[
+                        TableColumn(name="id", type_native="INTEGER", is_primary_key=True),
+                        TableColumn(name="req", type_native="TEXT", nullable=False),
+                    ],
+                )
+            ]
+        },
+    )
+
+    app = _TreeHarness()
+    async with app.run_test() as pilot:
+        tree = app.query_one(SchemaTree)
+        tree.populate(snapshot)
+        await pilot.pause()
+        node = next(n for n in tree.root.children[0].children[0].children if n.data is not None)
+        node.expand()
+        await pilot.pause()
+
+        labels = [str(child.label) for child in node.children[0].children]
+        assert any("(PK)" in lbl for lbl in labels)
+        assert any("NOT NULL" in lbl for lbl in labels)
+        for label in labels:
+            # The real assertion: rich can parse every one of them.
+            Text.from_markup(label)

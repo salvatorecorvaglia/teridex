@@ -62,6 +62,7 @@ class ResultsTable(DataTable[str]):
         self._rows: list[tuple[Any, ...]] = []
         self._row_count = 0
         self._truncated = False
+        self._summary = ""
 
     # Textual resolves a widget binding's action against the *declaring* node
     # only — ``_dispatch_action`` looks up ``action_<name>`` on that node and
@@ -83,6 +84,7 @@ class ResultsTable(DataTable[str]):
         self._rows = []
         self._row_count = 0
         self._truncated = False
+        self._summary = ""
         self.border_subtitle = None
 
     async def feed(self, batch: ResultBatch) -> None:
@@ -119,21 +121,33 @@ class ResultsTable(DataTable[str]):
                 await asyncio.sleep(0)
 
     def mark_done(self, *, cancelled: bool = False) -> None:
-        """Summarize the run on the table border.
+        """Summarize the finished run.
 
         ``cancelled`` flags the result set as incomplete so a partial result
         is not mistaken for the full output.
+
+        The text is published on :attr:`summary` as well as on this widget's
+        own ``border_subtitle``. The grid has no border unless it happens to be
+        focused, so the subtitle alone was invisible most of the time; the host
+        mirrors :attr:`summary` onto ``#results-panel``, which is the bordered,
+        titled container the user actually sees.
         """
         if not self._initialized or self._row_count == 0:
-            self.border_subtitle = "cancelled — no rows" if cancelled else "no rows returned"
-            return
-        n = self._row_count
-        parts = [f"{n} row{'s' if n != 1 else ''}"]
-        if self._truncated:
-            parts.append(f"display capped at {self.max_rows}")
-        if cancelled:
-            parts.append("cancelled (partial)")
-        self.border_subtitle = " · ".join(parts)
+            self._summary = "cancelled — no rows" if cancelled else "no rows returned"
+        else:
+            n = self._row_count
+            parts = [f"{n} row{'s' if n != 1 else ''}"]
+            if self._truncated:
+                parts.append(f"display capped at {self.max_rows}")
+            if cancelled:
+                parts.append("cancelled (partial)")
+            self._summary = " · ".join(parts)
+        self.border_subtitle = self._summary
+
+    @property
+    def summary(self) -> str:
+        """One-line description of the last finished run, or ``""``."""
+        return self._summary
 
     @property
     def truncated(self) -> bool:

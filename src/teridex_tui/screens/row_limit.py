@@ -24,7 +24,7 @@ class RowLimitModal(BaseModal[int]):
         self._current_limit = current_limit
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="RowLimitModal"):
+        with Vertical(id="row-limit-modal"):
             yield Static("[bold]Set Row Display Limit[/]\n", id="limit-title")
             yield Input(
                 value=str(self._current_limit),

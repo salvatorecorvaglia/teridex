@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import ValidationError
-from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
@@ -287,14 +286,14 @@ class TeridexApp(App[None]):
 
     def _wire_event_listeners(self) -> None:
         async def on_started(ev: QueryStarted) -> None:
-            self._status().message = f"running… ({escape(ev.sql_preview)})"
+            self._status().notify_status(f"running… ({ev.sql_preview})")
 
         async def on_completed(ev: QueryCompleted) -> None:
             bar = self._status()
             bar.rows = ev.rows
             bar.duration_ms = ev.duration_ms
             bar.has_run = True
-            bar.message = "ok"
+            bar.notify_status("ok", "success")
 
         async def on_failed(ev: QueryFailed) -> None:
             self._report_error(ev.error_code, ev.message)
@@ -316,7 +315,7 @@ class TeridexApp(App[None]):
         """
         async with self._connect_lock:
             bar = self._status()
-            bar.message = "connecting…"
+            bar.notify_status("connecting…")
             try:
                 session = await open_session(dsn, self.cfg, self.state.bus)
             except Exception as exc:
@@ -328,7 +327,7 @@ class TeridexApp(App[None]):
             bar.connection = session.dsn.render(mask_password=True)
             await self.action_refresh_schema()
             # Clear the transient message so the footer shows "Database Connected."
-            bar.message = ""
+            bar.notify_status("")
 
     async def _adopt(self, session: Session | None) -> None:
         """Install *session* as the current one, closing whatever it replaces."""
@@ -382,6 +381,16 @@ class TeridexApp(App[None]):
 
     # ---- user feedback -------------------------------------------------
 
+    def _set_results_summary(self, summary: str) -> None:
+        """Show the run summary on the results panel's border.
+
+        The grid itself has no border unless it happens to be focused, so its
+        own ``border_subtitle`` was invisible most of the time. ``#results-panel``
+        is the bordered, titled container the user actually looks at.
+        """
+        with contextlib.suppress(Exception):
+            self.query_one("#results-panel").border_subtitle = summary
+
     def _report_error(self, headline: str, exc: BaseException | str) -> None:
         """Surface an error in the status bar *and* as a notification.
 
@@ -391,7 +400,9 @@ class TeridexApp(App[None]):
         the short form so the last error stays visible after the toast fades.
         """
         detail = str(exc)
-        self._status().message = f"[red]{escape(headline)}: {escape(detail)}[/]"
+        # Plain text: StatusBar builds its own Content and never parses this,
+        # so a driver message full of brackets needs no escaping here.
+        self._status().notify_status(f"{headline}: {detail}", "error")
         # ``markup=False`` rather than ``escape(detail)``: a toast is plain error
         # text, and a driver message routinely contains brackets — ``TEXT[]``, a
         # bracket-quoted identifier, a Python repr. Parsed as markup, ``[/]``
@@ -421,15 +432,15 @@ class TeridexApp(App[None]):
         has to be synchronous to be a guard at all.
         """
         if self._query_in_flight:
-            self._status().message = "[yellow]a query is already running[/]"
+            self._status().notify_status("a query is already running", "warning")
             return
         pool = self.state.pool
         if pool is None:
-            self._status().message = "[yellow]not connected[/]"
+            self._status().notify_status("not connected", "warning")
             return
         editor = self._tabs().current_editor
         if editor is None or not editor.sql.strip():
-            self._status().message = "[yellow]nothing to run[/]"
+            self._status().notify_status("nothing to run", "warning")
             return
         self._query_in_flight = True
         self.run_worker(
@@ -446,6 +457,7 @@ class TeridexApp(App[None]):
         """
         results = self._results()
         results.reset()
+        self._set_results_summary("")
         results.loading = True
         self._status().truncated = False
 
@@ -476,7 +488,7 @@ class TeridexApp(App[None]):
                             break
                 except QueryCancelledError:
                     cancelled = True
-                    self._status().message = "[yellow]cancelled[/]"
+                    self._status().notify_status("cancelled", "warning")
                 except TeridexError as exc:
                     self._report_error("Query failed", exc)
                 finally:
@@ -488,6 +500,7 @@ class TeridexApp(App[None]):
                         await run.aclose()
                     results.loading = False
                     results.mark_done(cancelled=cancelled)
+                    self._set_results_summary(results.summary)
                     self._status().truncated = results.truncated
                     await self._record_history(sql)
         except Exception as exc:
@@ -505,15 +518,15 @@ class TeridexApp(App[None]):
     async def action_copy_cell(self) -> None:
         text = self._results().current_cell_text()
         if text is None:
-            self._status().message = "[yellow]nothing to copy[/]"
+            self._status().notify_status("nothing to copy", "warning")
             return
         self.copy_to_clipboard(text)
-        self._status().message = "copied cell"
+        self._status().notify_status("copied cell", "success")
 
     async def action_export_csv(self) -> None:
         results = self._results()
         if results.row_count == 0:
-            self._status().message = "[yellow]nothing to export[/]"
+            self._status().notify_status("nothing to export", "warning")
             return
         path = Path.home() / ".teridex" / "exports" / f"export-{int(time.time())}.csv"
         try:
@@ -534,7 +547,7 @@ class TeridexApp(App[None]):
                 severity="warning",
                 timeout=8,
             )
-        self._status().message = escape(summary)
+        self._status().notify_status(summary, "success")
 
     async def action_set_row_limit(self) -> None:
         current_limit = self.cfg.ui.max_display_rows
@@ -554,7 +567,7 @@ class TeridexApp(App[None]):
                 self._results().max_rows = new_limit
             with contextlib.suppress(Exception):
                 self._action_bar().limit = new_limit
-            self._status().message = f"Row limit set to {new_limit}"
+            self._status().notify_status(f"Row limit set to {new_limit}")
 
         await self.push_screen(RowLimitModal(current_limit), _on_limit)
 
@@ -569,14 +582,14 @@ class TeridexApp(App[None]):
     async def action_refresh_schema(self) -> None:
         if self.state.introspector is None:
             return
-        self._status().message = "refreshing schema…"
+        self._status().notify_status("refreshing schema…")
         try:
             snap = await self.state.introspector.refresh(lazy=True)
         except TeridexError as exc:
             self._report_error("Schema refresh failed", exc)
             return
         self._tree().populate(snap)
-        self._status().message = f"schema refreshed · {snap.object_count} object(s)"
+        self._status().notify_status(f"schema refreshed · {snap.object_count} object(s)")
 
     async def action_focus_editor_top(self) -> None:
         editor = self._tabs().current_editor
@@ -637,7 +650,7 @@ class TeridexApp(App[None]):
 
     async def action_show_history(self) -> None:
         if self.state.history is None:
-            self._status().message = "[yellow]history not opened[/]"
+            self._status().notify_status("history not opened", "warning")
             return
         entries = await self.state.history.recent(limit=50)
 

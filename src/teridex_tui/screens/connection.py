@@ -32,7 +32,7 @@ class ConnectionScreen(BaseModal[str]):
     """
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="ConnectionModal"):
+        with Vertical(id="connection-modal"):
             yield Static("[b]Connect to Database[/]\n", id="conn-title")
             yield Input(
                 placeholder="Enter DSN (e.g. duckdb:///:memory:)",

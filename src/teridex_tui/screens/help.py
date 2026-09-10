@@ -39,8 +39,8 @@ def _section(title: str, rows: list[tuple[str, str]]) -> list[str]:
         return []
     width = max(len(k) for k, _ in rows)
     return [
-        f"[bold yellow]{title}[/]",
-        *(f"  [bold cyan]{k.ljust(width)}[/]  {d}" for k, d in rows),
+        f"[bold $warning]{title}[/]",
+        *(f"  [bold $accent]{k.ljust(width)}[/]  {d}" for k, d in rows),
     ]
 
 
@@ -52,11 +52,11 @@ class HelpModal(BaseModal[None]):
     """
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="HelpModal"):
+        with Vertical(id="help-modal"):
             yield Static("[b]Teridex — Keybindings[/]\n", id="help-title")
             if self._is_vim():
                 yield Static(
-                    "[yellow]Note: Vim mode applies to global/panel navigation controls "
+                    "[$warning]Note: Vim mode applies to global/panel navigation controls "
                     "(e.g., j/k in list views, G/gg in panels). The query editor itself "
                     "remains in standard insert mode.[/]\n",
                     id="help-vim-note",
@@ -65,7 +65,7 @@ class HelpModal(BaseModal[None]):
             # consumes it before the app sees it — correct Textual behaviour,
             # but worth saying out loud since the footer advertises the key.
             yield Static(
-                "[yellow]Note: while the editor has focus, ``?`` types a question mark. "
+                "[$warning]Note: while the editor has focus, ``?`` types a question mark. "
                 "Use the command palette to reach this help from there.[/]\n",
                 id="help-focus-note",
             )

@@ -102,3 +102,53 @@ async def test_query_with_duplicate_columns() -> None:
         assert len(cols) == 2
         assert str(cols[0].label) == "a"
         assert str(cols[1].label) == "a"
+
+
+@pytest.mark.asyncio
+async def test_run_summary_lands_on_the_bordered_panel() -> None:
+    """The summary must be visible without the grid having focus.
+
+    ``border_subtitle`` only renders on a widget that has a border, and
+    ``ResultsTable`` has none except the one the ``:focus`` rule adds — so the
+    row count was visible only while the grid happened to be focused. The
+    bordered, titled container is its parent, ``#results-panel``.
+    """
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        editor = app._tabs().current_editor
+        assert editor is not None
+        editor.text = "SELECT 1 AS a UNION ALL SELECT 2"
+        await app.action_run_query()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+
+        results = app._results()
+        panel = app.query_one("#results-panel")
+        assert app.focused is not results, "the grid must not be focused for this to mean anything"
+        assert panel.styles.border.top[0], "results panel should have a border to write on"
+        assert panel.border_subtitle == "2 rows"
+        assert results.summary == "2 rows"
+
+
+@pytest.mark.asyncio
+async def test_a_new_run_clears_the_previous_summary() -> None:
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+        editor = app._tabs().current_editor
+        assert editor is not None
+
+        editor.text = "SELECT 1 AS a UNION ALL SELECT 2"
+        await app.action_run_query()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.query_one("#results-panel").border_subtitle == "2 rows"
+
+        editor.text = "SELECT 1 WHERE 0"
+        await app.action_run_query()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert app.query_one("#results-panel").border_subtitle == "no rows returned"

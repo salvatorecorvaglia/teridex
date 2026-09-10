@@ -24,7 +24,7 @@ class HistoryModal(BaseModal["HistoryEntry"]):
         self._entries = entries
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="HistoryModal"):
+        with Vertical(id="history-modal"):
             yield Static("[b]Query history[/]\n", id="history-title")
             yield ListView(id="history-list")
             yield Static("\n[dim](enter to load · escape to cancel)[/]", id="history-hint")
@@ -40,11 +40,13 @@ class HistoryModal(BaseModal["HistoryEntry"]):
             preview = preview_lines[0] if preview_lines else ""
             if len(preview) > 80:
                 preview = preview[:77] + "…"
+            # Theme variables, so the dots track the active theme instead of
+            # rendering as the terminal's own idea of green/red/yellow.
             status_style = {
-                "succeeded": "green",
-                "failed": "red",
-                "cancelled": "yellow",
-            }.get(entry.status, "white")
+                "succeeded": "$success",
+                "failed": "$error",
+                "cancelled": "$warning",
+            }.get(entry.status, "$foreground")
             label = (
                 f"[{status_style}]●[/] [bold]{escape(preview)}[/]\n"
                 f"   [dim]{escape(entry.connection_label)}  ·  "

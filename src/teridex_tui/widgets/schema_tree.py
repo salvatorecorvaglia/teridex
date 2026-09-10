@@ -9,6 +9,7 @@ wide schemas instead of O(objects * columns).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from rich.markup import escape
@@ -101,13 +102,31 @@ class SchemaTree(Tree[object]):
 
         self._fill_object_node(node, obj)
 
+    def _theme_color(self, name: str, fallback: str) -> str:
+        """Resolve a theme variable to a concrete colour usable in rich markup.
+
+        Tree labels are ``TextType`` and ``render_label`` returns a rich
+        ``Text``, so they go through *rich's* markup parser — which does not
+        understand Textual's ``$variable`` syntax. It treats ``[$warning]`` as
+        literal text and then raises ``MarkupError`` on the unmatched ``[/]``.
+        Resolving the variable to a hex value here keeps these accents tracking
+        the active theme while staying inside the grammar rich actually parses.
+        """
+        with contextlib.suppress(Exception):
+            value = self.app.theme_variables.get(name)
+            if value:
+                return str(value)
+        return fallback
+
     def _fill_object_node(self, node: TreeNode[object], obj: SchemaObject) -> None:
+        warning = self._theme_color("text-warning", "yellow")
+        error = self._theme_color("text-error", "red")
         # Columns block
         if obj.columns:
             cols_node = node.add("columns", data=None, expand=True)
             for col in obj.columns:
-                pk = " [yellow](PK)[/]" if col.is_primary_key else ""
-                null = "" if col.nullable else " [red]NOT NULL[/]"
+                pk = f" [{warning}](PK)[/]" if col.is_primary_key else ""
+                null = "" if col.nullable else f" [{error}]NOT NULL[/]"
                 cols_node.add_leaf(
                     f"[bold]{escape(col.name)}[/]  "
                     f"[italic dim]{escape(col.type_native)}[/]{pk}{null}",

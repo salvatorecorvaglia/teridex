@@ -5,7 +5,7 @@
  *   │ schema tree         ││  Tab 1  Tab 2                     │
  *   │                     ││  SQL editor with line numbers      │
  *   │                     │├───────────────────────────────────┤
- *   │                     ││ Tx: Auto  Display cap 10000  [Run]│
+ *   │                     ││ Display cap 10000        [Run]│
  *   │                     │├──── Query Results ────────────────┤
  *   │                     ││  data table                       │
  *   └─────────────────────┘└───────────────────────────────────┘
@@ -94,9 +94,14 @@ MainScreen {
     padding: 0 1;
 }
 
+/* A Textual Button is 3 rows tall by default (border top, content, border
+ * bottom), which the 1-row action bar clipped to a single visible row. Flat and
+ * single-row keeps the bar compact and the button whole. */
 #action-bar #run-query-btn {
     dock: right;
     min-width: 14;
+    height: 1;
+    border: none;
     background: $primary;
     color: $background;
     text-style: bold;
@@ -167,7 +172,6 @@ ResultsTable {
  * Textual's own built-in palette instead and this block never applied.
  */
 #command-palette {
-    layer: overlay;
     align: center top;
     width: 70%;
     height: auto;
@@ -188,10 +192,10 @@ ResultsTable {
 }
 
 /* ── Help, History & Connection modals ── */
-#HelpModal,
-#HistoryModal,
-#ConnectionModal,
-#RowLimitModal {
+#help-modal,
+#history-modal,
+#connection-modal,
+#row-limit-modal {
     align: center middle;
     background: $surface;
     border: thick $accent;
@@ -255,15 +259,17 @@ ResultsTable {
  * glance. Nothing here was styled before, leaving focus to whatever Textual's
  * defaults happened to render against the theme's own colours.
  */
-#schema-tree:focus,
-#results-table:focus,
+/* One idiom throughout: a border is declared up front and focus recolors it.
+ * These widgets all declare `border: round $primary` above, so `$accent` here
+ * swaps the colour without changing the box.
+ *
+ * `#schema-tree`, `#results-table` and `#sql-editor` are deliberately absent:
+ * they have no border of their own, so a `:focus` rule here *added* one and
+ * reflowed their content by two rows and two columns on every focus change.
+ * Their containing panels already signal focus via `:focus-within` below. */
 #history-list:focus,
 #palette-list:focus,
-#conn-presets:focus {
-    border: round $accent;
-}
-
-#sql-editor:focus,
+#conn-presets:focus,
 #palette-input:focus,
 #conn-input:focus,
 #limit-input:focus {

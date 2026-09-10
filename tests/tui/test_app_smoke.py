@@ -9,6 +9,7 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
+from textual.content import Content  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
 from teridex_core.config import TeridexConfig, UIConfig  # noqa: E402
@@ -188,7 +189,10 @@ async def test_cancel_query_stops_an_in_flight_run() -> None:
         await app.action_cancel_query()
         await asyncio.wait_for(app.workers.wait_for_complete(), timeout=5)
 
-        assert app._status().message == "[yellow]cancelled[/]"
+        # Assert on the rendered text, not the markup source: the severity
+        # colour is a theme variable now, and pinning the literal string made
+        # this a test of the palette rather than of the cancellation.
+        assert "cancelled" in Content.from_markup(app._status().message).plain
         assert not app._query_in_flight
 
 

@@ -1,6 +1,12 @@
 """Action bar between Query Editor and Query Results.
 
-Displays transaction mode, row limit, and a Run Query button.
+Displays the results display cap and a Run Query button.
+
+There is deliberately no transaction-mode indicator. One used to sit here
+reading "Tx: Auto-Commit" permanently — it was never updated, because nothing
+in the UI or the CLI reaches ``teridex_engine.transaction``. A label that
+cannot change is not a status, and it implied a feature that is not wired up.
+The engine keeps its transaction support for plugins and future work.
 """
 
 from __future__ import annotations
@@ -19,14 +25,12 @@ class ActionBar(Static):
     DEFAULT_CSS = ""
 
     limit: reactive[int] = reactive(500)
-    tx_mode: reactive[str] = reactive("Auto-Commit")
     connection_status: reactive[str] = reactive("Disconnected.")
 
     def __init__(self) -> None:
         super().__init__(id="action-bar")
 
     def compose(self) -> ComposeResult:
-        yield Static(f"Tx: {self.tx_mode}", classes="action-label", id="tx-label")
         yield Static(f"Display cap {self.limit}", classes="action-label", id="limit-label")
         yield Button("Run Query", id="run-query-btn", variant="primary")
 
@@ -36,10 +40,6 @@ class ActionBar(Static):
             # "Limit" alone reads as a SQL LIMIT clause; this is the number of
             # rows the grid will hold, which is a different promise entirely.
             self.query_one("#limit-label", Static).update(f"Display cap {limit_str}")
-
-    def watch_tx_mode(self, value: str) -> None:
-        with contextlib.suppress(Exception):
-            self.query_one("#tx-label", Static).update(f"Tx: {value}")
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-query-btn":
