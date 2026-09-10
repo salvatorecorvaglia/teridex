@@ -257,19 +257,30 @@ class TeridexApp(App[None]):
             sidebar = self.query_one("#sidebar")
             for w in rails["left"]:
                 await sidebar.mount(w)
+        # Append into the grid, rather than ``before=self._status()``.
+        # ``Widget._find_mount_point`` resolves a *widget* spot to
+        # ``spot.parent`` and ignores the receiver — and StatusBar is a sibling
+        # of ``#main-grid`` under MainScreen, not a child of it. So mounting
+        # "before the status bar" put both rails under MainScreen: the
+        # ``.with-right``/``.with-bottom`` rules added grid tracks nothing
+        # occupied, ``#main-grid.with-right #bottom-rail`` could never match
+        # (the rail was not a descendant), and the rails rendered as stacked
+        # blocks instead of side/bottom rails.
+        #
+        # Order is load-bearing: the grid places children in child order, so
+        # the right rail must be appended before the bottom rail.
         if rails["right"]:
             grid = self.query_one("#main-grid")
             grid.add_class("with-right")
             rail = Vertical(id="right-rail")
-            # Mount before the status bar so grid ordering stays correct.
-            await grid.mount(rail, before=self._status())
+            await grid.mount(rail)
             for w in rails["right"]:
                 await rail.mount(w)
         if rails["bottom"]:
             grid = self.query_one("#main-grid")
             grid.add_class("with-bottom")
             rail = Vertical(id="bottom-rail")
-            await grid.mount(rail, before=self._status())
+            await grid.mount(rail)
             for w in rails["bottom"]:
                 await rail.mount(w)
 

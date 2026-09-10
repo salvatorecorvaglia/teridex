@@ -76,3 +76,67 @@ async def test_right_rail_panel_mounts() -> None:
         # The grid grew its layout to include the right rail.
         grid = app.query_one("#main-grid")
         assert grid.has_class("with-right")
+
+        # The rail must be a *child of the grid*, not merely present somewhere.
+        # It used to be mounted with ``before=self._status()``, and
+        # ``Widget._find_mount_point`` resolves a widget spot to ``spot.parent``
+        # — StatusBar's parent is MainScreen, not the grid. So the rail landed
+        # outside the grid: the ``.with-right`` track it added was never
+        # occupied and the rail rendered as a stacked block. Asserting only
+        # "the widget exists" is what let that ship.
+        rail = app.query_one("#right-rail")
+        assert rail.parent is grid, f"right rail mounted under {rail.parent!r}, not #main-grid"
+        assert app.query_one("#acme-rail-text").parent is rail
+
+
+@pytest.mark.asyncio
+async def test_bottom_rail_mounts_into_the_grid_after_the_right_rail() -> None:
+    """Both rails at once: parents *and* child order, which drives grid placement."""
+
+    class _BothRailsPlugin:
+        manifest = PluginManifest(id="acme.both", name="Both")
+
+        def on_load(self, ctx: PluginContext) -> None:
+            ctx.register_panel(
+                Panel(
+                    id="acme.both.right",
+                    title="R",
+                    placement="right",
+                    factory=lambda _c: Static("r", id="acme-r"),
+                )
+            )
+            ctx.register_panel(
+                Panel(
+                    id="acme.both.bottom",
+                    title="B",
+                    placement="bottom",
+                    factory=lambda _c: Static("b", id="acme-b"),
+                )
+            )
+
+        def on_unload(self, ctx: PluginContext) -> None:
+            pass
+
+    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await app.workers.wait_for_complete()
+
+        loader: PluginLoader = app._loader
+        loader.load_instance(_BothRailsPlugin())
+        await app._mount_plugin_panels()
+        await pilot.pause()
+
+        grid = app.query_one("#main-grid")
+        assert grid.has_class("with-right")
+        assert grid.has_class("with-bottom")
+
+        right = app.query_one("#right-rail")
+        bottom = app.query_one("#bottom-rail")
+        assert right.parent is grid
+        assert bottom.parent is grid
+
+        # The grid fills cells in child order, so sidebar/workspace come first,
+        # then the right rail (third column), then the bottom rail (second row).
+        ids = [child.id for child in grid.children]
+        assert ids == ["sidebar", "workspace", "right-rail", "bottom-rail"], ids
