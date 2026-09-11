@@ -79,12 +79,23 @@ async def test_pool_acquire_cancellation_safety() -> None:
         async with pool.acquire() as a1:
             assert await a1.ping()
 
+            waiting = asyncio.Event()
+
             async def try_acquire() -> None:
+                # The pool is at capacity, so this parks on the waiter queue.
+                waiting.set()
                 async with pool.acquire():
                     pass
 
             task = asyncio.create_task(try_acquire())
-            await asyncio.sleep(0.05)
+            # Wait for the task to have actually started, rather than sleeping
+            # a guessed interval and hoping. The pool is at capacity, so it then
+            # blocks inside ``_acquire`` on the semaphore; one loop turn is
+            # enough to get it there. (Not a ``_waiters`` check: at size 1 the
+            # semaphore blocks *before* a waiter is ever registered, so that
+            # condition would never become true.)
+            await asyncio.wait_for(waiting.wait(), timeout=5)
+            await asyncio.sleep(0)
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
@@ -100,39 +111,40 @@ async def test_pool_acquire_cancellation_safety() -> None:
 async def test_pool_close_cancellation_safety_does_not_leak_adapter() -> None:
     """Closing the pool cancels connection tasks but lets cleanup finish to avoid leaks."""
     connections_created = []
+    # Events rather than wall-clock sleeps: the old version slept 0.03s hoping
+    # the connection had been created and 0.05s hoping cleanup had finished,
+    # which is a race dressed as a delay. These say what is actually awaited.
+    connected = asyncio.Event()
+    holding = asyncio.Event()
 
     async def tracking_factory(dsn: Dsn) -> DatabaseAdapter:
         a = SQLiteAdapter()
         await a.connect(dsn)
         connections_created.append(a)
-        # Yield to allow outer acquire to yield before returning
-        await asyncio.sleep(0.01)
+        connected.set()
         return a
 
     pool = ConnectionPool(Dsn.parse(_MEM), tracking_factory, size=1)
 
     async def try_acquire() -> None:
         async with pool.acquire():
-            await asyncio.sleep(0.1)
+            holding.set()
+            await asyncio.Event().wait()  # hold the adapter until cancelled
 
     task = asyncio.create_task(try_acquire())
-    # Wait for connection to be created
-    await asyncio.sleep(0.03)
+    await asyncio.wait_for(connected.wait(), timeout=5)
+    await asyncio.wait_for(holding.wait(), timeout=5)
 
-    # Cancel the acquire task. Since connection is completed but try_acquire is sleeping,
-    # this cancels try_acquire and triggers the cleanup/release task.
+    # Cancelling the holder triggers the pool's cleanup/release path.
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    # Close the pool.
     await pool.close()
-
-    await asyncio.sleep(0.05)
 
     assert len(connections_created) > 0
     for a in connections_created:
-        assert a.connected is False
+        assert a.connected is False, "close() left a tracked connection open"
 
 
 @pytest.mark.asyncio
@@ -144,25 +156,25 @@ async def test_close_closes_an_adapter_that_was_checked_out() -> None:
     """
     pool = ConnectionPool(Dsn.parse(_MEM), _factory, size=2)
     released: list[DatabaseAdapter] = []
+    acquired = asyncio.Event()
+    let_go = asyncio.Event()
 
     async def _hold() -> None:
         async with pool.acquire() as adapter:
             released.append(adapter)
-            await asyncio.sleep(0.05)
+            acquired.set()
+            await let_go.wait()
 
     holder = asyncio.create_task(_hold())
-    for _ in range(50):
-        await asyncio.sleep(0.01)
-        if released:
-            break
-    assert released, "never acquired an adapter"
+    await asyncio.wait_for(acquired.wait(), timeout=5)
 
-    await pool.close()
-    await holder
-    for _ in range(50):
-        await asyncio.sleep(0.01)
-        if not released[0].connected:  # type: ignore[attr-defined]
-            break
+    # Close *while* the adapter is still checked out — that is the case under
+    # test — and only then let the holder unwind. Its release will find the
+    # connection already closed and log a harmless reset failure.
+    await asyncio.wait_for(pool.close(), timeout=5)
+    let_go.set()
+    await asyncio.wait_for(holder, timeout=5)
+
     assert not released[0].connected, "checked-out adapter was left open"  # type: ignore[attr-defined]
 
 

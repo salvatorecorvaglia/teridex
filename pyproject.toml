@@ -77,7 +77,6 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "integration: requires a live database (postgres/mysql)",
-    "slow: slow-running tests",
 ]
 filterwarnings = [
     "error",
@@ -102,7 +101,7 @@ skip_covered = false
 # run), which cannot exercise the Postgres/MySQL adapters at all. The run with
 # integration enabled clears it comfortably. Raise this in step with the
 # offline suite, not with the integration one.
-fail_under = 79
+fail_under = 84
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

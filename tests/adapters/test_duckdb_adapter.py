@@ -10,6 +10,7 @@ duckdb = pytest.importorskip("duckdb")
 from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: E402
 from teridex_core.errors import QueryCancelledError  # noqa: E402
 from teridex_core.models.connection import Dsn  # noqa: E402
+from teridex_core.models.query import QueryStatus  # noqa: E402
 
 
 @pytest.mark.asyncio
@@ -49,8 +50,15 @@ async def test_duckdb_cancel_interrupts_running_query() -> None:
         task = asyncio.create_task(_drain())
         await asyncio.sleep(0.05)
         await a.cancel(h)
-        with pytest.raises((QueryCancelledError, Exception)):
+        # ``QueryCancelledError`` specifically. The previous form,
+        # ``pytest.raises((QueryCancelledError, Exception))``, is satisfied by
+        # *any* exception — ``Exception`` subsumes the first member — so it
+        # asserted only "something went wrong", not that cancellation was
+        # translated into the adapter contract's error. The other three adapters
+        # assert the concrete type in tests/adapters/test_cancellation_inflight.py.
+        with pytest.raises(QueryCancelledError):
             await asyncio.wait_for(task, timeout=5.0)
+        assert h.status is QueryStatus.CANCELLED
     finally:
         await a.close()
 

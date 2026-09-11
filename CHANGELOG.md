@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Crash:** pressing `Escape` in the connection dialog raised `ScreenStackError`. Textual delivers one key press to a screen twice — the focused widget bubbles it up and the screen is offered it directly — so `cancel()` ran a second time after the modal had already been popped, and the second `dismiss` popped an empty stack. Since that dialog is what the app opens when started without a DSN, it was reachable on the first keystroke of a fresh install. Modal dismissal is idempotent now, for every modal.
 - **Severity messages in the status bar were unreadable, and one was invisible.** The footer's background is `$warning` (a light gold), so severity carried by text colour measured 1.00:1 for warnings — `$warning` on `$warning` — and 2.2:1 for errors. "not connected", "nothing to run", "cancelled" and "display truncated" were all in that first category. Severity now renders as an inverted chip (dark text on a severity-coloured block), which clears 3:1 against its own background and reads as a badge.
 - The status bar takes plain text rather than markup. `StatusBar.message` is data now and the widget builds its own `Content`, so a driver message containing brackets renders verbatim with no escaping at the call site — the whole class of markup errors is gone from that surface rather than patched.
 - Severity colours across the TUI use theme variables instead of hardcoded `red`/`yellow`/`green`, so they track the active theme. Note that Textual's markup and rich's are not interchangeable: `Tree` labels go through rich, which rejects `$variable` tags, so the schema tree resolves theme variables to concrete colours instead. Tests pin both halves of that distinction.
@@ -72,6 +73,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Introspector` no longer answers a request for a full schema snapshot with a cached lazy one, which held no columns and so silently returned an empty schema.
 - Plugin bottom rails are now laid out: the app applied a `with-bottom` class that the stylesheet defined no rules for, leaving the rail an unplaced third child of a two-column grid.
 - CSV export (both `teridex run --format csv` and the TUI exporter) now defuses values a spreadsheet would evaluate as formulas.
+
+### Testing
+
+- The adapter conformance contract now covers `fetch_foreign_keys` and `fetch_indexes`, and asserts that a full `introspect()` agrees with the lazy per-object calls the schema tree uses. Only `fetch_columns` was under contract before, so the two code paths could drift — and DuckDB's per-object foreign-key and index implementations had never executed once. Coverage of the four introspectors went from 23–70% to 95–100%.
+- Two assertions that could pass vacuously were tightened: the per-query leak check used `getattr(adapter, "_cancel_flags", {}) == {}`, which succeeds on any adapter *lacking* the attribute, so a rename would have silently retired the check; and a cancellation test used `pytest.raises((QueryCancelledError, Exception))`, which `Exception` subsumes, asserting only that something went wrong.
+- Filled the coverage holes that let this audit's bugs through: the connection dialog (38% → 96%), the pool's cancellation paths, `Introspector.update_object`, `HelpModal._render_bindings`, `HistoryModal.submit`, `open_session`'s partial-failure rollback, the adapter registry's optional-driver branches, and every branch of `infer_column_type_from_value` — SQLite's only source of column typing.
+- Replaced wall-clock sleeps and fixed-count poll loops with `asyncio.Event` waits in the pool and introspector tests, which is the idiom `test_events.py` already demonstrated. `tests/engine/test_pool.py` went from 5.1s to 0.02s. The sleeps that remain are in cancellation tests, where the delay genuinely means "let the query get underway" against a real engine.
+- Removed dead test scaffolding: the `supports_transactions` conformance knob no subclass ever overrode (making its `pytest.skip` unreachable) and the declared-but-unused `slow` marker.
+- Raised the offline coverage gate from 79% to 84%. Offline coverage is 85.2%; with integration enabled it is 89.8%.
 
 ### Removed
 
