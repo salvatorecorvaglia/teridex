@@ -9,10 +9,10 @@
 ## ✨ Features
 
 - **🎹 Keyboard-First Layout**: Fully navigatable using Vim keys or custom layout keymaps.
-- **⚡ Asynchronous Execution Engine**: Run queries in the background. Long-running queries will never freeze the UI, and can be cancelled with a single keystroke.
+- **⚡ Asynchronous Execution Engine**: Run queries in the background. Long-running queries will never freeze the UI, and can be cancelled with a single keystroke (`Ctrl+B`).
 - **🔌 Pluggable Architecture**: Extend functionality with custom panels, commands, and hooks subscribing to runtime event lifecycles.
 - **📊 Interactive TUI**: Rich results viewer, schema tree explorer, syntax highlighting, and batch rendering.
-- **🛠️ Command Line Interface**: Fast, standalone utilities to connect, test connections, and execute queries directly to standard output.
+- **🛠️ Command Line Interface**: Fast, standalone utilities to connect, test connections, and execute queries directly to standard output in table, CSV, or JSON formats.
 
 ---
 
@@ -32,7 +32,7 @@ Teridex is database-agnostic and loads drivers dynamically via optional extras.
 
 ## 🚀 Installation
 
-Teridex requires **Python 3.13 or newer**. It is recommended to install using `pipx` or `uv` to keep the dependencies isolated.
+Teridex requires **Python 3.13 or newer**. It is recommended to install using `pipx` or `uv` to keep dependencies isolated.
 
 ### Using `uv` (Recommended)
 
@@ -55,22 +55,44 @@ pipx install "teridex[duckdb]"
 
 ## 📖 Quick Start
 
-You can run queries one-shot from the shell or jump into the terminal user interface.
+You can run queries one-shot from the shell or jump into the interactive terminal user interface.
 
 ### Running a One-Shot Query
 
-Use the `run` command to execute a single query and render the result as a styled table:
+Use the `run` command to execute a single query. By default, results render as a styled Rich table:
 
 ```bash
 teridex run --dsn "sqlite:///./my_database.db" "SELECT * FROM users LIMIT 5"
 ```
 
-### Starting the TUI
+#### Output Formats (`--format` / `-f`)
 
-Launch the full interactive terminal IDE:
+Format output as `table` (default), `csv`, or `json`. Machine-readable formats (`csv`, `json`) write clean unformatted data to `stdout` so results can be piped directly into `jq`, files, or CLI pipelines, while row counts and notices go to `stderr`:
 
 ```bash
+# Export query results as clean CSV
+teridex run --dsn "duckdb:///:memory:" --format csv "SELECT 1 AS id, 'alice' AS name" > users.csv
+
+# Pipe JSON output directly into jq
+teridex run --dsn "postgres://user:pass@localhost:5432/my_db" -f json "SELECT id, name FROM users" | jq '.[0]'
+```
+
+#### Additional Execution Options
+
+- `--limit <N>`: Maximum rows to fetch and print (default: `200`).
+- `--timeout <seconds>`: Query execution timeout in seconds. Set to `0` to disable timeout. Defaults to `engine.default_timeout_seconds` from configuration (60s).
+- `--config <path>`: Load configuration overrides from a specific TOML file.
+
+### Starting the Interactive TUI
+
+Launch the full interactive terminal user interface:
+
+```bash
+# Connect directly to a database
 teridex tui --dsn "postgres://user:pass@localhost:5432/my_db"
+
+# Or launch without a DSN to open the interactive connection dialog
+teridex tui
 ```
 
 ### Command Reference
@@ -85,7 +107,7 @@ teridex version
 # Sanity check database connection
 teridex connect --dsn "mysql://root:secret@127.0.0.1/test"
 
-# Use a specific config file (also available on `run` and `tui`)
+# Use a specific config file across commands
 teridex run --config ./teridex.toml --dsn "duckdb:///:memory:" "SELECT 42"
 
 # List discovered plugins
@@ -94,11 +116,55 @@ teridex plugins list
 
 ---
 
+## 🎹 Keybindings
+
+Teridex provides a responsive, keyboard-driven interface with collision-free shortcuts.
+
+### Global Shortcuts
+
+Available everywhere across the application:
+
+| Key | Action | Description |
+| :--- | :--- | :--- |
+| `Ctrl+Enter` / `Ctrl+J` | Run Query | Execute SQL query in the active editor tab |
+| `Ctrl+B` | Cancel Query | Abort the running query without freezing the UI |
+| `Ctrl+P` | Command Palette | Open fuzzy command palette |
+| `Ctrl+T` | New Tab | Open a new SQL query editor tab |
+| `Ctrl+O` | Close Tab | Close the active query tab |
+| `Ctrl+R` | Refresh Schema | Refresh database catalog and schema tree |
+| `Ctrl+G` | Query History | Browse and re-run past queries |
+| `?` | Help | Show keyboard shortcuts modal |
+| `Ctrl+Q` | Quit | Exit Teridex |
+
+> [!NOTE]
+> Query cancellation is bound to `Ctrl+B` (break) and tab closing to `Ctrl+O` to avoid colliding with text editor controls (`Ctrl+C` for copying text and `Ctrl+W` for deleting words).
+
+### Results Grid Shortcuts
+
+Active when the query results table is focused:
+
+| Key | Action | Description |
+| :--- | :--- | :--- |
+| `Ctrl+Y` | Copy Cell | Copy selected cell value to clipboard |
+| `Ctrl+E` | Export CSV | Export current query result set to CSV file |
+
+### Vim Keymap Mode
+
+Set `keymap = "vim"` in `config.toml` (or `TERIDEX_UI__KEYMAP="vim"`) to enable Vim-style navigation:
+
+| Key | Action | Description |
+| :--- | :--- | :--- |
+| `:` | Command Palette | Open fuzzy command palette (Ex command) |
+| `gg` | Editor Top | Move cursor to the top of the editor |
+| `G` (`Shift+G`) | Editor Bottom | Move cursor to the bottom of the editor |
+
+---
+
 ## ⚙️ Configuration
 
 Teridex configuration is loaded in layers: **Defaults ➡️ TOML Configuration ➡️ Environment Variables ➡️ CLI Flags**.
 
-This applies to `teridex tui`, `teridex run` and `teridex connect` alike — each accepts `--config` to point at a specific file.
+This applies to `teridex tui`, `teridex run`, and `teridex connect` alike — each accepts `--config` to point to a specific file.
 
 The default configuration file is searched at `~/.config/teridex/config.toml`. The configuration file must have secure permissions (e.g., `0600`) if it contains credentials.
 
@@ -108,16 +174,18 @@ Here is an example config file (see [config.example.toml](config.example.toml)):
 [ui]
 theme = "monokai"               # Theme: "monokai" (warm) | "nord" (cool)
 keymap = "default"              # Keymap: "default" | "vim"
-row_batch_size = 1000           # Query result batch loading size
-max_display_rows = 10000        # Caps rows stored in results view
+row_batch_size = 1000           # Query result batch loading size (10 to 100,000)
+max_display_rows = 10000        # Caps rows stored in results view (0 for unlimited)
 
 [engine]
-default_timeout_seconds = 60.0  # Soft limit for query runs
-max_history_entries = 1000      # Max CLI query history entries
-pool_size = 5                   # Connection pool size
+default_timeout_seconds = 60.0  # Soft limit for query runs (seconds)
+max_history_entries = 1000      # Max CLI query history entries (min 10)
+pool_size = 5                   # Connection pool size (1 to 64)
+history_path = "~/.local/share/teridex/history.db"  # Query history database path
 
 [logging]
 level = "INFO"                  # Log level: DEBUG | INFO | WARNING | ERROR
+json_lines = false              # Emit JSON logs (auto-selects JSON in non-TTY/Docker)
 
 [plugins]
 enabled = []                    # Allowlist (empty loads all discovered)
@@ -136,8 +204,11 @@ export TERIDEX_UI__THEME="nord"
 # Override keymap to vim
 export TERIDEX_UI__KEYMAP="vim"
 
-# Cap every query at 10 seconds, in the TUI and the CLI alike
+# Cap every query at 10 seconds, across TUI and CLI
 export TERIDEX_ENGINE__DEFAULT_TIMEOUT_SECONDS=10
+
+# Set default connection DSN
+export TERIDEX_DSN="postgres://user:pass@localhost:5432/my_db"
 ```
 
 ---
