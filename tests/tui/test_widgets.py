@@ -10,7 +10,7 @@ from rich.cells import cell_len  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.widgets import Static  # noqa: E402
 
-from teridex_tui.keymaps import key_label  # noqa: E402
+from teridex_tui.keymaps import ACTION_TO_KEY, key_label  # noqa: E402
 from teridex_tui.widgets.action_bar import ActionBar  # noqa: E402
 from teridex_tui.widgets.status_bar import StatusBar  # noqa: E402
 
@@ -152,3 +152,45 @@ def test_status_bar_never_parses_its_message_as_markup() -> None:
     bar = StatusBar()
     bar.notify_status(hostile, "error")
     assert hostile in bar.render().plain
+
+
+# ---- the footer must not hide the status on a normal terminal ----
+
+
+@pytest.mark.parametrize("width", [200, 140, 120, 104, 90, 80, 60])
+async def test_status_survives_a_narrow_terminal(width: int) -> None:
+    """Hints are dropped before the status is.
+
+    The full hint list was rendered first and the status right-aligned after
+    it, so below about 140 columns the status — every error message included —
+    was pushed off the right edge. An 80-column terminal is ordinary.
+    """
+    bar = StatusBar()
+    async with _Harness(bar).run_test(size=(width, 5)) as pilot:
+        bar.notify_status('Query failed: near "FROM": syntax error', "error")
+        await pilot.pause()
+        rendered = bar.render().plain
+        assert "Query failed" in rendered[: width - 2], "status pushed off-screen"
+        assert cell_len(rendered) <= width - 2, "footer overflowed its width"
+
+
+async def test_a_wide_terminal_still_shows_every_hint() -> None:
+    """Trimming must only kick in when the space is actually short."""
+    bar = StatusBar()
+    async with _Harness(bar).run_test(size=(220, 5)) as pilot:
+        bar.notify_status("ok", "success")
+        await pilot.pause()
+        rendered = bar.render().plain
+        for action, label in (("quit", "Quit"), ("cancel_query", "Cancel"), ("help", "Help")):
+            assert f"{key_label(ACTION_TO_KEY[action])} {label}" in rendered
+
+
+async def test_hints_are_dropped_from_the_right() -> None:
+    """The leftmost hints are the most important, so they survive longest."""
+    bar = StatusBar()
+    async with _Harness(bar).run_test(size=(70, 5)) as pilot:
+        bar.notify_status("connecting…")
+        await pilot.pause()
+        rendered = bar.render().plain
+        assert f"{key_label(ACTION_TO_KEY['quit'])} Quit" in rendered
+        assert "Palette" not in rendered

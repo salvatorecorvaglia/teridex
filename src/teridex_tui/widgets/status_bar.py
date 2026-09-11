@@ -104,19 +104,37 @@ class StatusBar(Static):
         self.message = message
         self.severity = severity
 
-    def _shortcuts(self) -> Content:
+    def _shortcuts(self, max_cells: int) -> Content:
+        """Render as many shortcut hints as fit in *max_cells*.
+
+        The hints are the *less* important half of the bar. They used to be
+        rendered in full and the status right-aligned after them, so on any
+        terminal narrower than about 140 columns the status — including every
+        error message — was pushed off the right edge and simply not shown. An
+        80-column terminal is ordinary, so that was most of them. Hints are
+        dropped from the right until the status fits.
+        """
         bindings = (
             _footer_bindings(_VIM_FOOTER_ACTIONS, VIM_ACTION_TO_KEY)
             if self.mode == "VIM"
             else _footer_bindings(_DEFAULT_FOOTER_ACTIONS, ACTION_TO_KEY)
         )
         parts: list[Any] = []
+        used = 0
         if self.mode and self.mode != "NORMAL":
-            parts.extend(((f" {self.mode} ", "bold reverse"), "  "))
+            badge = f" {self.mode} "
+            if len(badge) + 2 <= max_cells:
+                parts.extend(((badge, "bold reverse"), "  "))
+                used += len(badge) + 2
         for index, (key, desc) in enumerate(bindings):
-            if index:
-                parts.append("  ")
+            gap = "  " if index else ""
+            hint = f"{key} {desc}"
+            if used + len(gap) + len(hint) > max_cells:
+                break
+            if gap:
+                parts.append(gap)
             parts.extend(((key, "bold"), f" {desc}"))
+            used += len(gap) + len(hint)
         return Content.assemble(*parts)
 
     def _status(self) -> Content:
@@ -133,12 +151,14 @@ class StatusBar(Static):
         return Content.assemble(*parts)
 
     def render(self) -> Content:
-        shortcuts = self._shortcuts()
-        status = self._status()
         # Measured in terminal cells, not characters: the labels carry glyphs
         # like ``^↵`` whose rendered width is not their ``len()``.
         width = self.size.width or 80
         available = width - 2  # account for padding
+        # The status wins the space. Whatever is left over goes to the hints,
+        # minus a two-cell gap so they never touch.
+        status = self._status()
+        shortcuts = self._shortcuts(max(available - status.cell_length - 2, 0))
         padding_len = available - shortcuts.cell_length - status.cell_length
         separator = " " * padding_len if padding_len > 0 else "  "
         return Content.assemble(shortcuts, separator, status)
