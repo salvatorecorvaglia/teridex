@@ -64,7 +64,7 @@ jobs:
       - name: Test (pytest + coverage gate)
         run: ./tests/scripts/test.sh
         env:
-          TERIDEX_TEST_MARKERS: ${{ matrix.os == 'ubuntu-latest' && 'integration or not integration' || 'not integration' }}
+          REGISTRO_TEST_MARKERS: ${{ matrix.os == 'ubuntu-latest' && 'integration or not integration' || 'not integration' }}
 
   dependency-review:
     name: Dependency Review

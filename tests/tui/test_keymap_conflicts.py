@@ -1,9 +1,9 @@
 """App-level bindings must not be shadowed by the widget that has focus.
 
 Textual resolves a key from the focused widget upward, so an app-level binding
-loses to any binding the focused widget declares for the same key. Teridex is a
+loses to any binding the focused widget declares for the same key. Registro is a
 SQL editor: the editor has focus most of the time, and ``TextArea`` claims a
-generous slice of the ``ctrl+`` space. Four Teridex bindings sat squarely on
+generous slice of the ``ctrl+`` space. Four Registro bindings sat squarely on
 top of it — ``ctrl+c`` (cancel query vs. copy), ``ctrl+e`` (export vs. line
 end), ``ctrl+w`` (close tab vs. delete word), ``ctrl+y`` (copy cell vs. redo) —
 so those keys silently did the editor's thing instead, while the help modal
@@ -25,11 +25,11 @@ textual = pytest.importorskip("textual")
 
 from textual.widgets import DataTable, Input, TextArea  # noqa: E402
 
-from teridex_tui.keymaps.default import (  # noqa: E402
+from registro_tui.keymaps.default import (  # noqa: E402
     GLOBAL_BINDINGS,
     RESULTS_BINDINGS,
 )
-from teridex_tui.keymaps.vim import VIM_BINDINGS  # noqa: E402
+from registro_tui.keymaps.vim import VIM_BINDINGS  # noqa: E402
 
 
 def _declared_keys(widget_cls: type) -> set[str]:
@@ -103,11 +103,11 @@ def test_the_two_scopes_do_not_overlap() -> None:
 
 def test_every_action_is_reachable_from_the_keymap() -> None:
     """Guards against a binding that names an action the app does not implement."""
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
 
     for key, action, _desc in (*GLOBAL_BINDINGS, *RESULTS_BINDINGS):
-        assert hasattr(TeridexApp, f"action_{action}"), (
-            f"{key!r} is bound to {action!r}, but TeridexApp has no action_{action}"
+        assert hasattr(RegistroApp, f"action_{action}"), (
+            f"{key!r} is bound to {action!r}, but RegistroApp has no action_{action}"
         )
 
 
@@ -122,11 +122,11 @@ async def test_cancel_key_reaches_the_app_while_the_editor_has_focus() -> None:
     not via a subclass: ``CSS_PATH`` resolves relative to the defining module,
     so a subclass declared in a test file cannot find the stylesheet.
     """
-    from teridex_core.config import TeridexConfig  # noqa: PLC0415
-    from teridex_core.models.connection import Dsn  # noqa: PLC0415
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
-    from teridex_tui.keymaps.default import ACTION_TO_KEY  # noqa: PLC0415
-    from teridex_tui.widgets.sql_editor import SqlEditor  # noqa: PLC0415
+    from registro_core.config import RegistroConfig  # noqa: PLC0415
+    from registro_core.models.connection import Dsn  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
+    from registro_tui.keymaps.default import ACTION_TO_KEY  # noqa: PLC0415
+    from registro_tui.widgets.sql_editor import SqlEditor  # noqa: PLC0415
 
     fired = False
 
@@ -134,7 +134,7 @@ async def test_cancel_key_reaches_the_app_while_the_editor_has_focus() -> None:
         nonlocal fired
         fired = True
 
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -152,11 +152,11 @@ async def test_cancel_key_reaches_the_app_while_the_editor_has_focus() -> None:
 
 async def test_results_bindings_bubble_to_the_app_actions() -> None:
     """Bindings declared on ResultsTable resolve against the app's action methods."""
-    from teridex_core.config import TeridexConfig  # noqa: PLC0415
-    from teridex_core.models.connection import Dsn  # noqa: PLC0415
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
-    from teridex_tui.keymaps.default import RESULTS_BINDINGS  # noqa: PLC0415
-    from teridex_tui.widgets.results_table import ResultsTable  # noqa: PLC0415
+    from registro_core.config import RegistroConfig  # noqa: PLC0415
+    from registro_core.models.connection import Dsn  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
+    from registro_tui.keymaps.default import RESULTS_BINDINGS  # noqa: PLC0415
+    from registro_tui.widgets.results_table import ResultsTable  # noqa: PLC0415
 
     fired: list[str] = []
 
@@ -166,7 +166,7 @@ async def test_results_bindings_bubble_to_the_app_actions() -> None:
     async def _fake_export() -> None:
         fired.append("export_csv")
 
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -198,14 +198,14 @@ async def test_cancel_key_dispatches_while_a_query_is_streaming() -> None:
     The stream is parked mid-flight here rather than relying on a query that
     happens to be slow, so the test states the property instead of racing it.
     """
-    from teridex_core.config import TeridexConfig  # noqa: PLC0415
-    from teridex_core.models.connection import Dsn  # noqa: PLC0415
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
-    from teridex_tui.keymaps.default import ACTION_TO_KEY  # noqa: PLC0415
-    from teridex_tui.widgets.results_table import ResultsTable  # noqa: PLC0415
-    from teridex_tui.widgets.sql_editor import SqlEditor  # noqa: PLC0415
+    from registro_core.config import RegistroConfig  # noqa: PLC0415
+    from registro_core.models.connection import Dsn  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
+    from registro_tui.keymaps.default import ACTION_TO_KEY  # noqa: PLC0415
+    from registro_tui.widgets.results_table import ResultsTable  # noqa: PLC0415
+    from registro_tui.widgets.sql_editor import SqlEditor  # noqa: PLC0415
 
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()

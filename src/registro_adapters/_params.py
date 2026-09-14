@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from teridex_core.errors import AdapterConnectionError
+from registro_core.errors import AdapterConnectionError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Mapping

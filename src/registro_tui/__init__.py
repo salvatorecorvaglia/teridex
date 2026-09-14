@@ -1,5 +1,5 @@
-"""Teridex Textual TUI."""
+"""Registro Textual TUI."""
 
-from teridex_tui.app import TeridexApp
+from registro_tui.app import RegistroApp
 
-__all__ = ["TeridexApp"]
+__all__ = ["RegistroApp"]

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_adapters._introspect import SchemaIntrospector
-from teridex_core.models.schema import ForeignKey, Index, Table, TableColumn, View
+from registro_adapters._introspect import SchemaIntrospector
+from registro_core.models.schema import ForeignKey, Index, Table, TableColumn, View
 
 
 def _col(name: str) -> TableColumn:

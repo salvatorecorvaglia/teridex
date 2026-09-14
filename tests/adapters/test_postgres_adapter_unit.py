@@ -8,10 +8,10 @@ pytest.importorskip("asyncpg")
 
 import asyncpg
 
-from teridex_adapters.postgres_adapter import PostgresAdapter
-from teridex_core.errors import AdapterConnectionError, AdapterError, QueryError
-from teridex_core.models.connection import Dsn
-from teridex_core.models.query import QueryHandle, QueryStatus
+from registro_adapters.postgres_adapter import PostgresAdapter
+from registro_core.errors import AdapterConnectionError, AdapterError, QueryError
+from registro_core.models.connection import Dsn
+from registro_core.models.query import QueryHandle, QueryStatus
 
 
 def _adapter_with_statement(stmt: MagicMock) -> PostgresAdapter:
@@ -170,7 +170,7 @@ async def test_unknown_dsn_parameters_are_refused_before_connecting() -> None:
 async def test_known_dsn_parameters_pass_validation() -> None:
     """An allowlisted parameter must reach the driver, not be rejected here."""
     adapter = PostgresAdapter()
-    dsn = Dsn.parse("postgres://u:p@localhost:5432/db?sslmode=require&application_name=teridex")
+    dsn = Dsn.parse("postgres://u:p@localhost:5432/db?sslmode=require&application_name=registro")
 
     # Validation passes, so the failure comes from the connection attempt.
     with pytest.raises(AdapterConnectionError, match="connection failed"):

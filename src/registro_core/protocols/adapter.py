@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-    from teridex_core.models.connection import Dsn
-    from teridex_core.models.query import QueryHandle, QueryMetadata
-    from teridex_core.models.result import ResultBatch
-    from teridex_core.models.schema import (
+    from registro_core.models.connection import Dsn
+    from registro_core.models.query import QueryHandle, QueryMetadata
+    from registro_core.models.result import ResultBatch
+    from registro_core.models.schema import (
         ForeignKey,
         Index,
         SchemaSnapshot,
@@ -30,7 +30,7 @@ class Transaction(Protocol):
 class DatabaseAdapter(Protocol):
     """Protocol for an async database adapter.
 
-    Implementations live in ``teridex_adapters`` and are looked up by URL
+    Implementations live in ``registro_adapters`` and are looked up by URL
     scheme via the adapter registry.
     """
 

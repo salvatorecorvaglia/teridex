@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_adapters.registry import reset_default_registry
+from registro_adapters.registry import reset_default_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

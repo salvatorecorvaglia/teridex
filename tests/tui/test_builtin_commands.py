@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from teridex_tui.builtin_commands import BUILTIN_COMMANDS
-from teridex_tui.keymaps.default import GLOBAL_BINDINGS, RESULTS_BINDINGS
+from registro_tui.builtin_commands import BUILTIN_COMMANDS
+from registro_tui.keymaps.default import GLOBAL_BINDINGS, RESULTS_BINDINGS
 
 # Both scopes: the palette advertises results-grid keys too, so a guard that
 # only knew about the global ones would call a correct hint a drift.

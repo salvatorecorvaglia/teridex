@@ -5,20 +5,20 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
-from teridex_core.events import (
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
+from registro_core.events import (
     EventBus,
     QueryCancelled,
     QueryCompleted,
     QueryFailed,
     QueryStarted,
 )
-from teridex_core.logging import _request_context, bind_context, clear_context
-from teridex_core.models.connection import Dsn
-from teridex_core.models.query import QueryHandle, QueryStatus
-from teridex_core.models.result import Column, ResultBatch
-from teridex_engine.executor import QueryExecutor
+from registro_core.logging import _request_context, bind_context, clear_context
+from registro_core.models.connection import Dsn
+from registro_core.models.query import QueryHandle, QueryStatus
+from registro_core.models.result import Column, ResultBatch
+from registro_engine.executor import QueryExecutor
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -294,7 +294,7 @@ async def test_timeout_aborts_the_run_and_cancels_the_query() -> None:
         if failed:
             break
     assert failed, "a timed-out query published no failure event"
-    assert failed[0].error_code == "teridex.query.timeout"
+    assert failed[0].error_code == "registro.query.timeout"
     await bus.close()
 
 

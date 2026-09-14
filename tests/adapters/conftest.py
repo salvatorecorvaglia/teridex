@@ -2,7 +2,7 @@
 
 Postgres and MySQL need a real server. Two ways to get one, in order:
 
-1. ``TERIDEX_PG_DSN`` / ``TERIDEX_MYSQL_DSN`` — point at your own server
+1. ``REGISTRO_PG_DSN`` / ``REGISTRO_MYSQL_DSN`` — point at your own server
    (``tests/scripts/test-integration.sh`` brings up ``docker/docker-compose.yml``
    and exports these).
 2. testcontainers — started automatically when a Docker daemon is reachable.
@@ -46,12 +46,12 @@ def _normalize(url: str) -> str:
 
 @pytest.fixture(scope="session")
 def postgres_dsn() -> Iterator[str]:
-    env = os.getenv("TERIDEX_PG_DSN", "")
+    env = os.getenv("REGISTRO_PG_DSN", "")
     if env:
         yield env
         return
     if not _docker_available():
-        pytest.skip("no TERIDEX_PG_DSN and no Docker daemon for testcontainers")
+        pytest.skip("no REGISTRO_PG_DSN and no Docker daemon for testcontainers")
     try:
         from testcontainers.community.postgres import PostgresContainer  # noqa: PLC0415
     except ImportError:
@@ -63,12 +63,12 @@ def postgres_dsn() -> Iterator[str]:
 
 @pytest.fixture(scope="session")
 def mysql_dsn() -> Iterator[str]:
-    env = os.getenv("TERIDEX_MYSQL_DSN", "")
+    env = os.getenv("REGISTRO_MYSQL_DSN", "")
     if env:
         yield env
         return
     if not _docker_available():
-        pytest.skip("no TERIDEX_MYSQL_DSN and no Docker daemon for testcontainers")
+        pytest.skip("no REGISTRO_MYSQL_DSN and no Docker daemon for testcontainers")
     try:
         from testcontainers.community.mysql import MySqlContainer  # noqa: PLC0415
     except ImportError:

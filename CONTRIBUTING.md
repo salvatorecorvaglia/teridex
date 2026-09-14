@@ -1,12 +1,12 @@
-# Contributing to Teridex 📟
+# Contributing to Registro 📟
 
-Thank you for your interest in contributing to **Teridex**! We welcome contributions, bug reports, feature requests, and security improvements from the community.
+Thank you for your interest in contributing to **Registro**! We welcome contributions, bug reports, feature requests, and security improvements from the community.
 
 ---
 
 ## 🛠️ Development Setup
 
-Teridex uses [uv](https://github.com/astral-sh/uv) for fast, modern Python package management and workflow orchestration.
+Registro uses [uv](https://github.com/astral-sh/uv) for fast, modern Python package management and workflow orchestration.
 
 ### Prerequisites
 
@@ -17,8 +17,8 @@ Teridex uses [uv](https://github.com/astral-sh/uv) for fast, modern Python packa
 
 1. **Fork and Clone the Repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/teridex.git
-   cd teridex
+   git clone https://github.com/YOUR_USERNAME/registro.git
+   cd registro
    ```
 
 2. **Synchronize Dependencies**
@@ -105,15 +105,15 @@ Before submitting any Pull Request, ensure that formatting, linting, type-checki
 
 ## 🔌 Writing Plugins
 
-Teridex features an extensible, plugin-first architecture. You can contribute new plugins or create external plugins to add dockable panels, custom commands, and event listeners.
+Registro features an extensible, plugin-first architecture. You can contribute new plugins or create external plugins to add dockable panels, custom commands, and event listeners.
 
 ### Plugin Protocol
 
-A Teridex plugin implements the structural `Plugin` protocol (`teridex_core.protocols.plugin.Plugin`):
+A Registro plugin implements the structural `Plugin` protocol (`registro_core.protocols.plugin.Plugin`):
 
 ```python
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.context import PluginContext
+from registro_core.protocols.plugin import PluginManifest
+from registro_plugins.context import PluginContext
 
 
 class MyPlugin:
@@ -121,7 +121,7 @@ class MyPlugin:
         id="my_plugin",
         name="My Plugin",
         version="1.0.0",
-        description="A custom Teridex plugin",
+        description="A custom Registro plugin",
     )
 
     def on_load(self, ctx: PluginContext) -> None:
@@ -135,21 +135,21 @@ class MyPlugin:
 
 ### Packaging & Discovery
 
-Plugins are discovered dynamically via Python entry points in the `teridex.plugins` group. Add the following to your `pyproject.toml`:
+Plugins are discovered dynamically via Python entry points in the `registro.plugins` group. Add the following to your `pyproject.toml`:
 
 ```toml
-[project.entry-points."teridex.plugins"]
+[project.entry-points."registro.plugins"]
 my_plugin = "my_package.plugin:MyPlugin"
 ```
 
-You can verify that Teridex discovers your plugin by running:
+You can verify that Registro discovers your plugin by running:
 ```bash
-teridex plugins list
+registro plugins list
 ```
 
 ### Subscribing to Event Bus Hooks
 
-Plugins can subscribe to asynchronous lifecycle events on the `EventBus`. Key events defined in [events.py](src/teridex_core/events.py) include:
+Plugins can subscribe to asynchronous lifecycle events on the `EventBus`. Key events defined in [events.py](src/registro_core/events.py) include:
 
 - `ConnectionOpened` / `ConnectionClosed`
 - `QueryStarted` / `QueryProgress` / `QueryCompleted` / `QueryFailed` / `QueryCancelled`
@@ -159,9 +159,9 @@ Plugins can subscribe to asynchronous lifecycle events on the `EventBus`. Key ev
 The `@hook` decorator tags a method with the target event name. In `on_load`, subscribe your handler to the event class via `ctx.subscribe`:
 
 ```python
-from teridex_core.events import QueryStarted
-from teridex_plugins.api import hook, hook_event, is_hook
-from teridex_plugins.context import PluginContext
+from registro_core.events import QueryStarted
+from registro_plugins.api import hook, hook_event, is_hook
+from registro_plugins.context import PluginContext
 
 
 class QueryLoggerPlugin:
@@ -188,8 +188,8 @@ Plugins can contribute actions to the fuzzy command palette (`Ctrl+P`) and docka
 
 ```python
 from textual.widgets import Static
-from teridex_plugins.api import Command, Panel
-from teridex_plugins.context import PluginContext
+from registro_plugins.api import Command, Panel
+from registro_plugins.context import PluginContext
 
 
 class AnalyticsPlugin:

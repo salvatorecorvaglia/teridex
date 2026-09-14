@@ -8,30 +8,30 @@ from urllib.parse import urlencode
 
 import aiosqlite
 
-from teridex_adapters._params import coerce_params
-from teridex_adapters._typeinfer import infer_column_type_from_value
-from teridex_adapters.base import AbstractAdapter, connection_id
-from teridex_adapters.introspect.sqlite import SQLiteIntrospector
-from teridex_core.errors import (
+from registro_adapters._params import coerce_params
+from registro_adapters._typeinfer import infer_column_type_from_value
+from registro_adapters.base import AbstractAdapter, connection_id
+from registro_adapters.introspect.sqlite import SQLiteIntrospector
+from registro_core.errors import (
     AdapterConnectionError,
     AdapterError,
     QueryCancelledError,
 )
-from teridex_core.logging import get_logger
-from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
-from teridex_core.models.result import Column, ColumnType, ResultBatch
+from registro_core.logging import get_logger
+from registro_core.models.query import QueryHandle, QueryMetadata, QueryStatus
+from registro_core.models.result import Column, ColumnType, ResultBatch
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping, Sequence
 
-    from teridex_core.models.connection import Dsn
-    from teridex_core.models.schema import (
+    from registro_core.models.connection import Dsn
+    from registro_core.models.schema import (
         ForeignKey,
         Index,
         SchemaSnapshot,
         TableColumn,
     )
-    from teridex_core.protocols.adapter import Transaction
+    from registro_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 

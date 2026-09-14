@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from textual.widgets import TabbedContent, TabPane
 
-from teridex_tui.widgets.sql_editor import SqlEditor
+from registro_tui.widgets.sql_editor import SqlEditor
 
 
 class QueryTabs(TabbedContent):

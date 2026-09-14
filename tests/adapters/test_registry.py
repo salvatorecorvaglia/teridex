@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_adapters.registry import (
+from registro_adapters.registry import (
     create_adapter_for_dsn,
     default_registry,
     reset_default_registry,
 )
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.errors import AdapterError
-from teridex_core.models.connection import Dsn
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.errors import AdapterError
+from registro_core.models.connection import Dsn
 
 
 def test_registry_has_known_adapters() -> None:
@@ -77,7 +77,7 @@ def test_a_missing_driver_is_skipped_not_fatal(monkeypatch: pytest.MonkeyPatch) 
     real_import = builtins.__import__
 
     def _no_duckdb(name: str, *args: object, **kwargs: object) -> object:
-        if name.startswith("teridex_adapters.duckdb_adapter"):
+        if name.startswith("registro_adapters.duckdb_adapter"):
             raise ImportError("duckdb not installed")
         return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
 

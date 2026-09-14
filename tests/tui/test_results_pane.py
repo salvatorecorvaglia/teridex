@@ -8,14 +8,14 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
 
 
 @pytest.mark.asyncio
 async def test_query_with_rows_sets_count_subtitle(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -36,7 +36,7 @@ async def test_query_with_rows_sets_count_subtitle(tmp_path) -> None:  # type: i
 
 @pytest.mark.asyncio
 async def test_query_with_no_rows_sets_empty_subtitle() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -58,7 +58,7 @@ async def test_query_with_no_rows_sets_empty_subtitle() -> None:
 @pytest.mark.asyncio
 async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -72,7 +72,7 @@ async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: i
         await app.workers.wait_for_complete()
         await pilot.pause()
         await app.action_export_csv()
-        exports = list((tmp_path / ".teridex" / "exports").glob("export-*.csv"))
+        exports = list((tmp_path / ".registro" / "exports").glob("export-*.csv"))
         assert len(exports) == 1
         with exports[0].open() as f:
             rows = list(csv.reader(f))
@@ -82,7 +82,7 @@ async def test_export_csv_writes_rows(tmp_path, monkeypatch) -> None:  # type: i
 
 @pytest.mark.asyncio
 async def test_query_with_duplicate_columns() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -113,7 +113,7 @@ async def test_run_summary_lands_on_the_bordered_panel() -> None:
     row count was visible only while the grid happened to be focused. The
     bordered, titled container is its parent, ``#results-panel``.
     """
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -134,7 +134,7 @@ async def test_run_summary_lands_on_the_bordered_panel() -> None:
 
 @pytest.mark.asyncio
 async def test_a_new_run_clears_the_previous_summary() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()

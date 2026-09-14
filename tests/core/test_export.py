@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_core.export import csv_safe_cell, csv_safe_row
+from registro_core.export import csv_safe_cell, csv_safe_row
 
 
 @pytest.mark.parametrize(

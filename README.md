@@ -1,8 +1,8 @@
-# Teridex 📟
+# Registro 📟
 
 **A terminal-first database workspace for modern engineers**
 
-**Teridex** is a TUI database client built on a clean async core and a plugin-first architecture. It combines a rich query editor, lazy schema browser, virtualized result tables, and a fuzzy command palette — all inside your terminal.
+**Registro** is a TUI database client built on a clean async core and a plugin-first architecture. It combines a rich query editor, lazy schema browser, virtualized result tables, and a fuzzy command palette — all inside your terminal.
 
 ---
 
@@ -18,7 +18,7 @@
 
 ## 🗄️ Supported Databases
 
-Teridex is database-agnostic and loads drivers dynamically via optional extras.
+Registro is database-agnostic and loads drivers dynamically via optional extras.
 
 | Database | Extra | Adapter Protocol | Details |
 | :--- | :--- | :--- | :--- |
@@ -32,23 +32,23 @@ Teridex is database-agnostic and loads drivers dynamically via optional extras.
 
 ## 🚀 Installation
 
-Teridex requires **Python 3.13 or newer**. It is recommended to install using `pipx` or `uv` to keep dependencies isolated.
+Registro requires **Python 3.13 or newer**. It is recommended to install using `pipx` or `uv` to keep dependencies isolated.
 
 ### Using `uv` (Recommended)
 
 ```bash
 # Install with all database drivers
-uv tool install "teridex[all]"
+uv tool install "registro[all]"
 
 # Install with PostgreSQL and SQLite support only
-uv tool install "teridex[postgres,sqlite]"
+uv tool install "registro[postgres,sqlite]"
 ```
 
 ### Using `pipx`
 
 ```bash
 # Install with DuckDB support
-pipx install "teridex[duckdb]"
+pipx install "registro[duckdb]"
 ```
 
 ---
@@ -62,7 +62,7 @@ You can run queries one-shot from the shell or jump into the interactive termina
 Use the `run` command to execute a single query. By default, results render as a styled Rich table:
 
 ```bash
-teridex run --dsn "sqlite:///./my_database.db" "SELECT * FROM users LIMIT 5"
+registro run --dsn "sqlite:///./my_database.db" "SELECT * FROM users LIMIT 5"
 ```
 
 #### Output Formats (`--format` / `-f`)
@@ -71,10 +71,10 @@ Format output as `table` (default), `csv`, or `json`. Machine-readable formats (
 
 ```bash
 # Export query results as clean CSV
-teridex run --dsn "duckdb:///:memory:" --format csv "SELECT 1 AS id, 'alice' AS name" > users.csv
+registro run --dsn "duckdb:///:memory:" --format csv "SELECT 1 AS id, 'alice' AS name" > users.csv
 
 # Pipe JSON output directly into jq
-teridex run --dsn "postgres://user:pass@localhost:5432/my_db" -f json "SELECT id, name FROM users" | jq '.[0]'
+registro run --dsn "postgres://user:pass@localhost:5432/my_db" -f json "SELECT id, name FROM users" | jq '.[0]'
 ```
 
 #### Additional Execution Options
@@ -89,36 +89,36 @@ Launch the full interactive terminal user interface:
 
 ```bash
 # Connect directly to a database
-teridex tui --dsn "postgres://user:pass@localhost:5432/my_db"
+registro tui --dsn "postgres://user:pass@localhost:5432/my_db"
 
 # Or launch without a DSN to open the interactive connection dialog
-teridex tui
+registro tui
 ```
 
 ### Command Reference
 
 ```bash
 # Display help and options
-teridex --help
+registro --help
 
 # Print version and discovered database adapters
-teridex version
+registro version
 
 # Sanity check database connection
-teridex connect --dsn "mysql://root:secret@127.0.0.1/test"
+registro connect --dsn "mysql://root:secret@127.0.0.1/test"
 
 # Use a specific config file across commands
-teridex run --config ./teridex.toml --dsn "duckdb:///:memory:" "SELECT 42"
+registro run --config ./registro.toml --dsn "duckdb:///:memory:" "SELECT 42"
 
 # List discovered plugins
-teridex plugins list
+registro plugins list
 ```
 
 ---
 
 ## 🎹 Keybindings
 
-Teridex provides a responsive, keyboard-driven interface with collision-free shortcuts.
+Registro provides a responsive, keyboard-driven interface with collision-free shortcuts.
 
 ### Global Shortcuts
 
@@ -134,7 +134,7 @@ Available everywhere across the application:
 | `Ctrl+R` | Refresh Schema | Refresh database catalog and schema tree |
 | `Ctrl+G` | Query History | Browse and re-run past queries |
 | `?` | Help | Show keyboard shortcuts modal |
-| `Ctrl+Q` | Quit | Exit Teridex |
+| `Ctrl+Q` | Quit | Exit Registro |
 
 > [!NOTE]
 > Query cancellation is bound to `Ctrl+B` (break) and tab closing to `Ctrl+O` to avoid colliding with text editor controls (`Ctrl+C` for copying text and `Ctrl+W` for deleting words).
@@ -150,7 +150,7 @@ Active when the query results table is focused:
 
 ### Vim Keymap Mode
 
-Set `keymap = "vim"` in `config.toml` (or `TERIDEX_UI__KEYMAP="vim"`) to enable Vim-style navigation:
+Set `keymap = "vim"` in `config.toml` (or `REGISTRO_UI__KEYMAP="vim"`) to enable Vim-style navigation:
 
 | Key | Action | Description |
 | :--- | :--- | :--- |
@@ -162,11 +162,11 @@ Set `keymap = "vim"` in `config.toml` (or `TERIDEX_UI__KEYMAP="vim"`) to enable 
 
 ## ⚙️ Configuration
 
-Teridex configuration is loaded in layers: **Defaults ➡️ TOML Configuration ➡️ Environment Variables ➡️ CLI Flags**.
+Registro configuration is loaded in layers: **Defaults ➡️ TOML Configuration ➡️ Environment Variables ➡️ CLI Flags**.
 
-This applies to `teridex tui`, `teridex run`, and `teridex connect` alike — each accepts `--config` to point to a specific file.
+This applies to `registro tui`, `registro run`, and `registro connect` alike — each accepts `--config` to point to a specific file.
 
-The default configuration file is searched at `~/.config/teridex/config.toml`. The configuration file must have secure permissions (e.g., `0600`) if it contains credentials.
+The default configuration file is searched at `~/.config/registro/config.toml`. The configuration file must have secure permissions (e.g., `0600`) if it contains credentials.
 
 Here is an example config file (see [config.example.toml](config.example.toml)):
 
@@ -181,7 +181,7 @@ max_display_rows = 10000        # Caps rows stored in results view (0 for unlimi
 default_timeout_seconds = 60.0  # Soft limit for query runs (seconds)
 max_history_entries = 1000      # Max CLI query history entries (min 10)
 pool_size = 5                   # Connection pool size (1 to 64)
-history_path = "~/.local/share/teridex/history.db"  # Query history database path
+history_path = "~/.local/share/registro/history.db"  # Query history database path
 
 [logging]
 level = "INFO"                  # Log level: DEBUG | INFO | WARNING | ERROR
@@ -194,21 +194,21 @@ disabled = []                   # Blocklist
 
 ### Environment Overrides
 
-Any configuration value can be overridden via environment variables using the pattern `TERIDEX_<SECTION>__<FIELD>`.
+Any configuration value can be overridden via environment variables using the pattern `REGISTRO_<SECTION>__<FIELD>`.
 
 Examples:
 ```bash
 # Override the UI theme
-export TERIDEX_UI__THEME="nord"
+export REGISTRO_UI__THEME="nord"
 
 # Override keymap to vim
-export TERIDEX_UI__KEYMAP="vim"
+export REGISTRO_UI__KEYMAP="vim"
 
 # Cap every query at 10 seconds, across TUI and CLI
-export TERIDEX_ENGINE__DEFAULT_TIMEOUT_SECONDS=10
+export REGISTRO_ENGINE__DEFAULT_TIMEOUT_SECONDS=10
 
 # Set default connection DSN
-export TERIDEX_DSN="postgres://user:pass@localhost:5432/my_db"
+export REGISTRO_DSN="postgres://user:pass@localhost:5432/my_db"
 ```
 
 ---

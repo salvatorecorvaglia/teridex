@@ -64,14 +64,14 @@ config.toml
 # Docker (local overrides)
 docker-compose.override.yml
 
-# Teridex (project-specific runtime & storage)
+# Registro (project-specific runtime & storage)
 *.db
 *.sqlite
 *.sqlite3
 *.duckdb
 *.log
-teridex.log
-.teridex/
+registro.log
+.registro/
 scratch/
 
 # IDEs and Editors

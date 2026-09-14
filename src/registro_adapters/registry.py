@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from teridex_core.errors import AdapterError
+from registro_core.errors import AdapterError
 
 if TYPE_CHECKING:
-    from teridex_adapters.base import AbstractAdapter
-    from teridex_core.models.connection import Dsn
+    from registro_adapters.base import AbstractAdapter
+    from registro_core.models.connection import Dsn
 
 
 class AdapterRegistry:
@@ -50,25 +50,25 @@ def _build_default() -> AdapterRegistry:
     # Lazy imports so unused-driver modules don't crash on missing extras.
     # PLC0415 intentionally suppressed — each driver is an optional extra.
     try:
-        from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: PLC0415
+        from registro_adapters.duckdb_adapter import DuckDBAdapter  # noqa: PLC0415
 
         reg.register(DuckDBAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.sqlite_adapter import SQLiteAdapter  # noqa: PLC0415
+        from registro_adapters.sqlite_adapter import SQLiteAdapter  # noqa: PLC0415
 
         reg.register(SQLiteAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.postgres_adapter import PostgresAdapter  # noqa: PLC0415
+        from registro_adapters.postgres_adapter import PostgresAdapter  # noqa: PLC0415
 
         reg.register(PostgresAdapter)
     except ImportError:
         pass
     try:
-        from teridex_adapters.mysql_adapter import MySQLAdapter  # noqa: PLC0415
+        from registro_adapters.mysql_adapter import MySQLAdapter  # noqa: PLC0415
 
         reg.register(MySQLAdapter)
     except ImportError:

@@ -17,12 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The run summary ("2 rows · display capped at 10000") moved from the results grid to `#results-panel`. `border_subtitle` only renders on a widget that has a border, and the grid has none except the one the `:focus` rule added — so the row count was visible only while the grid happened to be focused.
 - The Run Query button is no longer clipped. A Textual `Button` is three rows tall by default and the one-row action bar cut it to a single visible row.
 - Focus indication no longer reflows the layout. `:focus` rules *added* a border to widgets that had none, shifting their content by two rows and two columns on every focus change; those widgets' panels already signal focus by recolouring a border that is always there. One idiom throughout now.
-- Removed the permanently-static "Tx: Auto-Commit" label from the action bar. Nothing in the UI or CLI reaches `teridex_engine.transaction`, so the label implied a feature that is not wired up. The engine keeps its transaction support for plugins.
+- Removed the permanently-static "Tx: Auto-Commit" label from the action bar. Nothing in the UI or CLI reaches `registro_engine.transaction`, so the label implied a feature that is not wired up. The engine keeps its transaction support for plugins.
 - Dropped a dead `layer: overlay` declaration (no `layers:` is defined anywhere) and renamed the four PascalCase modal container ids to kebab-case, matching every other id in the stylesheet.
-- **`teridex run` and `teridex connect` now read the configuration file.** Neither ever called `load_config`, so `[engine] default_timeout_seconds`, `[logging] level` and every `TERIDEX_<section>__<field>` environment override applied to the TUI only — while the README documented the layering unconditionally. Both commands also accept `--config`, matching `tui`. `run --timeout` now defaults to `engine.default_timeout_seconds` instead of a hardcoded 60s; an explicit `--timeout` still wins, and `--timeout 0` still disables the timeout.
+- **`registro run` and `registro connect` now read the configuration file.** Neither ever called `load_config`, so `[engine] default_timeout_seconds`, `[logging] level` and every `REGISTRO_<section>__<field>` environment override applied to the TUI only — while the README documented the layering unconditionally. Both commands also accept `--config`, matching `tui`. `run --timeout` now defaults to `engine.default_timeout_seconds` instead of a hardcoded 60s; an explicit `--timeout` still wins, and `--timeout 0` still disables the timeout.
 - `ui.theme` is a `Literal["monokai", "nord"]` rather than a bare string. An unrecognized name used to fall back to monokai at render time, which looked like the setting being ignored; a typo is now a startup error. A test keeps the literal in step with the theme registry.
 - Configuration sections validate on assignment. Settings are mutated at runtime (the row-limit modal writes `ui.max_display_rows`), and those writes previously bypassed the field constraints that the same value would have hit coming from a config file.
-- `teridex run` reports rows *printed* separately from rows *read* when `--limit` truncates the output — it could previously print 2 rows under a caption reading "5 row(s)".
+- `registro run` reports rows *printed* separately from rows *read* when `--limit` truncates the output — it could previously print 2 rows under a caption reading "5 row(s)".
 - The per-adapter parameter-binding contract is documented on `DatabaseAdapter.execute`. Each adapter binds with its driver's native paramstyle (Postgres wants `{"1": v}`, MySQL `{"name": v}` for `%(name)s`, DuckDB `$name`, SQLite DB-API), so `params` is not portable across adapters. Documented rather than unified, which would break every caller.
 - **Breaking (keybindings):** four bindings sat on keys Textual's `TextArea` already claims, and the focused widget wins — so with the SQL editor focused, which is the normal state while working, those keys did the editor's thing and the app's action never fired. `Ctrl+C` in particular did nothing to cancel a query while the help modal explicitly promised it did.
   - `Cancel query` moved from `Ctrl+C` to `Ctrl+B` (`Ctrl+C` is copy in the editor, and Textual's own `Screen`/`App` bind it too).
@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-- DSN query parameters carrying credentials (`?password=`, `?auth_token=`, anything whose name contains `password`/`passwd`/`pwd`/`secret`/`token`/`credential`) are now redacted by `mask_dsn_password` and by `Dsn.render(mask_password=True)`. Only the userinfo segment (`scheme://user:pw@host`) was masked before, so a secret passed as a query parameter was written verbatim to `~/.teridex/teridex.log`, shown in the status bar, and persisted as the `connection_label` of every query in `~/.teridex/history.db`. File-path parameters (`sslkey`, `sslcert`, `sslrootcert`) are deliberately left legible — they are not secrets, and redacting them makes a TLS misconfiguration unreadable.
+- DSN query parameters carrying credentials (`?password=`, `?auth_token=`, anything whose name contains `password`/`passwd`/`pwd`/`secret`/`token`/`credential`) are now redacted by `mask_dsn_password` and by `Dsn.render(mask_password=True)`. Only the userinfo segment (`scheme://user:pw@host`) was masked before, so a secret passed as a query parameter was written verbatim to `~/.registro/registro.log`, shown in the status bar, and persisted as the `connection_label` of every query in `~/.registro/history.db`. File-path parameters (`sslkey`, `sslcert`, `sslrootcert`) are deliberately left legible — they are not secrets, and redacting them makes a TLS misconfiguration unreadable.
 
 ### Fixed
 
@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed `_do_connect` no longer strands the driver connection. Every adapter opens its connection and *then* runs a follow-up statement (PRAGMAs, `pg_backend_pid()`, `CONNECTION_ID()`); because `close()` is a no-op until `connect()` completes, a failure in that second half leaked the connection and, for aiosqlite, its worker thread.
 - `Introspector` no longer answers a request for a full schema snapshot with a cached lazy one, which held no columns and so silently returned an empty schema.
 - Plugin bottom rails are now laid out: the app applied a `with-bottom` class that the stylesheet defined no rules for, leaving the rail an unplaced third child of a two-column grid.
-- CSV export (both `teridex run --format csv` and the TUI exporter) now defuses values a spreadsheet would evaluate as formulas.
+- CSV export (both `registro run --format csv` and the TUI exporter) now defuses values a spreadsheet would evaluate as formulas.
 
 ### Testing
 
@@ -91,23 +91,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Chore
 
 - Factored the duplicated "already cancelled" stream in the SQLite and MySQL adapters into a shared `_CancelledStream`, removing an always-true `if` that guarded an unreachable `yield`.
-- Removed a no-op `except Exception: raise` in `teridex_engine.transaction`, a duplicate `Dsn` import, and a redundant function-local `contextlib` import.
+- Removed a no-op `except Exception: raise` in `registro_engine.transaction`, a duplicate `Dsn` import, and a redundant function-local `contextlib` import.
 - Hoisted `datetime`/`decimal`/`uuid` imports in `_typeinfer` to module scope; they were re-imported per column, per result set.
 - `SchemaTree` posts an `IntrospectionFailed` message instead of reaching into the app's private `_status` method.
-- `TeridexApp.__init__` no longer touches the filesystem; log setup moved to `on_mount` and falls back to stderr when `$HOME` is not writable.
+- `RegistroApp.__init__` no longer touches the filesystem; log setup moved to `on_mount` and falls back to stderr when `$HOME` is not writable.
 
 ## [1.2.0] - 2026-08-25
 
 ### Added
 
 - Added a "Show help" builtin command to the TUI command palette.
-- Added `resources/teridex.svg` project logo.
+- Added `resources/registro.svg` project logo.
 
 ### Changed
 
 - Centralized adapter connection and error handling in `AbstractAdapter` (`_require_conn`, `_wrap_driver_error`), standardizing "not connected" errors and driver-error translation into `QueryError`/`QueryCancelledError` across the DuckDB, MySQL, PostgreSQL, and SQLite adapters.
 - Added a `connected` property to the `DatabaseAdapter` protocol.
-- Environment variable configuration overrides now process `os.environ` in sorted order, so a nested field override (e.g. `TERIDEX_ENGINE__POOL_SIZE`) deterministically wins over a same-section scalar override (e.g. `TERIDEX_ENGINE`), regardless of the OS/shell's environment iteration order.
+- Environment variable configuration overrides now process `os.environ` in sorted order, so a nested field override (e.g. `REGISTRO_ENGINE__POOL_SIZE`) deterministically wins over a same-section scalar override (e.g. `REGISTRO_ENGINE`), regardless of the OS/shell's environment iteration order.
 - Command palette default keybindings are now derived from the active keymap's bindings instead of separately hardcoded literals, preventing displayed hints from drifting out of sync with the real keymap.
 - Updated CI and release GitHub Actions workflows.
 
@@ -147,7 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Removed unused legacy dependency injection container (`src/teridex_core/di.py`).
+- Removed unused legacy dependency injection container (`src/registro_core/di.py`).
 
 ## [1.0.0] - 2026-08-06
 
@@ -172,7 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Modularized database schema introspection into dedicated per-adapter modules (`teridex_adapters.introspect` for DuckDB, MySQL, PostgreSQL, and SQLite).
+- Modularized database schema introspection into dedicated per-adapter modules (`registro_adapters.introspect` for DuckDB, MySQL, PostgreSQL, and SQLite).
 - Added Vim mode keybinding hints (`gg` / `G`) in the TUI status bar footer when Vim navigation mode is active.
 
 ### Changed
@@ -209,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added escaping using `rich.markup.escape` to connection, validation, and query error strings in the TUI to prevent Rich markup injection or rendering issues.
 - Optimized query execution result feeding by immediately halting table updates once the results table indicates truncation (e.g., limit is reached).
-- Added automatic permission hardening (applying `0o600` permissions) to the Teridex configuration file if it is detected to have group/world-writable permissions.
+- Added automatic permission hardening (applying `0o600` permissions) to the Registro configuration file if it is detected to have group/world-writable permissions.
 - Ensured a `QueryCompleted` event is correctly emitted on `GeneratorExit` within the query executor, ensuring proper cleanup and statistics tracking when a query is cancelled.
 - Fixed release checksum (`SHA256SUMS`) generation by running the checksum command directly inside the package distribution directory.
 
@@ -224,7 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Refactored `TeridexConfig` configuration parsing model from Pydantic's `BaseSettings` to `BaseModel` and `ConfigDict`.
+- Refactored `RegistroConfig` configuration parsing model from Pydantic's `BaseSettings` to `BaseModel` and `ConfigDict`.
 - Cached results table rows internally in `self._rows` to improve CSV export behavior and speed.
 - `StatusBar` uses `Text.from_markup().plain` to calculate the visual footer width accurately.
 - `Dsn` userinfo rendering handles standalone username or password fields correctly without assuming both exist.
@@ -253,7 +253,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Query execution failure handling now catches all base exceptions (rather than just adapter-specific `QueryError`s) and wraps them as structured query failures with a proper `teridex.query.unexpected` error code.
+- Query execution failure handling now catches all base exceptions (rather than just adapter-specific `QueryError`s) and wraps them as structured query failures with a proper `registro.query.unexpected` error code.
 
 
 ## [0.3.0] - 2026-06-22
@@ -305,4 +305,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- First implementation of Teridex.
+- First implementation of Registro.

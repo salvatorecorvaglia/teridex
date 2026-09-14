@@ -1,4 +1,4 @@
-"""Query history persisted in a local SQLite store under ``~/.teridex``."""
+"""Query history persisted in a local SQLite store under ``~/.registro``."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import aiosqlite
 from pydantic import BaseModel, ConfigDict, Field
 
-from teridex_core.logging import get_logger
+from registro_core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,7 @@ class QueryHistory:
     """Append-only history with a bounded retention window."""
 
     def __init__(self, path: Path | None = None, *, max_entries: int = 1000) -> None:
-        self._path = path or (Path.home() / ".teridex" / "history.db")
+        self._path = path or (Path.home() / ".registro" / "history.db")
         self._max = max_entries
         self._conn: aiosqlite.Connection | None = None
         self._inserts_since_trim = 0

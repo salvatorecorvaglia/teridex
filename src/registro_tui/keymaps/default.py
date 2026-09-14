@@ -9,7 +9,7 @@ is the normal state while working.
 ``Input``; ``tests/tui/test_keymap_conflicts.py`` enforces that against the
 installed Textual rather than against a list copied into a comment here.
 
-``RESULTS_BINDINGS`` are declared on :class:`~teridex_tui.widgets.results_table.ResultsTable`
+``RESULTS_BINDINGS`` are declared on :class:`~registro_tui.widgets.results_table.ResultsTable`
 instead. They only fire when the results grid has focus — which is the only
 time "copy this cell" or "export these rows" means anything — and the editor is
 not on that focus chain, so they can keep the keys that read best.
@@ -46,7 +46,7 @@ RESULTS_BINDINGS: list[tuple[str, str, str]] = [
     ("ctrl+e", "export_csv", "Export CSV"),
 ]
 
-# Kept as the app-level list under its original name: ``TeridexApp.BINDINGS``,
+# Kept as the app-level list under its original name: ``RegistroApp.BINDINGS``,
 # the vim keymap, and the help modal all mean "the global ones" by it.
 DEFAULT_BINDINGS: list[tuple[str, str, str]] = GLOBAL_BINDINGS
 

@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from teridex_engine.transaction import transaction
+from registro_engine.transaction import transaction
 
 if TYPE_CHECKING:
-    from teridex_core.protocols.adapter import DatabaseAdapter
+    from registro_core.protocols.adapter import DatabaseAdapter
 
 
 class _FakeTx:

@@ -1,4 +1,4 @@
-"""Map driver-native type names to Teridex ``ColumnType``."""
+"""Map driver-native type names to Registro ``ColumnType``."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import datetime
 import decimal
 import uuid
 
-from teridex_core.models.result import ColumnType
+from registro_core.models.result import ColumnType
 
 _INTEGER = {
     "int",

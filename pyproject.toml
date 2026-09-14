@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "teridex"
+name = "registro"
 version = "2.0.0"
 description = "A terminal-first database workspace for modern engineers"
 readme = "README.md"
@@ -39,11 +39,11 @@ all = [
 ]
 
 [project.scripts]
-teridex = "teridex_cli.main:main"
+registro = "registro_cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/salvatorecorvaglia/teridex"
-Documentation = "https://github.com/salvatorecorvaglia/teridex#readme"
+Homepage = "https://github.com/salvatorecorvaglia/registro"
+Documentation = "https://github.com/salvatorecorvaglia/registro#readme"
 
 [dependency-groups]
 dev = [
@@ -57,19 +57,19 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-    "src/teridex_core",
-    "src/teridex_adapters",
-    "src/teridex_engine",
-    "src/teridex_plugins",
-    "src/teridex_cli",
-    "src/teridex_tui",
+    "src/registro_core",
+    "src/registro_adapters",
+    "src/registro_engine",
+    "src/registro_plugins",
+    "src/registro_cli",
+    "src/registro_tui",
 ]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"src/teridex_tui/teridex.tcss" = "share/teridex/teridex.tcss"
+"src/registro_tui/registro.tcss" = "share/registro/registro.tcss"
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/teridex_tui/teridex.tcss" = "teridex_tui/teridex.tcss"
+"src/registro_tui/registro.tcss" = "registro_tui/registro.tcss"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

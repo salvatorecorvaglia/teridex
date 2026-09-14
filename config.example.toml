@@ -1,7 +1,7 @@
-# Teridex configuration file
+# Registro configuration file
 #
-# Default location:  ~/.config/teridex/config.toml
-# Layered overrides: TERIDEX_<section>__<field> env vars > CLI flags
+# Default location:  ~/.config/registro/config.toml
+# Layered overrides: REGISTRO_<section>__<field> env vars > CLI flags
 
 [ui]
 # Theme name. Built-ins: "monokai" (warm) | "nord" (cool).
@@ -22,15 +22,15 @@ max_display_rows = 10000
 # Queries are aborted after this many seconds, and cancelled server-side.
 default_timeout_seconds = 60.0
 
-# Bounded retention of the local query-history store (~/.teridex/history.db).
+# Bounded retention of the local query-history store (~/.registro/history.db).
 max_history_entries = 1000
 
 # Pool size when the TUI is configured to route queries through a
 # ConnectionPool.
 pool_size = 5
 
-# Where the query-history store lives. Unset uses ~/.teridex/history.db.
-# history_path = "~/.local/share/teridex/history.db"
+# Where the query-history store lives. Unset uses ~/.registro/history.db.
+# history_path = "~/.local/share/registro/history.db"
 
 [logging]
 # DEBUG | INFO | WARNING | ERROR

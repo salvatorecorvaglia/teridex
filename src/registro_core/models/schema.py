@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from teridex_core.models.result import ColumnType
+from registro_core.models.result import ColumnType
 
 ObjectKind = Literal["table", "view", "materialized_view"]
 

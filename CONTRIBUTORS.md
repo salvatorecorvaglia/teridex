@@ -1,6 +1,6 @@
 # Contributors 👥
 
-A huge thank you to everyone who has contributed to **Teridex**!
+A huge thank you to everyone who has contributed to **Registro**!
 
 ## ✨ Lead Maintainer
 

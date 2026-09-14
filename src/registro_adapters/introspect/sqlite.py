@@ -5,15 +5,15 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from teridex_adapters._introspect import SchemaIntrospector
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import connection_id
-from teridex_core.models.schema import ForeignKey, Index, TableColumn
+from registro_adapters._introspect import SchemaIntrospector
+from registro_adapters._typeinfer import infer_column_type
+from registro_adapters.base import connection_id
+from registro_core.models.schema import ForeignKey, Index, TableColumn
 
 if TYPE_CHECKING:
     import aiosqlite
 
-    from teridex_adapters.sqlite_adapter import SQLiteAdapter
+    from registro_adapters.sqlite_adapter import SQLiteAdapter
 
 
 def _quote_ident(name: str) -> str:

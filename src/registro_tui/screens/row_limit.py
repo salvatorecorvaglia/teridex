@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from textual.containers import Vertical
 from textual.widgets import Button, Input, Static
 
-from teridex_tui.screens._base import BaseModal
+from registro_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

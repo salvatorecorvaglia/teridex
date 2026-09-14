@@ -1,13 +1,13 @@
-"""Typer-powered Teridex CLI.
+"""Typer-powered Registro CLI.
 
 Commands:
-    teridex tui --dsn <url>         launch the TUI
-    teridex run --dsn <url> "<sql>" one-shot query, prints results as a Rich table
-    teridex connect --dsn <url>     connection sanity check
-    teridex plugins list            list discovered plugins
-    teridex version                 print version + supported drivers
+    registro tui --dsn <url>         launch the TUI
+    registro run --dsn <url> "<sql>" one-shot query, prints results as a Rich table
+    registro connect --dsn <url>     connection sanity check
+    registro plugins list            list discovered plugins
+    registro version                 print version + supported drivers
 
-``--dsn`` reads ``TERIDEX_DSN`` from the environment when omitted.
+``--dsn`` reads ``REGISTRO_DSN`` from the environment when omitted.
 """
 
 from __future__ import annotations
@@ -25,19 +25,19 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from teridex_adapters import create_adapter_for_dsn, default_registry
-from teridex_core.config import TeridexConfig, load_config
-from teridex_core.errors import (
+from registro_adapters import create_adapter_for_dsn, default_registry
+from registro_core.config import RegistroConfig, load_config
+from registro_core.errors import (
     QueryCancelledError,
     QueryError,
     QueryTimeoutError,
-    TeridexError,
+    RegistroError,
 )
-from teridex_core.events import EventBus
-from teridex_core.export import csv_safe_row
-from teridex_core.logging import clear_context, configure_logging, get_logger
-from teridex_core.models.connection import Dsn
-from teridex_engine.executor import QueryExecutor
+from registro_core.events import EventBus
+from registro_core.export import csv_safe_row
+from registro_core.logging import clear_context, configure_logging, get_logger
+from registro_core.models.connection import Dsn
+from registro_engine.executor import QueryExecutor
 
 logger = get_logger(__name__)
 console = Console()
@@ -77,7 +77,7 @@ def _render(fmt: OutputFormat, columns: list[str], rows: list[tuple[Any, ...]]) 
 
 
 app = typer.Typer(
-    name="teridex",
+    name="registro",
     help="A terminal-first database workspace for modern engineers",
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -89,7 +89,7 @@ app.add_typer(plugins_app, name="plugins")
 @app.callback()
 def _root(
     log_level: Annotated[
-        str | None, typer.Option("--log-level", help="Log level.", envvar="TERIDEX_LOG_LEVEL")
+        str | None, typer.Option("--log-level", help="Log level.", envvar="REGISTRO_LOG_LEVEL")
     ] = None,
 ) -> None:
     # A conservative default so anything logged before a command has resolved
@@ -103,11 +103,11 @@ def _root(
 _ConfigOption = Annotated[str, typer.Option("--config", help="Path to config TOML.")]
 
 
-def _resolve_config(config_path: str, log_level: str | None) -> TeridexConfig:
+def _resolve_config(config_path: str, log_level: str | None) -> RegistroConfig:
     """Load layered config and point logging at the level it resolves to.
 
     ``run`` and ``connect`` used to skip this entirely: they never called
-    ``load_config``, so the config file, every ``TERIDEX_<section>__<field>``
+    ``load_config``, so the config file, every ``REGISTRO_<section>__<field>``
     env override, and the configured log level applied to the TUI only — while
     the README documented the layering unconditionally.
 
@@ -130,10 +130,10 @@ def _cli_log_level(ctx: typer.Context) -> str | None:
 
 @app.command()
 def version() -> None:
-    """Print Teridex version and discovered adapter drivers."""
-    from teridex_core import __version__  # noqa: PLC0415 - keep CLI startup fast
+    """Print Registro version and discovered adapter drivers."""
+    from registro_core import __version__  # noqa: PLC0415 - keep CLI startup fast
 
-    console.print(f"[bold cyan]teridex[/] {__version__}")
+    console.print(f"[bold cyan]registro[/] {__version__}")
     console.print(f"adapters: {', '.join(default_registry().names()) or '[none]'}")
 
 
@@ -144,7 +144,7 @@ def connect(
         str,
         typer.Option(
             "--dsn",
-            envvar="TERIDEX_DSN",
+            envvar="REGISTRO_DSN",
             help="Database URL, e.g. duckdb:///:memory:",
         ),
     ],
@@ -153,7 +153,7 @@ def connect(
     """Open a connection to verify the DSN is reachable."""
     try:
         _resolve_config(config_path, _cli_log_level(ctx))
-    except TeridexError as exc:
+    except RegistroError as exc:
         console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
         raise typer.Exit(code=1) from exc
 
@@ -186,7 +186,7 @@ def connect(
 def run_query(
     ctx: typer.Context,
     sql: Annotated[str, typer.Argument(help="SQL to execute.")],
-    dsn: Annotated[str, typer.Option("--dsn", envvar="TERIDEX_DSN", help="Database URL.")],
+    dsn: Annotated[str, typer.Option("--dsn", envvar="REGISTRO_DSN", help="Database URL.")],
     limit: Annotated[int, typer.Option("--limit", min=1, help="Max rows to print.")] = 200,
     timeout: Annotated[
         float | None,
@@ -218,7 +218,7 @@ def run_query(
 
     try:
         cfg = _resolve_config(config_path, _cli_log_level(ctx))
-    except TeridexError as exc:
+    except RegistroError as exc:
         console.print(f"[bold red]ERROR[/] {escape(str(exc))}")
         raise typer.Exit(code=1) from exc
     # ``is not None`` rather than ``or``: ``--timeout 0`` is a deliberate
@@ -278,7 +278,7 @@ def run_query(
         except QueryCancelledError:
             console.print("[yellow]query cancelled[/]")
             return 1
-        except (QueryError, TeridexError) as exc:
+        except (QueryError, RegistroError) as exc:
             console.print(f"[bold red]QUERY ERROR[/] {escape(str(exc))}")
             return 1
         except Exception as exc:
@@ -298,16 +298,16 @@ def tui(
     ctx: typer.Context,
     dsn: Annotated[
         str,
-        typer.Option("--dsn", envvar="TERIDEX_DSN", help="Initial DSN to connect to."),
+        typer.Option("--dsn", envvar="REGISTRO_DSN", help="Initial DSN to connect to."),
     ] = "",
     config_path: Annotated[str, typer.Option("--config", help="Path to config TOML.")] = "",
 ) -> None:
-    """Launch the Teridex TUI."""
-    # Lazy imports — keep `teridex version` and `teridex run` fast by not
+    """Launch the Registro TUI."""
+    # Lazy imports — keep `registro version` and `registro run` fast by not
     # importing Textual unless we actually launch the TUI.
     from pathlib import Path  # noqa: PLC0415
 
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
 
     cli_log_level = ctx.parent.params.get("log_level") if ctx.parent else None
     overrides = {}
@@ -330,15 +330,15 @@ def tui(
     os.environ.setdefault("COLORTERM", "truecolor")
     os.environ.setdefault("TERM", "xterm-256color")
 
-    TeridexApp(config=cfg, initial_dsn=initial_dsn).run()
+    RegistroApp(config=cfg, initial_dsn=initial_dsn).run()
 
 
 @plugins_app.command("list")
 def plugins_list() -> None:
-    """List discovered Teridex plugins."""
-    # Lazy: only pulled in for `teridex plugins list`.
-    from teridex_plugins.loader import PluginLoader  # noqa: PLC0415
-    from teridex_plugins.registry import PluginRegistry  # noqa: PLC0415
+    """List discovered Registro plugins."""
+    # Lazy: only pulled in for `registro plugins list`.
+    from registro_plugins.loader import PluginLoader  # noqa: PLC0415
+    from registro_plugins.registry import PluginRegistry  # noqa: PLC0415
 
     bus = EventBus()
     loader = PluginLoader(PluginRegistry(), bus)

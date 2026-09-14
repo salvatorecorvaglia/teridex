@@ -1,4 +1,4 @@
-"""Shared behaviour for Teridex's modal screens.
+"""Shared behaviour for Registro's modal screens.
 
 Every modal in the app answers the same two keys — ``escape`` cancels,
 ``enter`` submits — and each one used to hand-roll that, which is how they
@@ -42,7 +42,7 @@ class BaseModal(ModalScreen[ResultT | None]):
         second time *after* the screen had already been popped, and the second
         ``dismiss`` raised ``ScreenStackError`` off an empty stack — crashing
         the app on the connection dialog, which is the first thing a user sees
-        when ``teridex tui`` is started without a DSN.
+        when ``registro tui`` is started without a DSN.
 
         Guarding here rather than in ``on_key`` covers every route to a
         double resolution, including a subclass's ``submit`` being reached from

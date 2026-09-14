@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.errors import QueryCancelledError
-from teridex_core.models.connection import Dsn
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.errors import QueryCancelledError
+from registro_core.models.connection import Dsn
 
 if TYPE_CHECKING:
     import pathlib

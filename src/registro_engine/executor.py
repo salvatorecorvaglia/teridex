@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from teridex_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
-from teridex_core.events import (
+from registro_core.errors import QueryCancelledError, QueryError, QueryTimeoutError
+from registro_core.events import (
     EventBus,
     QueryCancelled,
     QueryCompleted,
@@ -23,19 +23,19 @@ from teridex_core.events import (
     QueryProgress,
     QueryStarted,
 )
-from teridex_core.logging import bind_context, get_logger, reset_context
-from teridex_core.models.query import QueryStatus
+from registro_core.logging import bind_context, get_logger, reset_context
+from registro_core.models.query import QueryStatus
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-    from teridex_core.models.query import QueryHandle
-    from teridex_core.models.result import ResultBatch
-    from teridex_core.protocols.adapter import DatabaseAdapter
+    from registro_core.models.query import QueryHandle
+    from registro_core.models.result import ResultBatch
+    from registro_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
 
-_UNEXPECTED = "teridex.query.unexpected"
+_UNEXPECTED = "registro.query.unexpected"
 
 
 @dataclass

@@ -1,5 +1,5 @@
 """Database schema introspectors."""
 
-from teridex_adapters._introspect import SchemaIntrospector
+from registro_adapters._introspect import SchemaIntrospector
 
 __all__ = ["SchemaIntrospector"]

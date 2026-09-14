@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from teridex_core.events import Event, EventBus
-from teridex_core.logging import get_logger
+from registro_core.events import Event, EventBus
+from registro_core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from teridex_plugins.api import Command, Panel
-    from teridex_plugins.registry import PluginRegistry
+    from registro_plugins.api import Command, Panel
+    from registro_plugins.registry import PluginRegistry
 
 logger = get_logger(__name__)
 E = TypeVar("E", bound=Event)

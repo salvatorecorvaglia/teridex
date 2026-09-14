@@ -16,12 +16,12 @@ from rich.markup import escape
 from textual.message import Message
 from textual.widgets import Tree
 
-from teridex_core.models.schema import SchemaObject
+from registro_core.models.schema import SchemaObject
 
 if TYPE_CHECKING:
     from textual.widgets.tree import TreeNode
 
-    from teridex_core.models.schema import SchemaSnapshot
+    from registro_core.models.schema import SchemaSnapshot
 
 
 class SchemaTree(Tree[object]):

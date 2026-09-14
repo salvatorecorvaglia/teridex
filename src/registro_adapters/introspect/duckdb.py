@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from teridex_adapters._introspect import SchemaIntrospector
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import connection_id
-from teridex_core.models.schema import ForeignKey, Index, TableColumn
+from registro_adapters._introspect import SchemaIntrospector
+from registro_adapters._typeinfer import infer_column_type
+from registro_adapters.base import connection_id
+from registro_core.models.schema import ForeignKey, Index, TableColumn
 
 if TYPE_CHECKING:
     import duckdb
 
-    from teridex_core.models.connection import Dsn
+    from registro_core.models.connection import Dsn
 
 
 def _index_columns(expressions: object) -> list[str]:

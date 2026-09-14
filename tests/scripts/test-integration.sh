@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$HERE"
 
 COMPOSE_FILE="docker/docker-compose.yml"
-KEEP_UP="${TERIDEX_KEEP_CONTAINERS:-0}"
+KEEP_UP="${REGISTRO_KEEP_CONTAINERS:-0}"
 
 cleanup() {
   if [[ "$KEEP_UP" != "1" ]]; then
@@ -33,9 +33,9 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
-export TERIDEX_PG_DSN="${TERIDEX_PG_DSN:-postgres://teridex:teridex@localhost:5432/teridex}"
-export TERIDEX_MYSQL_DSN="${TERIDEX_MYSQL_DSN:-mysql://teridex:teridex@127.0.0.1:3306/teridex}"
-export TERIDEX_TEST_MARKERS="integration or not integration"
+export REGISTRO_PG_DSN="${REGISTRO_PG_DSN:-postgres://registro:registro@localhost:5432/registro}"
+export REGISTRO_MYSQL_DSN="${REGISTRO_MYSQL_DSN:-mysql://registro:registro@127.0.0.1:3306/registro}"
+export REGISTRO_TEST_MARKERS="integration or not integration"
 
 echo "==> pytest (integration enabled)"
 exec "$HERE/tests/scripts/test.sh" "$@"

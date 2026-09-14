@@ -6,16 +6,16 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
-from teridex_tui.keymaps import GLOBAL_BINDINGS, key_label  # noqa: E402
-from teridex_tui.screens.help import HelpModal, _rows  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
+from registro_tui.keymaps import GLOBAL_BINDINGS, key_label  # noqa: E402
+from registro_tui.screens.help import HelpModal, _rows  # noqa: E402
 
 
 @pytest.mark.asyncio
 async def test_help_modal_opens_and_dismisses() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -58,7 +58,7 @@ def test_rows_deduplicate_a_repeated_key() -> None:
 
 
 async def test_help_lists_global_and_results_bindings() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -79,12 +79,12 @@ async def test_help_lists_global_and_results_bindings() -> None:
 
 
 async def test_help_shows_vim_bindings_only_in_vim_mode() -> None:
-    plain = TeridexConfig()
-    vim = TeridexConfig()
+    plain = RegistroConfig()
+    vim = RegistroConfig()
     vim.ui.keymap = "vim"
 
     for cfg, expected in ((plain, False), (vim, True)):
-        app = TeridexApp(config=cfg, initial_dsn=Dsn.parse("sqlite:///:memory:"))
+        app = RegistroApp(config=cfg, initial_dsn=Dsn.parse("sqlite:///:memory:"))
         async with app.run_test() as pilot:
             await pilot.pause()
             await app.workers.wait_for_complete()

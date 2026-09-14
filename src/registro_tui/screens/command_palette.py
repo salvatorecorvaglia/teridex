@@ -10,8 +10,8 @@ from rich.markup import escape
 from textual.containers import Vertical
 from textual.widgets import Input, ListItem, ListView, Static
 
-from teridex_plugins.api import Command
-from teridex_tui.screens._base import BaseModal
+from registro_plugins.api import Command
+from registro_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

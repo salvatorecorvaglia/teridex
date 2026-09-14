@@ -1,7 +1,7 @@
-"""Public protocols (structural interfaces) defining Teridex extension points."""
+"""Public protocols (structural interfaces) defining Registro extension points."""
 
-from teridex_core.protocols.adapter import DatabaseAdapter, Transaction
-from teridex_core.protocols.plugin import Plugin, PluginManifest
+from registro_core.protocols.adapter import DatabaseAdapter, Transaction
+from registro_core.protocols.plugin import Plugin, PluginManifest
 
 __all__ = [
     "DatabaseAdapter",

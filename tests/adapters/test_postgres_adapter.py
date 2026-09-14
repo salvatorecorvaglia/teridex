@@ -1,6 +1,6 @@
 """PostgreSQL runs the shared adapter conformance suite.
 
-Needs a server: either ``TERIDEX_PG_DSN`` (see ``tests/scripts/test-integration.sh``)
+Needs a server: either ``REGISTRO_PG_DSN`` (see ``tests/scripts/test-integration.sh``)
 or a reachable Docker daemon, from which the ``postgres_dsn`` fixture starts a
 container. Marked ``integration`` so the default local run stays fast.
 """
@@ -13,8 +13,8 @@ import pytest
 
 pytest.importorskip("asyncpg")
 
-from teridex_adapters.postgres_adapter import PostgresAdapter
-from teridex_core.models.connection import Dsn
+from registro_adapters.postgres_adapter import PostgresAdapter
+from registro_core.models.connection import Dsn
 from tests.adapters._conformance import AdapterConformance, drain
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.integration
 
 
 class TestPostgresConformance(AdapterConformance):
-    create_table_sql = "CREATE TABLE teridex_conformance (id INTEGER, name VARCHAR(32))"
+    create_table_sql = "CREATE TABLE registro_conformance (id INTEGER, name VARCHAR(32))"
 
     @pytest.fixture
     async def adapter(self, postgres_dsn: str) -> AsyncIterator[PostgresAdapter]:
@@ -33,10 +33,10 @@ class TestPostgresConformance(AdapterConformance):
         try:
             # The server is shared across the session, so each test starts from
             # a clean table rather than inheriting the previous one's rows.
-            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await drain(a, "DROP TABLE IF EXISTS registro_conformance")
             yield a
         finally:
-            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await drain(a, "DROP TABLE IF EXISTS registro_conformance")
             await a.close()
 
 

@@ -4,11 +4,11 @@ import asyncio
 
 import pytest
 
-from teridex_core.events import Event, EventBus, QueryStarted
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.api import Command
-from teridex_plugins.context import PluginContext
-from teridex_plugins.registry import PluginRegistry
+from registro_core.events import Event, EventBus, QueryStarted
+from registro_core.protocols.plugin import PluginManifest
+from registro_plugins.api import Command
+from registro_plugins.context import PluginContext
+from registro_plugins.registry import PluginRegistry
 
 
 def _make_context(services: dict[str, object] | None = None) -> PluginContext:

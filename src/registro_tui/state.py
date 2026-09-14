@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from teridex_core.events import EventBus
-    from teridex_core.models.connection import Dsn
-    from teridex_core.protocols.adapter import DatabaseAdapter
-    from teridex_engine.history import QueryHistory
-    from teridex_engine.introspector import Introspector
-    from teridex_engine.pool import ConnectionPool
-    from teridex_plugins.registry import PluginRegistry
+    from registro_core.events import EventBus
+    from registro_core.models.connection import Dsn
+    from registro_core.protocols.adapter import DatabaseAdapter
+    from registro_engine.history import QueryHistory
+    from registro_engine.introspector import Introspector
+    from registro_engine.pool import ConnectionPool
+    from registro_plugins.registry import PluginRegistry
 
 
 @dataclass

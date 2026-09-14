@@ -1,12 +1,12 @@
-"""Teridex core abstractions."""
+"""Registro core abstractions."""
 
-from teridex_core.errors import (
+from registro_core.errors import (
     AdapterError,
     ConfigError,
     PluginError,
     QueryCancelledError,
     QueryError,
-    TeridexError,
+    RegistroError,
 )
 
 __all__ = [
@@ -15,7 +15,7 @@ __all__ = [
     "PluginError",
     "QueryCancelledError",
     "QueryError",
-    "TeridexError",
+    "RegistroError",
 ]
 
 __version__ = "2.0.0"

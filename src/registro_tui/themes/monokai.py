@@ -1,4 +1,4 @@
-from teridex_tui.themes._base import Theme
+from registro_tui.themes._base import Theme
 
 # Monokai. ``accent`` and ``error`` were both #f92672, which made an accent
 # border and an error border indistinguishable; accent moves to Monokai's

@@ -9,16 +9,16 @@ textual = pytest.importorskip("textual")
 from textual.app import App  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_engine.history import HistoryEntry  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
-from teridex_tui.screens.history import HistoryModal  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_engine.history import HistoryEntry  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
+from registro_tui.screens.history import HistoryModal  # noqa: E402
 
 
 @pytest.mark.asyncio
 async def test_history_modal_opens_empty() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -33,7 +33,7 @@ async def test_history_modal_opens_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_history_modal_lists_entry_after_insert() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()

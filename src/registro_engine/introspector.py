@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from teridex_core.events import EventBus, SchemaRefreshed
-from teridex_core.logging import get_logger
+from registro_core.events import EventBus, SchemaRefreshed
+from registro_core.logging import get_logger
 
 if TYPE_CHECKING:
-    from teridex_core.models.schema import (
+    from registro_core.models.schema import (
         ForeignKey,
         Index,
         SchemaSnapshot,
         TableColumn,
     )
-    from teridex_core.protocols.adapter import DatabaseAdapter
+    from registro_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
 

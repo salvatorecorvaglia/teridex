@@ -8,8 +8,8 @@ import pytest
 
 pytest.importorskip("duckdb")
 
-from teridex_adapters.duckdb_adapter import DuckDBAdapter
-from teridex_core.models.connection import Dsn
+from registro_adapters.duckdb_adapter import DuckDBAdapter
+from registro_core.models.connection import Dsn
 from tests.adapters._conformance import AdapterConformance
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class TestDuckDBConformance(AdapterConformance):
-    create_table_sql = "CREATE TABLE teridex_conformance (id INTEGER, name VARCHAR)"
+    create_table_sql = "CREATE TABLE registro_conformance (id INTEGER, name VARCHAR)"
 
     @pytest.fixture
     async def adapter(self) -> AsyncIterator[DuckDBAdapter]:

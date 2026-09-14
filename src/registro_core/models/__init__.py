@@ -1,9 +1,9 @@
 """Domain models."""
 
-from teridex_core.models.connection import ConnectionInfo, Dsn
-from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
-from teridex_core.models.result import Column, ColumnType, ResultBatch, Row
-from teridex_core.models.schema import (
+from registro_core.models.connection import ConnectionInfo, Dsn
+from registro_core.models.query import QueryHandle, QueryMetadata, QueryStatus
+from registro_core.models.result import Column, ColumnType, ResultBatch, Row
+from registro_core.models.schema import (
     ForeignKey,
     Index,
     SchemaObject,

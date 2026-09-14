@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_adapters.introspect.sqlite import SQLiteIntrospector
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.models.connection import Dsn
+from registro_adapters.introspect.sqlite import SQLiteIntrospector
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.models.connection import Dsn
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

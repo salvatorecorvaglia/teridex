@@ -14,7 +14,7 @@ class PluginManifest(BaseModel):
     name: str
     version: str = "0.0.0"
     description: str = ""
-    requires_teridex: str = ">=0.1.0"
+    requires_registro: str = ">=0.1.0"
     tags: list[str] = Field(default_factory=list)
 
 

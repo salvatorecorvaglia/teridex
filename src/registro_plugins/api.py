@@ -11,13 +11,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from teridex_plugins.context import PluginContext
+    from registro_plugins.context import PluginContext
 
 PanelPlacement = Literal["left", "right", "bottom"]
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-_HOOK_ATTR = "__teridex_hook__"
+_HOOK_ATTR = "__registro_hook__"
 
 
 def hook(event: str) -> Callable[[F], F]:
@@ -26,7 +26,7 @@ def hook(event: str) -> Callable[[F], F]:
     This is a bookkeeping aid only: nothing in the loader auto-registers
     tagged methods. A plugin's ``on_load`` must still explicitly subscribe
     each handler via :meth:`PluginContext.subscribe` with the corresponding
-    :class:`~teridex_core.events.Event` subclass — ``hook``/:func:`is_hook`/
+    :class:`~registro_core.events.Event` subclass — ``hook``/:func:`is_hook`/
     :func:`hook_event` just let ``on_load`` discover its own tagged methods
     (e.g. by iterating ``dir(self)``) instead of listing them by hand.
 

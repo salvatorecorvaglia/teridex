@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.models.connection import Dsn
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.models.connection import Dsn
 from tests.adapters._conformance import AdapterConformance
 
 if TYPE_CHECKING:

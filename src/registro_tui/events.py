@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from teridex_core.events import Event
+from registro_core.events import Event
 
 
 class RunActionRequested(Event):

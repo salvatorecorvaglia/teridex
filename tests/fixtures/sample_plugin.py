@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.api import Command
+from registro_core.protocols.plugin import PluginManifest
+from registro_plugins.api import Command
 
 if TYPE_CHECKING:
-    from teridex_plugins.context import PluginContext
+    from registro_plugins.context import PluginContext
 
 
 class SamplePlugin:

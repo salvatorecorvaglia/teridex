@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_engine.history import HistoryEntry, QueryHistory
+from registro_engine.history import HistoryEntry, QueryHistory
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from structlog.types import EventDict, Processor
 
 _request_context: ContextVar[dict[str, Any] | None] = ContextVar(
-    "teridex_request_context", default=None
+    "registro_request_context", default=None
 )
 
 _configured = False

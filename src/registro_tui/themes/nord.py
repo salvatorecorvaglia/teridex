@@ -1,4 +1,4 @@
-from teridex_tui.themes._base import Theme
+from registro_tui.themes._base import Theme
 
 # Nord. As with Monokai, ``accent`` is pulled off ``error`` (both were
 # #bf616a) — accent takes Nord's frost purple, error keeps aurora red.

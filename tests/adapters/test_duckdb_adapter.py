@@ -7,10 +7,10 @@ import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
-from teridex_adapters.duckdb_adapter import DuckDBAdapter  # noqa: E402
-from teridex_core.errors import QueryCancelledError  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_core.models.query import QueryStatus  # noqa: E402
+from registro_adapters.duckdb_adapter import DuckDBAdapter  # noqa: E402
+from registro_core.errors import QueryCancelledError  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_core.models.query import QueryStatus  # noqa: E402
 
 
 @pytest.mark.asyncio

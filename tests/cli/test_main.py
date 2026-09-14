@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
 
-from teridex_cli.main import app
+from registro_cli.main import app
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -20,7 +20,7 @@ runner = CliRunner()
 def test_version_runs() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "teridex" in result.stdout.lower()
+    assert "registro" in result.stdout.lower()
 
 
 def test_connect_requires_dsn_flag() -> None:
@@ -39,7 +39,7 @@ def test_connect_with_envvar_succeeds() -> None:
     result = runner.invoke(
         app,
         ["connect"],
-        env={"TERIDEX_DSN": "duckdb:///:memory:"},
+        env={"REGISTRO_DSN": "duckdb:///:memory:"},
     )
     assert result.exit_code == 0
     assert "OK" in result.stdout
@@ -146,7 +146,7 @@ def test_plugins_list_runs() -> None:
 # ---- configuration reaches the CLI, not just the TUI ----
 #
 # ``run`` and ``connect`` never called ``load_config``, so the config file and
-# every ``TERIDEX_<section>__<field>`` override applied to the TUI only — while
+# every ``REGISTRO_<section>__<field>`` override applied to the TUI only — while
 # the README documented the layering unconditionally.
 
 

@@ -6,9 +6,9 @@ import pytest
 
 textual = pytest.importorskip("textual")
 
-from teridex_core.config import TeridexConfig, UIConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
+from registro_core.config import RegistroConfig, UIConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
 
 # Vim-only keys that DEFAULT_BINDINGS does not include.
 _VIM_ONLY = {"colon", "g", "shift+g"}
@@ -16,8 +16,8 @@ _VIM_ONLY = {"colon", "g", "shift+g"}
 
 @pytest.mark.asyncio
 async def test_default_keymap_lacks_vim_bindings() -> None:
-    app = TeridexApp(
-        config=TeridexConfig(ui=UIConfig(keymap="default")),
+    app = RegistroApp(
+        config=RegistroConfig(ui=UIConfig(keymap="default")),
         initial_dsn=Dsn.parse("sqlite:///:memory:"),
     )
     async with app.run_test() as pilot:
@@ -31,8 +31,8 @@ async def test_default_keymap_lacks_vim_bindings() -> None:
 
 @pytest.mark.asyncio
 async def test_vim_keymap_registers_extra_bindings() -> None:
-    app = TeridexApp(
-        config=TeridexConfig(ui=UIConfig(keymap="vim")),
+    app = RegistroApp(
+        config=RegistroConfig(ui=UIConfig(keymap="vim")),
         initial_dsn=Dsn.parse("sqlite:///:memory:"),
     )
     async with app.run_test() as pilot:

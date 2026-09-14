@@ -1,4 +1,4 @@
-"""Main screen — composes the Teridex layout.
+"""Main screen — composes the Registro layout.
 
 Layout:
     ┌── Data Catalog ──┐┌──── Query Editor ─────────────────────┐
@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING
 
 from textual.containers import Container, Vertical
 
-from teridex_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
-from teridex_tui.widgets.action_bar import ActionBar
+from registro_tui.widgets import QueryTabs, ResultsTable, SchemaTree, StatusBar
+from registro_tui.widgets.action_bar import ActionBar
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, field_validator
 
-from teridex_core.errors import ConfigError
+from registro_core.errors import ConfigError
 
 Scheme = Literal["duckdb", "sqlite", "postgres", "postgresql", "mysql"]
 _VALID_SCHEMES = {"duckdb", "sqlite", "postgres", "postgresql", "mysql"}
@@ -130,7 +130,7 @@ class Dsn(BaseModel):
             )
         except ValidationError as exc:
             # Field validation (an unsupported scheme, a bad port) must surface
-            # as a Teridex error like every other DSN failure. Letting pydantic's
+            # as a Registro error like every other DSN failure. Letting pydantic's
             # own multi-line dump escape put a stack-trace-shaped message in
             # front of the user, in a UI that renders it as Rich markup.
             detail = (

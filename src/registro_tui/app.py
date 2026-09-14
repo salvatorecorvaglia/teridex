@@ -1,4 +1,4 @@
-"""TeridexApp — the top-level Textual application.
+"""RegistroApp — the top-level Textual application.
 
 Responsibilities:
 * Build the dependency graph (event bus, plugin registry, adapter, executor).
@@ -18,53 +18,53 @@ from pydantic import ValidationError
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
-from teridex_core.config import TeridexConfig, load_config
-from teridex_core.errors import QueryCancelledError, QueryError, TeridexError
-from teridex_core.events import (
+from registro_core.config import RegistroConfig, load_config
+from registro_core.errors import QueryCancelledError, QueryError, RegistroError
+from registro_core.events import (
     EventBus,
     QueryCompleted,
     QueryFailed,
     QueryStarted,
 )
-from teridex_core.logging import clear_context, configure_logging, get_logger
-from teridex_core.models.connection import Dsn
-from teridex_engine.executor import QueryExecutor, QueryRun
-from teridex_engine.history import HistoryEntry
-from teridex_plugins.context import PluginContext
-from teridex_plugins.loader import PluginLoader
-from teridex_plugins.registry import PluginRegistry
-from teridex_tui.builtin_commands import BUILTIN_COMMANDS
-from teridex_tui.events import RunActionRequested
-from teridex_tui.keymaps import DEFAULT_BINDINGS, VIM_BINDINGS
-from teridex_tui.screens.command_palette import CommandPaletteScreen
-from teridex_tui.screens.connection import ConnectionScreen
-from teridex_tui.screens.help import HelpModal
-from teridex_tui.screens.history import HistoryModal
-from teridex_tui.screens.main import MainScreen
-from teridex_tui.screens.row_limit import RowLimitModal
-from teridex_tui.session import Session, open_session
-from teridex_tui.state import AppState
-from teridex_tui.themes import THEMES
-from teridex_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, StatusBar
+from registro_core.logging import clear_context, configure_logging, get_logger
+from registro_core.models.connection import Dsn
+from registro_engine.executor import QueryExecutor, QueryRun
+from registro_engine.history import HistoryEntry
+from registro_plugins.context import PluginContext
+from registro_plugins.loader import PluginLoader
+from registro_plugins.registry import PluginRegistry
+from registro_tui.builtin_commands import BUILTIN_COMMANDS
+from registro_tui.events import RunActionRequested
+from registro_tui.keymaps import DEFAULT_BINDINGS, VIM_BINDINGS
+from registro_tui.screens.command_palette import CommandPaletteScreen
+from registro_tui.screens.connection import ConnectionScreen
+from registro_tui.screens.help import HelpModal
+from registro_tui.screens.history import HistoryModal
+from registro_tui.screens.main import MainScreen
+from registro_tui.screens.row_limit import RowLimitModal
+from registro_tui.session import Session, open_session
+from registro_tui.state import AppState
+from registro_tui.themes import THEMES
+from registro_tui.widgets import ActionBar, QueryTabs, ResultsTable, SchemaTree, StatusBar
 
 if TYPE_CHECKING:
     from textual.widget import Widget
 
-    from teridex_engine.pool import ConnectionPool
-    from teridex_plugins.api import Command
+    from registro_engine.pool import ConnectionPool
+    from registro_plugins.api import Command
 
 logger = get_logger(__name__)
 
 # Worker name/group for the query stream. Named so ``on_unmount`` and the
 # tests can find it, and so a stray second run is visible in the worker list.
-_QUERY_WORKER = "teridex-query"
+_QUERY_WORKER = "registro-query"
 
 
-class TeridexApp(App[None]):
-    """The Teridex Textual application."""
+class RegistroApp(App[None]):
+    """The Registro Textual application."""
 
-    CSS_PATH = "teridex.tcss"
-    TITLE = "Teridex"
+    CSS_PATH = "registro.tcss"
+    TITLE = "Registro"
 
     # Class-level bindings — Textual reads these at class-creation time.
     # Vim-mode adds extra bindings dynamically in __init__ via bind().
@@ -74,7 +74,7 @@ class TeridexApp(App[None]):
 
     def __init__(
         self,
-        config: TeridexConfig | None = None,
+        config: RegistroConfig | None = None,
         initial_dsn: Dsn | None = None,
     ) -> None:
         super().__init__()
@@ -97,7 +97,7 @@ class TeridexApp(App[None]):
     # ---- lifecycle -----------------------------------------------------
 
     def _setup_logging(self) -> None:
-        """Point structured logging at ``~/.teridex/teridex.log``.
+        """Point structured logging at ``~/.registro/registro.log``.
 
         Done on mount rather than in ``__init__``: a constructor that touches
         the filesystem cannot be built where ``$HOME`` is read-only, and it made
@@ -106,11 +106,11 @@ class TeridexApp(App[None]):
         """
         log_file: Path | None = None
         try:
-            log_dir = Path.home() / ".teridex"
+            log_dir = Path.home() / ".registro"
             log_dir.mkdir(parents=True, exist_ok=True)
             with contextlib.suppress(OSError):
                 log_dir.chmod(0o700)
-            candidate = log_dir / "teridex.log"
+            candidate = log_dir / "registro.log"
             if not candidate.exists():
                 candidate.touch()
             with contextlib.suppress(OSError):
@@ -169,7 +169,7 @@ class TeridexApp(App[None]):
 
         theme = THEMES.get(self.cfg.ui.theme, THEMES["monokai"])
         tx = TxTheme(
-            name=f"teridex-{theme.name}",
+            name=f"registro-{theme.name}",
             primary=theme.primary,
             accent=theme.accent,
             success=theme.success,
@@ -218,7 +218,7 @@ class TeridexApp(App[None]):
         live DB credentials and let a plugin run arbitrary SQL or exhaust the
         pool outside the executor's event bus/history/cancellation machinery,
         which would defeat ``PluginContext``'s "intentionally narrow" surface
-        (see ``teridex_plugins.context``). ``introspector`` and ``history``
+        (see ``registro_plugins.context``). ``introspector`` and ``history``
         are safe to share: they only expose schema metadata and past query
         records, not live connections.
         """
@@ -489,7 +489,7 @@ class TeridexApp(App[None]):
                 except QueryCancelledError:
                     cancelled = True
                     self._status().notify_status("cancelled", "warning")
-                except TeridexError as exc:
+                except RegistroError as exc:
                     self._report_error("Query failed", exc)
                 finally:
                     # Close the stream before the adapter goes back to the pool.
@@ -528,7 +528,7 @@ class TeridexApp(App[None]):
         if results.row_count == 0:
             self._status().notify_status("nothing to export", "warning")
             return
-        path = Path.home() / ".teridex" / "exports" / f"export-{int(time.time())}.csv"
+        path = Path.home() / ".registro" / "exports" / f"export-{int(time.time())}.csv"
         try:
             n = await results.export_csv(path)
         except OSError as exc:
@@ -556,7 +556,7 @@ class TeridexApp(App[None]):
             if new_limit is None:
                 return
             try:
-                # ``TeridexConfig`` validates on assignment now, so a value the
+                # ``RegistroConfig`` validates on assignment now, so a value the
                 # modal let through but the schema rejects surfaces here rather
                 # than silently installing an out-of-range cap.
                 self.cfg.ui.max_display_rows = new_limit
@@ -585,7 +585,7 @@ class TeridexApp(App[None]):
         self._status().notify_status("refreshing schema…")
         try:
             snap = await self.state.introspector.refresh(lazy=True)
-        except TeridexError as exc:
+        except RegistroError as exc:
             self._report_error("Schema refresh failed", exc)
             return
         self._tree().populate(snap)

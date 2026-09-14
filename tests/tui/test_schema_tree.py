@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_core.models.result import ColumnType
-from teridex_core.models.schema import SchemaSnapshot, Table, TableColumn
+from registro_core.models.result import ColumnType
+from registro_core.models.schema import SchemaSnapshot, Table, TableColumn
 
 textual = pytest.importorskip("textual")
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
-from teridex_tui.widgets import SchemaTree  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
+from registro_tui.widgets import SchemaTree  # noqa: E402
 
 
 def _snapshot() -> SchemaSnapshot:
@@ -46,7 +46,7 @@ def _walk_labels(tree: SchemaTree) -> list[str]:
 
 @pytest.mark.asyncio
 async def test_columns_only_appear_after_expansion() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -79,7 +79,7 @@ async def test_columns_only_appear_after_expansion() -> None:
 
 @pytest.mark.asyncio
 async def test_re_expansion_does_not_duplicate() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -101,7 +101,7 @@ async def test_re_expansion_does_not_duplicate() -> None:
 
 @pytest.mark.asyncio
 async def test_introspection_retry_on_failure() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()

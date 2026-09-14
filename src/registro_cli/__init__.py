@@ -1,5 +1,5 @@
-"""Teridex CLI."""
+"""Registro CLI."""
 
-from teridex_cli.main import app, main
+from registro_cli.main import app, main
 
 __all__ = ["app", "main"]

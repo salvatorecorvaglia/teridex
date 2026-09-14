@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from teridex_adapters._introspect import SchemaIntrospector
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import connection_id
-from teridex_core.models.schema import ForeignKey, Index, TableColumn, View
+from registro_adapters._introspect import SchemaIntrospector
+from registro_adapters._typeinfer import infer_column_type
+from registro_adapters.base import connection_id
+from registro_core.models.schema import ForeignKey, Index, TableColumn, View
 
 if TYPE_CHECKING:
     from typing import Literal
 
     import asyncpg
 
-    from teridex_adapters.postgres_adapter import PostgresAdapter
+    from registro_adapters.postgres_adapter import PostgresAdapter
 
 
 # Columns come from pg_catalog rather than information_schema. The

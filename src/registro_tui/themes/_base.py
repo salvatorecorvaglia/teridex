@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class Theme:
-    """A Teridex theme rendered as Textual design tokens."""
+    """A Registro theme rendered as Textual design tokens."""
 
     name: str
     background: str

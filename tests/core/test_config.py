@@ -6,15 +6,15 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import ValidationError
 
-from teridex_core.config import load_config
-from teridex_core.errors import ConfigError
+from registro_core.config import load_config
+from registro_core.errors import ConfigError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
 def test_load_config_with_file(tmp_path: Path) -> None:
-    cfg = tmp_path / "teridex.toml"
+    cfg = tmp_path / "registro.toml"
     cfg.write_text(
         dedent(
             """
@@ -40,7 +40,7 @@ def test_load_config_missing_file_returns_defaults(tmp_path: Path) -> None:
 
 
 def test_load_config_deep_merges_overrides(tmp_path: Path) -> None:
-    cfg = tmp_path / "teridex.toml"
+    cfg = tmp_path / "registro.toml"
     cfg.write_text(
         dedent(
             """
@@ -59,13 +59,13 @@ def test_load_config_deep_merges_overrides(tmp_path: Path) -> None:
 def test_env_config_scalar_and_nested_conflict_is_order_independent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, set_scalar_first: bool
 ) -> None:
-    """A scalar (``TERIDEX_ENGINE``) and a nested field (``TERIDEX_ENGINE__POOL_SIZE``)
+    """A scalar (``REGISTRO_ENGINE``) and a nested field (``REGISTRO_ENGINE__POOL_SIZE``)
     targeting the same section must resolve the same way regardless of which
     ``setenv`` call happens first — the merge must not depend on
     ``os.environ`` iteration order.
     """
-    scalar = ("TERIDEX_ENGINE", '{"max_history_entries": 42}')
-    nested = ("TERIDEX_ENGINE__POOL_SIZE", "8")
+    scalar = ("REGISTRO_ENGINE", '{"max_history_entries": 42}')
+    nested = ("REGISTRO_ENGINE__POOL_SIZE", "8")
     ordered = [scalar, nested] if set_scalar_first else [nested, scalar]
     for name, value in ordered:
         monkeypatch.setenv(name, value)
@@ -88,7 +88,7 @@ def test_unknown_theme_is_rejected() -> None:
 
 def test_known_themes_are_accepted() -> None:
     # Imported locally: tests/core must not pull in Textual at module scope.
-    from teridex_tui.themes import THEMES  # noqa: PLC0415
+    from registro_tui.themes import THEMES  # noqa: PLC0415
 
     for name in THEMES:
         assert load_config(None, ui={"theme": name}).ui.theme == name
@@ -98,8 +98,8 @@ def test_theme_literal_matches_the_registered_themes() -> None:
     """The ``Literal`` and the theme registry must not drift apart."""
     import typing  # noqa: PLC0415
 
-    from teridex_core.config import UIConfig  # noqa: PLC0415
-    from teridex_tui.themes import THEMES  # noqa: PLC0415
+    from registro_core.config import UIConfig  # noqa: PLC0415
+    from registro_tui.themes import THEMES  # noqa: PLC0415
 
     allowed = set(typing.get_args(UIConfig.model_fields["theme"].annotation))
     assert allowed == set(THEMES)

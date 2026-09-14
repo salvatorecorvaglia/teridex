@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_adapters._params import coerce_params, coerce_value
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.errors import AdapterConnectionError
-from teridex_core.models.connection import Dsn
+from registro_adapters._params import coerce_params, coerce_value
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.errors import AdapterConnectionError
+from registro_core.models.connection import Dsn
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,4 @@
-"""Layered configuration: defaults → TOML file → env (`TERIDEX_*`) → CLI."""
+"""Layered configuration: defaults → TOML file → env (`REGISTRO_*`) → CLI."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from teridex_core.errors import ConfigError
-from teridex_core.logging import get_logger
+from registro_core.errors import ConfigError
+from registro_core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -21,7 +21,7 @@ class _Section(BaseModel):
     ``validate_assignment`` has to live on the section that owns the field:
     settings are mutated at runtime (the row-limit modal writes
     ``ui.max_display_rows``), and that assignment is validated by *UIConfig*,
-    not by the enclosing ``TeridexConfig``. Setting it only on the parent left
+    not by the enclosing ``RegistroConfig``. Setting it only on the parent left
     every nested write unchecked, so a value the schema would have rejected
     from a config file was accepted at runtime.
     """
@@ -32,7 +32,7 @@ class _Section(BaseModel):
 class UIConfig(_Section):
     # ``Literal``, matching ``keymap``: an unknown theme name used to fall back
     # to monokai silently, so a typo looked like the theme setting being
-    # ignored. Keep in step with ``teridex_tui.themes.THEMES``, which
+    # ignored. Keep in step with ``registro_tui.themes.THEMES``, which
     # ``tests/core/test_config.py`` asserts.
     theme: Literal["monokai", "nord"] = "monokai"
     keymap: Literal["default", "vim"] = "default"
@@ -47,7 +47,7 @@ class EngineConfig(_Section):
     max_history_entries: int = Field(default=1000, ge=10)
     pool_size: int = Field(default=5, ge=1, le=64)
     # Where the local query-history store lives. ``None`` uses
-    # ``~/.teridex/history.db``. Every other path in the app is configurable;
+    # ``~/.registro/history.db``. Every other path in the app is configurable;
     # this one was hardcoded at the single call site.
     history_path: str | None = None
 
@@ -64,10 +64,10 @@ class PluginsConfig(_Section):
     disabled: list[str] = Field(default_factory=list)
 
 
-class TeridexConfig(BaseModel):
-    """Top-level Teridex settings.
+class RegistroConfig(BaseModel):
+    """Top-level Registro settings.
 
-    Env vars: ``TERIDEX_<section>__<field>``, e.g. ``TERIDEX_UI__THEME=nord``.
+    Env vars: ``REGISTRO_<section>__<field>``, e.g. ``REGISTRO_UI__THEME=nord``.
     """
 
     model_config = ConfigDict(
@@ -83,7 +83,7 @@ class TeridexConfig(BaseModel):
 
 
 def default_config_path() -> Path:
-    return Path.home() / ".config" / "teridex" / "config.toml"
+    return Path.home() / ".config" / "registro" / "config.toml"
 
 
 def _deep_merge(base: dict[str, Any], custom: dict[str, Any]) -> dict[str, Any]:
@@ -102,14 +102,14 @@ def _get_env_config() -> dict[str, Any]:
 
     env_data: dict[str, Any] = {}
     # Sort so the result never depends on the OS/shell's environment
-    # iteration order: a scalar (``TERIDEX_ENGINE``) and a nested field
-    # (``TERIDEX_ENGINE__POOL_SIZE``) can both target the same top-level key,
+    # iteration order: a scalar (``REGISTRO_ENGINE``) and a nested field
+    # (``REGISTRO_ENGINE__POOL_SIZE``) can both target the same top-level key,
     # and whichever is applied last wins. Sorting makes the shorter, less
     # specific key always precede the longer, more specific one, so a nested
     # override always and consistently wins over a same-section scalar.
     for key, val in sorted(os.environ.items()):
-        if key.startswith("TERIDEX_"):
-            name = key[len("TERIDEX_") :]
+        if key.startswith("REGISTRO_"):
+            name = key[len("REGISTRO_") :]
             if not name:
                 continue
             parts = [p.lower() for p in name.split("__")]
@@ -133,7 +133,7 @@ def _get_env_config() -> dict[str, Any]:
     return env_data
 
 
-def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
+def load_config(path: Path | None = None, **overrides: Any) -> RegistroConfig:
     """Load configuration. File is optional; env/CLI overrides win."""
     toml_data: dict[str, Any] = {}
     cfg_path = path or default_config_path()
@@ -162,7 +162,7 @@ def load_config(path: Path | None = None, **overrides: Any) -> TeridexConfig:
     data = _deep_merge(toml_data, _get_env_config())
     data = _deep_merge(data, overrides)
     try:
-        return TeridexConfig.model_validate(data)
+        return RegistroConfig.model_validate(data)
     except Exception as exc:  # pydantic ValidationError
         raise ConfigError(
             "invalid configuration",

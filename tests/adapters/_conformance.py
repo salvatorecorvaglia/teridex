@@ -23,17 +23,17 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
 
-from teridex_core.errors import QueryCancelledError, QueryError
-from teridex_core.models.result import ColumnType
+from registro_core.errors import QueryCancelledError, QueryError
+from registro_core.models.result import ColumnType
 
 if TYPE_CHECKING:
-    from teridex_core.models.result import ResultBatch
-    from teridex_core.protocols.adapter import DatabaseAdapter
+    from registro_core.models.result import ResultBatch
+    from registro_core.protocols.adapter import DatabaseAdapter
 
-_TABLE = "teridex_conformance"
-_PARENT = "teridex_conf_parent"
-_CHILD = "teridex_conf_child"
-_INDEX = "teridex_conf_tag_idx"
+_TABLE = "registro_conformance"
+_PARENT = "registro_conf_parent"
+_CHILD = "registro_conf_child"
+_INDEX = "registro_conf_tag_idx"
 
 
 async def drain(adapter: DatabaseAdapter, sql: str) -> list[tuple[Any, ...]]:
@@ -54,7 +54,7 @@ class AdapterConformance:
     """Contract every adapter must satisfy. Subclass and supply ``adapter``."""
 
     # --- dialect knobs a subclass may override -------------------------
-    #: DDL for a two-column table named ``teridex_conformance``.
+    #: DDL for a two-column table named ``registro_conformance``.
     create_table_sql: ClassVar[str] = f"CREATE TABLE {_TABLE} (id INTEGER, name VARCHAR(32))"
     #: A statement that cannot parse on any engine.
     invalid_sql: ClassVar[str] = "SELCT NOT VALID SQL ("

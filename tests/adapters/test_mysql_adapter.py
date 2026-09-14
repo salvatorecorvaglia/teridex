@@ -1,6 +1,6 @@
 """MySQL runs the shared adapter conformance suite.
 
-Needs a server: either ``TERIDEX_MYSQL_DSN`` (see
+Needs a server: either ``REGISTRO_MYSQL_DSN`` (see
 ``tests/scripts/test-integration.sh``) or a reachable Docker daemon, from which the
 ``mysql_dsn`` fixture starts a container.
 """
@@ -13,9 +13,9 @@ import pytest
 
 pytest.importorskip("asyncmy")
 
-from teridex_adapters.mysql_adapter import MySQLAdapter
-from teridex_core.models.connection import Dsn
-from teridex_core.models.result import ColumnType
+from registro_adapters.mysql_adapter import MySQLAdapter
+from registro_core.models.connection import Dsn
+from registro_core.models.result import ColumnType
 from tests.adapters._conformance import AdapterConformance, collect, drain
 
 if TYPE_CHECKING:
@@ -25,17 +25,17 @@ pytestmark = pytest.mark.integration
 
 
 class TestMySQLConformance(AdapterConformance):
-    create_table_sql = "CREATE TABLE teridex_conformance (id INT, name VARCHAR(32))"
+    create_table_sql = "CREATE TABLE registro_conformance (id INT, name VARCHAR(32))"
 
     @pytest.fixture
     async def adapter(self, mysql_dsn: str) -> AsyncIterator[MySQLAdapter]:
         a = MySQLAdapter()
         await a.connect(Dsn.parse(mysql_dsn))
         try:
-            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await drain(a, "DROP TABLE IF EXISTS registro_conformance")
             yield a
         finally:
-            await drain(a, "DROP TABLE IF EXISTS teridex_conformance")
+            await drain(a, "DROP TABLE IF EXISTS registro_conformance")
             await a.close()
 
 

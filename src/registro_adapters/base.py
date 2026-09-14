@@ -13,22 +13,22 @@ import contextlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, TypeVar
 
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
-from teridex_core.logging import get_logger
-from teridex_core.models.query import QueryHandle, QueryMetadata, QueryStatus
+from registro_core.errors import AdapterError, QueryCancelledError, QueryError
+from registro_core.logging import get_logger
+from registro_core.models.query import QueryHandle, QueryMetadata, QueryStatus
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Mapping
 
-    from teridex_core.models.connection import Dsn
-    from teridex_core.models.result import ResultBatch
-    from teridex_core.models.schema import (
+    from registro_core.models.connection import Dsn
+    from registro_core.models.result import ResultBatch
+    from registro_core.models.schema import (
         ForeignKey,
         Index,
         SchemaSnapshot,
         TableColumn,
     )
-    from teridex_core.protocols.adapter import Transaction
+    from registro_core.protocols.adapter import Transaction
 
 logger = get_logger(__name__)
 
@@ -74,7 +74,7 @@ class AbstractAdapter(ABC):
 
     Threading/concurrency contract: an adapter instance is **single-owner** —
     it serves one query at a time. The engine enforces this by handing every
-    run a dedicated adapter from :class:`~teridex_engine.pool.ConnectionPool`.
+    run a dedicated adapter from :class:`~registro_engine.pool.ConnectionPool`.
     The per-handle ``_cancel_flags`` / ``_metadata`` dicts are therefore only
     mutated from one logical caller; they are not guarded for concurrent
     ``execute`` calls on the same instance.
@@ -188,7 +188,7 @@ class AbstractAdapter(ABC):
         sql: str | None = None,
         mark_failed: bool = True,
     ) -> NoReturn:
-        """Translate a driver-native error into the Teridex error hierarchy.
+        """Translate a driver-native error into the Registro error hierarchy.
 
         Checks the handle's cancel flag first: a query cancelled mid-flight
         surfaces as :class:`QueryCancelledError` regardless of which
@@ -240,7 +240,7 @@ class AbstractAdapter(ABC):
     async def reset(self) -> None:
         """Return the adapter to a clean state before it is reused.
 
-        Called by :class:`~teridex_engine.pool.ConnectionPool` on release.
+        Called by :class:`~registro_engine.pool.ConnectionPool` on release.
         Subclasses **must** also unwind connection-level state — an open
         transaction, a server-side cursor — because the next caller inherits
         this connection and would otherwise run inside someone else's

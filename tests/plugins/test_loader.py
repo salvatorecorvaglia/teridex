@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from teridex_core.events import ConnectionOpened, EventBus
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.api import Command, hook, hook_event, is_hook
-from teridex_plugins.loader import PluginLoader
-from teridex_plugins.registry import PluginRegistry
+from registro_core.events import ConnectionOpened, EventBus
+from registro_core.protocols.plugin import PluginManifest
+from registro_plugins.api import Command, hook, hook_event, is_hook
+from registro_plugins.loader import PluginLoader
+from registro_plugins.registry import PluginRegistry
 
 if TYPE_CHECKING:
-    from teridex_plugins.context import PluginContext
+    from registro_plugins.context import PluginContext
 
 
 class _SamplePlugin:
@@ -113,7 +113,7 @@ async def test_incompatible_plugin_version_is_skipped() -> None:
 
     class _FuturePlugin:
         manifest = PluginManifest(
-            id="future", name="Future", version="1.0.0", requires_teridex=">=99.0.0"
+            id="future", name="Future", version="1.0.0", requires_registro=">=99.0.0"
         )
 
         def on_load(self, ctx: PluginContext) -> None:

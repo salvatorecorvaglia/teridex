@@ -8,8 +8,8 @@ import uuid
 
 import pytest
 
-from teridex_adapters._typeinfer import infer_column_type, infer_column_type_from_value
-from teridex_core.models.result import ColumnType
+from registro_adapters._typeinfer import infer_column_type, infer_column_type_from_value
+from registro_core.models.result import ColumnType
 
 
 @pytest.mark.parametrize(

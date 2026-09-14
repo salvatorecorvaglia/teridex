@@ -1,7 +1,7 @@
 """Cover the real entry-point discovery path of ``PluginLoader``.
 
 We don't install a real wheel — we monkeypatch
-``teridex_plugins.loader.entry_points`` to return a synthetic
+``registro_plugins.loader.entry_points`` to return a synthetic
 ``EntryPoint`` pointing at the in-tree fixture module.
 """
 
@@ -11,10 +11,10 @@ from importlib.metadata import EntryPoint
 
 import pytest
 
-from teridex_core.errors import PluginLoadError
-from teridex_core.events import EventBus
-from teridex_plugins.loader import PluginLoader
-from teridex_plugins.registry import PluginRegistry
+from registro_core.errors import PluginLoadError
+from registro_core.events import EventBus
+from registro_plugins.loader import PluginLoader
+from registro_plugins.registry import PluginRegistry
 
 
 @pytest.mark.asyncio
@@ -31,7 +31,7 @@ async def test_discover_returns_entry_points_filtered_by_group(
         assert group == PluginLoader.GROUP
         return (fake,)
 
-    monkeypatch.setattr("teridex_plugins.loader.entry_points", _fake_entry_points)
+    monkeypatch.setattr("registro_plugins.loader.entry_points", _fake_entry_points)
 
     bus = EventBus()
     try:
@@ -52,7 +52,7 @@ async def test_load_all_drives_entry_point_factory(
         group=PluginLoader.GROUP,
     )
     monkeypatch.setattr(
-        "teridex_plugins.loader.entry_points",
+        "registro_plugins.loader.entry_points",
         lambda *, group: (fake,) if group == PluginLoader.GROUP else (),
     )
 
@@ -79,7 +79,7 @@ async def test_load_entry_point_wraps_factory_errors(
         group=PluginLoader.GROUP,
     )
     monkeypatch.setattr(
-        "teridex_plugins.loader.entry_points",
+        "registro_plugins.loader.entry_points",
         lambda *, group: (bad,) if group == PluginLoader.GROUP else (),
     )
 

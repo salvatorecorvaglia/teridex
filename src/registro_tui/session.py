@@ -1,6 +1,6 @@
 """Database session lifecycle: connect, tear down, replace.
 
-Extracted from :class:`~teridex_tui.app.TeridexApp`, which was the only place
+Extracted from :class:`~registro_tui.app.RegistroApp`, which was the only place
 that knew how to build a connection *and* the only place that knew how to
 dispose of one. Keeping the two together — and away from the UI — is what makes
 "open a second connection while the first is still connecting" safe: the old
@@ -15,32 +15,32 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from teridex_adapters import create_adapter_for_dsn
-from teridex_core.errors import AdapterError
-from teridex_core.logging import get_logger
-from teridex_engine.history import QueryHistory
-from teridex_engine.introspector import Introspector
-from teridex_engine.pool import ConnectionPool
+from registro_adapters import create_adapter_for_dsn
+from registro_core.errors import AdapterError
+from registro_core.logging import get_logger
+from registro_engine.history import QueryHistory
+from registro_engine.introspector import Introspector
+from registro_engine.pool import ConnectionPool
 
 if TYPE_CHECKING:
-    from teridex_adapters.base import AbstractAdapter
-    from teridex_core.config import TeridexConfig
-    from teridex_core.events import EventBus
-    from teridex_core.models.connection import Dsn
+    from registro_adapters.base import AbstractAdapter
+    from registro_core.config import RegistroConfig
+    from registro_core.events import EventBus
+    from registro_core.models.connection import Dsn
 
 logger = get_logger(__name__)
 
 
-def default_history_path(cfg: TeridexConfig) -> Path:
+def default_history_path(cfg: RegistroConfig) -> Path:
     """Resolve where the query-history store lives.
 
     ``engine.history_path`` wins when set; otherwise the store sits alongside
-    the log file under ``~/.teridex``.
+    the log file under ``~/.registro``.
     """
     configured = cfg.engine.history_path
     if configured:
         return Path(configured).expanduser()
-    return Path.home() / ".teridex" / "history.db"
+    return Path.home() / ".registro" / "history.db"
 
 
 def is_in_memory(dsn: Dsn) -> bool:
@@ -58,7 +58,7 @@ def share_in_memory_sqlite(dsn: Dsn) -> Dsn:
     """
     if dsn.scheme != "sqlite" or not is_in_memory(dsn):
         return dsn
-    name = f"teridex-mem-{uuid4().hex}"
+    name = f"registro-mem-{uuid4().hex}"
     return dsn.model_copy(
         update={
             "database": f"file:{name}",
@@ -104,7 +104,7 @@ class Session:
                 logger.exception("session_close_failed", resource=label)
 
 
-async def open_session(dsn: Dsn, cfg: TeridexConfig, bus: EventBus) -> Session:
+async def open_session(dsn: Dsn, cfg: RegistroConfig, bus: EventBus) -> Session:
     """Connect to *dsn* and build the session around it.
 
     Anything already opened is closed if a later step fails, so a partial

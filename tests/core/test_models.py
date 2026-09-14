@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_core.errors import ConfigError
-from teridex_core.models.connection import Dsn, mask_dsn_password
-from teridex_core.models.query import QueryHandle, QueryStatus
+from registro_core.errors import ConfigError
+from registro_core.models.connection import Dsn, mask_dsn_password
+from registro_core.models.query import QueryHandle, QueryStatus
 
 
 def test_dsn_parse_sqlite() -> None:
@@ -80,8 +80,8 @@ def test_query_handle_lifecycle() -> None:
         "sqlite:///relative.db",
         "sqlite:////abs/path/foo.db",
         "duckdb:////abs/path/foo.duckdb",
-        "postgres://teridex:teridex@localhost:5432/teridex",
-        "mysql://teridex:teridex@localhost:3306/teridex",
+        "postgres://registro:registro@localhost:5432/registro",
+        "mysql://registro:registro@localhost:3306/registro",
         "postgres://user@host/db",
     ],
 )

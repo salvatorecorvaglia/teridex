@@ -10,15 +10,15 @@ import asyncmy
 from asyncmy import errors as asyncmy_errors
 from asyncmy.constants import FIELD_TYPE
 
-from teridex_adapters.mysql_adapter import (
+from registro_adapters.mysql_adapter import (
     _FIELD_TYPE_NAMES,
     MySQLAdapter,
     _describe_columns,
 )
-from teridex_core.errors import AdapterError, QueryCancelledError, QueryError
-from teridex_core.models.connection import Dsn
-from teridex_core.models.query import QueryHandle, QueryStatus
-from teridex_core.models.result import ColumnType
+from registro_core.errors import AdapterError, QueryCancelledError, QueryError
+from registro_core.models.connection import Dsn
+from registro_core.models.query import QueryHandle, QueryStatus
+from registro_core.models.result import ColumnType
 
 
 def _adapter_with_cursor(cursor: MagicMock) -> MySQLAdapter:
@@ -251,7 +251,7 @@ async def test_introspection_keeps_the_buffered_cursor() -> None:
     """
     import inspect  # noqa: PLC0415
 
-    from teridex_adapters.introspect.mysql import MySQLIntrospector  # noqa: PLC0415
+    from registro_adapters.introspect.mysql import MySQLIntrospector  # noqa: PLC0415
 
     source = inspect.getsource(MySQLIntrospector._fetch)
     assert "self._conn.cursor()" in source

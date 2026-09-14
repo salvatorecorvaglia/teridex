@@ -8,8 +8,8 @@ from rich.markup import escape
 from textual.containers import Vertical
 from textual.widgets import Button, Input, ListItem, ListView, Static
 
-from teridex_core.models.connection import Dsn
-from teridex_tui.screens._base import BaseModal
+from registro_core.models.connection import Dsn
+from registro_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -20,8 +20,8 @@ if TYPE_CHECKING:
 _PRESETS: list[tuple[str, str]] = [
     ("DuckDB (in-memory)", "duckdb:///:memory:"),
     ("SQLite (in-memory)", "sqlite:///:memory:"),
-    ("PostgreSQL (local)", "postgres://teridex:teridex@localhost:5432/teridex"),
-    ("MySQL (local)", "mysql://teridex:teridex@localhost:3306/teridex"),
+    ("PostgreSQL (local)", "postgres://registro:registro@localhost:5432/registro"),
+    ("MySQL (local)", "mysql://registro:registro@localhost:3306/registro"),
 ]
 
 

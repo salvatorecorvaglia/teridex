@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from teridex_core.errors import PluginError
-from teridex_core.logging import get_logger
+from registro_core.errors import PluginError
+from registro_core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from teridex_core.protocols.plugin import PluginManifest
-    from teridex_plugins.api import Command, Panel
+    from registro_core.protocols.plugin import PluginManifest
+    from registro_plugins.api import Command, Panel
 
 logger = get_logger(__name__)
 

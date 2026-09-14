@@ -17,13 +17,13 @@ from textual.binding import Binding
 from textual.widgets import DataTable
 from textual.widgets.data_table import CellDoesNotExist
 
-from teridex_core.export import csv_safe_row
-from teridex_tui.keymaps.default import RESULTS_BINDINGS
+from registro_core.export import csv_safe_row
+from registro_tui.keymaps.default import RESULTS_BINDINGS
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from teridex_core.models.result import ResultBatch
+    from registro_core.models.result import ResultBatch
 
 
 # Rows inserted between yields to the event loop.

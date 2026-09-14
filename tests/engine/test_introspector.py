@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.events import EventBus, SchemaRefreshed
-from teridex_core.models.connection import Dsn
-from teridex_core.models.schema import ForeignKey, Index, SchemaSnapshot, TableColumn
-from teridex_engine.introspector import Introspector
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.events import EventBus, SchemaRefreshed
+from registro_core.models.connection import Dsn
+from registro_core.models.schema import ForeignKey, Index, SchemaSnapshot, TableColumn
+from registro_engine.introspector import Introspector
 
 if TYPE_CHECKING:
-    from teridex_core.protocols.adapter import DatabaseAdapter
+    from registro_core.protocols.adapter import DatabaseAdapter
 
 
 class _FakeAdapter:

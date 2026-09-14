@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_plugins.api import Command, Panel
-from teridex_plugins.loader import version_satisfies
+from registro_plugins.api import Command, Panel
+from registro_plugins.loader import version_satisfies
 
 
 async def _noop(_ctx: object) -> None:

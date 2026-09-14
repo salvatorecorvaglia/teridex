@@ -4,7 +4,7 @@ Displays the results display cap and a Run Query button.
 
 There is deliberately no transaction-mode indicator. One used to sit here
 reading "Tx: Auto-Commit" permanently — it was never updated, because nothing
-in the UI or the CLI reaches ``teridex_engine.transaction``. A label that
+in the UI or the CLI reaches ``registro_engine.transaction``. A label that
 cannot change is not a status, and it implied a feature that is not wired up.
 The engine keeps its transaction support for plugins and future work.
 """

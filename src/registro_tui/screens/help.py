@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 from textual.containers import Vertical
 from textual.widgets import Static
 
-from teridex_tui.keymaps import GLOBAL_BINDINGS, RESULTS_BINDINGS, key_label
-from teridex_tui.keymaps.vim import VIM_BINDINGS
-from teridex_tui.screens._base import BaseModal
+from registro_tui.keymaps import GLOBAL_BINDINGS, RESULTS_BINDINGS, key_label
+from registro_tui.keymaps.vim import VIM_BINDINGS
+from registro_tui.screens._base import BaseModal
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -53,7 +53,7 @@ class HelpModal(BaseModal[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="help-modal"):
-            yield Static("[b]Teridex — Keybindings[/]\n", id="help-title")
+            yield Static("[b]Registro — Keybindings[/]\n", id="help-title")
             if self._is_vim():
                 yield Static(
                     "[$warning]Note: Vim mode applies to global/panel navigation controls "

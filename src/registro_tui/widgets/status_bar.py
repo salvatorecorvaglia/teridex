@@ -22,7 +22,7 @@ from textual.content import Content
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from teridex_tui.keymaps import ACTION_TO_KEY, VIM_ACTION_TO_KEY, key_label
+from registro_tui.keymaps import ACTION_TO_KEY, VIM_ACTION_TO_KEY, key_label
 
 # Actions surfaced in the footer, in display order, each with the short label
 # the footer shows. Only the *label* is written here — the key is resolved from

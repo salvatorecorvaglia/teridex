@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from teridex_adapters._introspect import SchemaIntrospector
-from teridex_adapters._typeinfer import infer_column_type
-from teridex_adapters.base import connection_id
-from teridex_core.models.schema import ForeignKey, Index, TableColumn
+from registro_adapters._introspect import SchemaIntrospector
+from registro_adapters._typeinfer import infer_column_type
+from registro_adapters.base import connection_id
+from registro_core.models.schema import ForeignKey, Index, TableColumn
 
 if TYPE_CHECKING:
-    from teridex_adapters.mysql_adapter import MySQLAdapter
+    from registro_adapters.mysql_adapter import MySQLAdapter
 
 # Schemas MySQL owns; never surfaced in the catalog tree.
 _SYSTEM_SCHEMAS = "('mysql','performance_schema','information_schema','sys')"

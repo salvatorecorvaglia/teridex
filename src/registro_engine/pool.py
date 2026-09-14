@@ -12,9 +12,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from teridex_core.logging import get_logger
-from teridex_core.models.connection import Dsn
-from teridex_core.protocols.adapter import DatabaseAdapter
+from registro_core.logging import get_logger
+from registro_core.models.connection import Dsn
+from registro_core.protocols.adapter import DatabaseAdapter
 
 logger = get_logger(__name__)
 

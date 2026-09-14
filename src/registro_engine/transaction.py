@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from teridex_core.protocols.adapter import DatabaseAdapter, Transaction
+    from registro_core.protocols.adapter import DatabaseAdapter, Transaction
 
 
 @asynccontextmanager

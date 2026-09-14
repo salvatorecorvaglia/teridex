@@ -20,17 +20,17 @@ ignore = [
 # Typer derives the command-line interface from the function signature, so the
 # number of parameters is the number of options the command offers. Same
 # rationale as the global PLR0913 ignore, scoped to where the framework forces it.
-"src/teridex_cli/**" = ["PLR0917"]
+"src/registro_cli/**" = ["PLR0917"]
 "**/__init__.py" = ["F401"]
 
 [lint.isort]
 known-first-party = [
-    "teridex_core",
-    "teridex_engine",
-    "teridex_adapters",
-    "teridex_plugins",
-    "teridex_cli",
-    "teridex_tui",
+    "registro_core",
+    "registro_engine",
+    "registro_adapters",
+    "registro_plugins",
+    "registro_cli",
+    "registro_tui",
 ]
 
 [format]

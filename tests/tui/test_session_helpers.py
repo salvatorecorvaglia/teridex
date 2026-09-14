@@ -4,12 +4,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from teridex_adapters.sqlite_adapter import SQLiteAdapter
-from teridex_core.config import TeridexConfig
-from teridex_core.events import EventBus
-from teridex_core.models.connection import Dsn
-from teridex_engine.history import QueryHistory
-from teridex_tui.session import (
+from registro_adapters.sqlite_adapter import SQLiteAdapter
+from registro_core.config import RegistroConfig
+from registro_core.events import EventBus
+from registro_core.models.connection import Dsn
+from registro_engine.history import QueryHistory
+from registro_tui.session import (
     is_in_memory,
     is_single_connection_dsn,
     open_session,
@@ -56,7 +56,7 @@ def test_share_in_memory_sqlite_rewrites_to_a_named_shared_cache_uri() -> None:
     shared = share_in_memory_sqlite(dsn)
     assert shared.scheme == "sqlite"
     assert shared.database is not None
-    assert shared.database.startswith("file:teridex-mem-")
+    assert shared.database.startswith("file:registro-mem-")
     assert shared.params["mode"] == "memory"
     assert shared.params["cache"] == "shared"
 
@@ -112,7 +112,7 @@ async def test_open_session_closes_what_it_opened_when_a_later_step_fails(
     monkeypatch.setattr(SQLiteAdapter, "connect", _tracking_connect)
     monkeypatch.setattr(SQLiteAdapter, "close", _tracking_close)
 
-    cfg = TeridexConfig()
+    cfg = RegistroConfig()
     cfg.engine.history_path = str(tmp_path / "history.db")
     bus = EventBus()
     try:
@@ -129,7 +129,7 @@ async def test_session_close_continues_past_a_failing_resource(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """One resource refusing to close must not strand the others."""
-    cfg = TeridexConfig()
+    cfg = RegistroConfig()
     cfg.engine.history_path = str(tmp_path / "history.db")
     bus = EventBus()
     session = await open_session(Dsn.parse("sqlite:///:memory:"), cfg, bus)

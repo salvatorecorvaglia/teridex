@@ -10,9 +10,9 @@ from rich.cells import cell_len  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.widgets import Static  # noqa: E402
 
-from teridex_tui.keymaps import ACTION_TO_KEY, key_label  # noqa: E402
-from teridex_tui.widgets.action_bar import ActionBar  # noqa: E402
-from teridex_tui.widgets.status_bar import StatusBar  # noqa: E402
+from registro_tui.keymaps import ACTION_TO_KEY, key_label  # noqa: E402
+from registro_tui.widgets.action_bar import ActionBar  # noqa: E402
+from registro_tui.widgets.status_bar import StatusBar  # noqa: E402
 
 
 class _Harness(App[None]):

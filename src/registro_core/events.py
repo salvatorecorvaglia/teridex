@@ -1,6 +1,6 @@
 """Typed asynchronous event bus.
 
-The bus is the spine of Teridex's internal architecture. Publishers fire and
+The bus is the spine of Registro's internal architecture. Publishers fire and
 forget; subscribers receive events on their own coroutine. Events are Pydantic
 models — type the subscriber by the concrete class.
 
@@ -23,7 +23,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from teridex_core.logging import get_logger
+from registro_core.logging import get_logger
 
 logger = get_logger(__name__)
 

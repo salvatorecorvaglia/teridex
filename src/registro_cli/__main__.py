@@ -1,4 +1,4 @@
-from teridex_cli.main import main
+from registro_cli.main import main
 
 if __name__ == "__main__":
     main()

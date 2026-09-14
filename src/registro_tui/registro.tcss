@@ -1,4 +1,4 @@
-/* Teridex Textual CSS — main layout
+/* Registro Textual CSS — main layout
  *
  * Layout:
  *   ┌── Data Catalog ────┐┌──── Query Editor ──────────────────┐
@@ -255,7 +255,7 @@ ResultsTable {
 }
 
 /* ── Focus, hover and disabled states ──
- * Teridex is keyboard-first, so "where am I?" has to be answerable at a
+ * Registro is keyboard-first, so "where am I?" has to be answerable at a
  * glance. Nothing here was styled before, leaving focus to whatever Textual's
  * defaults happened to render against the theme's own colours.
  */

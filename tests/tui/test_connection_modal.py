@@ -15,7 +15,7 @@ textual = pytest.importorskip("textual")
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.widgets import Button, Input, ListView, Static  # noqa: E402
 
-from teridex_tui.screens.connection import _PRESETS, ConnectionScreen  # noqa: E402
+from registro_tui.screens.connection import _PRESETS, ConnectionScreen  # noqa: E402
 
 
 class _Harness(App[None]):
@@ -160,10 +160,10 @@ async def test_escape_does_not_crash_the_real_app() -> None:
     app opens on startup when no DSN is given, so it was the very first
     keystroke a new user might try.
     """
-    from teridex_core.config import TeridexConfig  # noqa: PLC0415
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
+    from registro_core.config import RegistroConfig  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
 
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         assert isinstance(app.screen, ConnectionScreen), "startup should open the dialog"

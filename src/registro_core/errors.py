@@ -1,4 +1,4 @@
-"""Typed exception hierarchy for Teridex.
+"""Typed exception hierarchy for Registro.
 
 Every error carries a stable, machine-readable ``code`` for telemetry and
 plugin-side handling. Use ``code`` for branching, ``message`` for humans.
@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 
-class TeridexError(Exception):
-    """Base class for all Teridex errors."""
+class RegistroError(Exception):
+    """Base class for all Registro errors."""
 
-    code: str = "teridex.unknown"
+    code: str = "registro.unknown"
 
     def __init__(self, message: str, /, *, context: dict[str, Any] | None = None) -> None:
         super().__init__(message)
@@ -25,12 +25,12 @@ class TeridexError(Exception):
         return f"[{self.code}] {self.message}"
 
 
-class ConfigError(TeridexError):
-    code = "teridex.config"
+class ConfigError(RegistroError):
+    code = "registro.config"
 
 
-class AdapterError(TeridexError):
-    code = "teridex.adapter"
+class AdapterError(RegistroError):
+    code = "registro.adapter"
 
 
 class AdapterConnectionError(AdapterError):
@@ -42,24 +42,24 @@ class AdapterConnectionError(AdapterError):
        in modules that import from this package.
     """
 
-    code = "teridex.adapter.connection"
+    code = "registro.adapter.connection"
 
 
-class QueryError(TeridexError):
-    code = "teridex.query"
+class QueryError(RegistroError):
+    code = "registro.query"
 
 
 class QueryCancelledError(QueryError):
-    code = "teridex.query.cancelled"
+    code = "registro.query.cancelled"
 
 
 class QueryTimeoutError(QueryError):
-    code = "teridex.query.timeout"
+    code = "registro.query.timeout"
 
 
-class PluginError(TeridexError):
-    code = "teridex.plugin"
+class PluginError(RegistroError):
+    code = "registro.plugin"
 
 
 class PluginLoadError(PluginError):
-    code = "teridex.plugin.load"
+    code = "registro.plugin.load"

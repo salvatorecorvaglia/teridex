@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from teridex_core.errors import PluginError
-from teridex_plugins.api import Command, Panel
-from teridex_plugins.registry import PluginRegistry
+from registro_core.errors import PluginError
+from registro_plugins.api import Command, Panel
+from registro_plugins.registry import PluginRegistry
 
 
 async def _noop(_ctx: object) -> None:

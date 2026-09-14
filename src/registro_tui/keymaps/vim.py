@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from teridex_tui.keymaps.default import DEFAULT_BINDINGS
+from registro_tui.keymaps.default import DEFAULT_BINDINGS
 
 VIM_BINDINGS: list[tuple[str, str, str]] = [
     *DEFAULT_BINDINGS,

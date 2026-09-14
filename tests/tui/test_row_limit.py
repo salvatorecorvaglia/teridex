@@ -8,15 +8,15 @@ textual = pytest.importorskip("textual")
 
 from textual.widgets import Input, Static  # noqa: E402
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
-from teridex_tui.screens.row_limit import RowLimitModal  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
+from registro_tui.screens.row_limit import RowLimitModal  # noqa: E402
 
 
 @pytest.mark.asyncio
 async def test_row_limit_modal_lifecycle() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -45,7 +45,7 @@ async def test_row_limit_modal_lifecycle() -> None:
 @pytest.mark.asyncio
 async def test_row_limit_modal_reports_invalid_input_instead_of_ignoring_it() -> None:
     """Bad input must say so and keep the modal open, not look like a dead key."""
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.action_set_row_limit()
@@ -65,7 +65,7 @@ async def test_row_limit_modal_reports_invalid_input_instead_of_ignoring_it() ->
 
 @pytest.mark.asyncio
 async def test_row_limit_modal_rejects_a_negative_limit() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.action_set_row_limit()

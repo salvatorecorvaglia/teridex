@@ -11,14 +11,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from teridex_core.models.schema import (
+from registro_core.models.schema import (
     SchemaSnapshot,
     Table,
     View,
 )
 
 if TYPE_CHECKING:
-    from teridex_core.models.schema import (
+    from registro_core.models.schema import (
         ForeignKey,
         Index,
         SchemaObject,

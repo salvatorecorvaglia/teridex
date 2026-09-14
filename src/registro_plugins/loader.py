@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING, Any
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from teridex_core import __version__ as _teridex_version
-from teridex_core.errors import PluginError, PluginLoadError
-from teridex_core.events import EventBus, PluginLoaded, PluginUnloaded
-from teridex_core.logging import get_logger
-from teridex_core.protocols.plugin import PluginManifest
-from teridex_plugins.context import PluginContext
+from registro_core import __version__ as _registro_version
+from registro_core.errors import PluginError, PluginLoadError
+from registro_core.events import EventBus, PluginLoaded, PluginUnloaded
+from registro_core.logging import get_logger
+from registro_core.protocols.plugin import PluginManifest
+from registro_plugins.context import PluginContext
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from teridex_plugins.registry import PluginRegistry
+    from registro_plugins.registry import PluginRegistry
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,7 @@ class PluginLoader:
         def on_unload(ctx: PluginContext) -> None
     """
 
-    GROUP = "teridex.plugins"
+    GROUP = "registro.plugins"
 
     def __init__(
         self,
@@ -116,12 +116,12 @@ class PluginLoader:
         if not self._is_allowed(manifest.id):
             logger.info("plugin_skipped", plugin_id=manifest.id)
             return
-        if not version_satisfies(_teridex_version, manifest.requires_teridex):
+        if not version_satisfies(_registro_version, manifest.requires_registro):
             logger.warning(
                 "plugin_incompatible",
                 plugin_id=manifest.id,
-                requires_teridex=manifest.requires_teridex,
-                teridex_version=_teridex_version,
+                requires_registro=manifest.requires_registro,
+                registro_version=_registro_version,
             )
             return
         self._registry.add_plugin(manifest)

@@ -12,12 +12,12 @@ textual = pytest.importorskip("textual")
 from textual.content import Content  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
-from teridex_core.config import TeridexConfig, UIConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_core.protocols.plugin import PluginManifest  # noqa: E402
-from teridex_plugins.api import Command  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
-from teridex_tui.screens.command_palette import CommandPaletteScreen  # noqa: E402
+from registro_core.config import RegistroConfig, UIConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_core.protocols.plugin import PluginManifest  # noqa: E402
+from registro_plugins.api import Command  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
+from registro_tui.screens.command_palette import CommandPaletteScreen  # noqa: E402
 
 _RECURSIVE_BUSY_SQL = (
     "WITH RECURSIVE t(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM t LIMIT 200000) SELECT * FROM t"
@@ -26,7 +26,7 @@ _RECURSIVE_BUSY_SQL = (
 
 @pytest.mark.asyncio
 async def test_app_boots_in_memory_sqlite() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         # Give startup tasks a chance to settle.
         await pilot.pause()
@@ -39,7 +39,7 @@ async def test_app_boots_in_memory_sqlite() -> None:
 async def test_run_query_rejects_reentry_while_in_flight() -> None:
     # Regression: a second run while one is in flight must not clobber the
     # current run handle — it should be rejected up front.
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         app._query_in_flight = True
@@ -51,7 +51,7 @@ async def test_run_query_rejects_reentry_while_in_flight() -> None:
 @pytest.mark.asyncio
 async def test_run_query_empty_sql_gives_feedback() -> None:
     # Running with an empty editor must not silently no-op.
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -63,7 +63,7 @@ async def test_run_query_empty_sql_gives_feedback() -> None:
 @pytest.mark.asyncio
 async def test_closing_last_tab_keeps_an_editor() -> None:
     # Closing every tab must leave a usable editor behind.
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.action_close_tab()
@@ -73,7 +73,7 @@ async def test_closing_last_tab_keeps_an_editor() -> None:
 
 @pytest.mark.asyncio
 async def test_focus_editor_actions_move_cursor() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         editor = app._tabs().current_editor
@@ -87,7 +87,7 @@ async def test_focus_editor_actions_move_cursor() -> None:
 
 @pytest.mark.asyncio
 async def test_teardown_closes_connection() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -100,7 +100,7 @@ async def test_teardown_closes_connection() -> None:
 
 @pytest.mark.asyncio
 async def test_command_palette_invokes_with_correct_plugin_context() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     resolved_context = None
 
     class CustomCommandPlugin:
@@ -148,8 +148,8 @@ async def test_command_palette_invokes_with_correct_plugin_context() -> None:
 
 @pytest.mark.asyncio
 async def test_action_bar_unlimited_limit_label() -> None:
-    config = TeridexConfig(ui=UIConfig(max_display_rows=0))
-    app = TeridexApp(config=config)
+    config = RegistroConfig(ui=UIConfig(max_display_rows=0))
+    app = RegistroApp(config=config)
     async with app.run_test() as pilot:
         await pilot.pause()
         limit_label = app.query_one("#limit-label", Static)
@@ -158,7 +158,7 @@ async def test_action_bar_unlimited_limit_label() -> None:
 
 @pytest.mark.asyncio
 async def test_copy_cell_with_nothing_selected_gives_feedback() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.action_copy_cell()
@@ -167,7 +167,7 @@ async def test_copy_cell_with_nothing_selected_gives_feedback() -> None:
 
 @pytest.mark.asyncio
 async def test_cancel_query_stops_an_in_flight_run() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -202,7 +202,7 @@ async def test_unmount_cancels_an_in_flight_run() -> None:
     # signalled to cancel during teardown, not left to run past it. A fake
     # stand-in for `action_cancel_query` avoids racing the real query stream
     # against the widget tree being torn down by the same `run_test()` exit.
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     cancelled = asyncio.Event()
 
     async def _fake_cancel_query() -> None:
@@ -218,7 +218,7 @@ async def test_unmount_cancels_an_in_flight_run() -> None:
 
 @pytest.mark.asyncio
 async def test_unmount_does_not_cancel_when_no_run_is_in_flight() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     cancel_called = asyncio.Event()
 
     async def _fake_cancel_query() -> None:
@@ -234,7 +234,7 @@ async def test_unmount_does_not_cancel_when_no_run_is_in_flight() -> None:
 
 @pytest.mark.asyncio
 async def test_unmount_cancels_an_in_flight_palette_task() -> None:
-    app = TeridexApp(config=TeridexConfig())
+    app = RegistroApp(config=RegistroConfig())
     started = asyncio.Event()
     task_holder: dict[str, asyncio.Task[None]] = {}
 

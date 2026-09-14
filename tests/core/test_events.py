@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from teridex_core.events import Event, EventBus, QueryCompleted, QueryStarted
+from registro_core.events import Event, EventBus, QueryCompleted, QueryStarted
 
 
 @pytest.mark.asyncio

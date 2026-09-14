@@ -7,16 +7,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from teridex_plugins.api import Command
+from registro_plugins.api import Command
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from teridex_plugins.context import PluginContext
+    from registro_plugins.context import PluginContext
 
 
-from teridex_tui.events import RunActionRequested
-from teridex_tui.keymaps.default import ACTION_TO_KEY
+from registro_tui.events import RunActionRequested
+from registro_tui.keymaps.default import ACTION_TO_KEY
 
 
 def _wrap(action: str) -> Callable[[PluginContext], Awaitable[None]]:
@@ -83,7 +83,7 @@ BUILTIN_COMMANDS: list[Command] = [
     Command(
         id="builtin.export_csv",
         title="Export results as CSV",
-        description="Write the current result set to ~/.teridex/exports/.",
+        description="Write the current result set to ~/.registro/exports/.",
         default_binding=ACTION_TO_KEY.get("export_csv"),
         handler=_wrap("export_csv"),
         category="Results",
@@ -112,7 +112,7 @@ BUILTIN_COMMANDS: list[Command] = [
     ),
     Command(
         id="builtin.quit",
-        title="Quit Teridex",
+        title="Quit Registro",
         default_binding=ACTION_TO_KEY.get("quit"),
         handler=_wrap("quit"),
         category="App",

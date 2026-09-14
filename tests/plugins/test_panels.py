@@ -10,15 +10,15 @@ from typing import TYPE_CHECKING  # noqa: E402
 
 from textual.widgets import Static  # noqa: E402
 
-from teridex_core.config import TeridexConfig  # noqa: E402
-from teridex_core.models.connection import Dsn  # noqa: E402
-from teridex_core.protocols.plugin import PluginManifest  # noqa: E402
-from teridex_plugins.api import Panel  # noqa: E402
-from teridex_tui.app import TeridexApp  # noqa: E402
+from registro_core.config import RegistroConfig  # noqa: E402
+from registro_core.models.connection import Dsn  # noqa: E402
+from registro_core.protocols.plugin import PluginManifest  # noqa: E402
+from registro_plugins.api import Panel  # noqa: E402
+from registro_tui.app import RegistroApp  # noqa: E402
 
 if TYPE_CHECKING:
-    from teridex_plugins.context import PluginContext
-    from teridex_plugins.loader import PluginLoader
+    from registro_plugins.context import PluginContext
+    from registro_plugins.loader import PluginLoader
 
 _TEXT = "★ plugin-rail-ok"
 
@@ -41,7 +41,7 @@ class _RailPlugin:
 
 @pytest.mark.asyncio
 async def test_no_rails_when_no_plugins() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()
@@ -58,7 +58,7 @@ async def test_no_rails_when_no_plugins() -> None:
 
 @pytest.mark.asyncio
 async def test_right_rail_panel_mounts() -> None:
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         # Manually inject our plugin via the loader stored on the app.
         # The app loads entry-point plugins in ``on_mount``; we inject *after*
@@ -117,7 +117,7 @@ async def test_bottom_rail_mounts_into_the_grid_after_the_right_rail() -> None:
         def on_unload(self, ctx: PluginContext) -> None:
             pass
 
-    app = TeridexApp(config=TeridexConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
+    app = RegistroApp(config=RegistroConfig(), initial_dsn=Dsn.parse("sqlite:///:memory:"))
     async with app.run_test() as pilot:
         await pilot.pause()
         await app.workers.wait_for_complete()

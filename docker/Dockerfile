@@ -34,16 +34,16 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TERIDEX_LOG_LEVEL=INFO
+    REGISTRO_LOG_LEVEL=INFO
 
-RUN useradd -ms /bin/false -u 10001 teridex
+RUN useradd -ms /bin/false -u 10001 registro
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /app /app
 
 WORKDIR /app
-USER teridex
+USER registro
 
-# `teridex tui` needs a terminal: run it with `docker run -it`.
-ENTRYPOINT ["teridex"]
+# `registro tui` needs a terminal: run it with `docker run -it`.
+ENTRYPOINT ["registro"]
 CMD ["--help"]

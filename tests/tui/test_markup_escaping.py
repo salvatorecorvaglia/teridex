@@ -16,16 +16,16 @@ from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.content import Content  # noqa: E402
 
-from teridex_core.models.result import Column, ResultBatch  # noqa: E402
-from teridex_core.models.schema import (  # noqa: E402
+from registro_core.models.result import Column, ResultBatch  # noqa: E402
+from registro_core.models.schema import (  # noqa: E402
     ForeignKey,
     Index,
     SchemaSnapshot,
     Table,
     TableColumn,
 )
-from teridex_tui.widgets.results_table import ResultsTable  # noqa: E402
-from teridex_tui.widgets.schema_tree import SchemaTree  # noqa: E402
+from registro_tui.widgets.results_table import ResultsTable  # noqa: E402
+from registro_tui.widgets.schema_tree import SchemaTree  # noqa: E402
 
 _HOSTILE = "[bold]danger[/]"
 # A bare closing tag is the crash case: Rich raises MarkupError on it.
@@ -140,7 +140,7 @@ async def test_connection_modal_survives_a_bracket_bearing_dsn() -> None:
     """
     from textual.widgets import Input, Static  # noqa: PLC0415
 
-    from teridex_tui.screens.connection import ConnectionScreen  # noqa: PLC0415
+    from registro_tui.screens.connection import ConnectionScreen  # noqa: PLC0415
 
     class _Harness(App[None]):
         pass
@@ -171,10 +171,10 @@ async def test_error_toast_preserves_bracketed_driver_text() -> None:
     the one identifier that mattered — and ``[/]`` raised MarkupError inside the
     toast's render.
     """
-    from teridex_tui.app import TeridexApp  # noqa: PLC0415
+    from registro_tui.app import RegistroApp  # noqa: PLC0415
 
     detail = f"syntax error near [col] {_UNBALANCED}"
-    app = TeridexApp()
+    app = RegistroApp()
     async with app.run_test() as pilot:
         await pilot.pause()
         app._report_error("Query failed", detail)
@@ -209,7 +209,7 @@ async def test_status_bar_renders_themed_severity_messages() -> None:
     It measured with rich's ``Text`` while rendering through Textual, so the
     first ``[$error]`` message would have raised MarkupError mid-render.
     """
-    from teridex_tui.widgets.status_bar import StatusBar  # noqa: PLC0415
+    from registro_tui.widgets.status_bar import StatusBar  # noqa: PLC0415
 
     class _Harness(App[None]):
         def compose(self) -> ComposeResult:
@@ -226,7 +226,7 @@ async def test_status_bar_renders_themed_severity_messages() -> None:
 
 async def test_schema_tree_labels_stay_parseable_by_rich() -> None:
     """Tree labels go through rich, so they must not carry ``$variable`` tags."""
-    from teridex_core.models.schema import SchemaSnapshot, Table, TableColumn  # noqa: PLC0415
+    from registro_core.models.schema import SchemaSnapshot, Table, TableColumn  # noqa: PLC0415
 
     snapshot = SchemaSnapshot(
         connection_id="c",
